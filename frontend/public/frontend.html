@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADK Agentic Writer - Test Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+        
+        .header h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+        
+        .content-types {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .content-type-card {
+            padding: 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .content-type-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+        }
+        
+        .content-type-card.selected {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+        }
+        
+        .content-type-card h3 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .content-type-card p {
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        .input-section {
+            margin-bottom: 20px;
+        }
+        
+        .input-section label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .input-section input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+        
+        .input-section input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .generate-button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .generate-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+        }
+        
+        .generate-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+        }
+        
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .agent-status {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .agent-list {
+            list-style: none;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .agent-badge {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            text-transform: capitalize;
+        }
+        
+        .result-content {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+        }
+        
+        .result-content pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .api-links {
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        .api-links a {
+            color: white;
+            text-decoration: none;
+            margin: 0 15px;
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        
+        .api-links a:hover {
+            background: rgba(255,255,255,0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 ADK Agentic Writer</h1>
+            <p>Multi-Agentic Interactive Content Production System</p>
+            <div class="api-links">
+                <a href="/">🏠 Home</a>
+                <a href="/docs" target="_blank">📚 API Documentation</a>
+                <a href="/agents" target="_blank">🤖 View Agents</a>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Select Content Type</h2>
+            <div class="content-types" id="contentTypes"></div>
+
+            <div class="input-section">
+                <label for="topic">Topic</label>
+                <input
+                    id="topic"
+                    type="text"
+                    placeholder="Enter a topic (e.g., 'Ancient Rome', 'Climate Change', 'Space Exploration')"
+                />
+            </div>
+
+            <button class="generate-button" id="generateBtn">Generate Content</button>
+            
+            <div id="error" class="error hidden"></div>
+        </div>
+
+        <div id="loading" class="card hidden">
+            <div class="loading">
+                <div class="loading-spinner"></div>
+                <p>Our team of AI agents is working on your content...</p>
+            </div>
+        </div>
+
+        <div id="result" class="card hidden">
+            <h2>Generated Content</h2>
+            <div id="agentStatus" class="agent-status hidden">
+                <h4>Agents Involved:</h4>
+                <ul class="agent-list" id="agentList"></ul>
+            </div>
+            <div class="result-content">
+                <pre id="resultContent"></pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8000';
+        
+        const contentTypes = [
+            { value: 'quiz', label: 'Quiz', description: 'Interactive quizzes with multiple choice questions' },
+            { value: 'quest_game', label: 'Quest Game', description: 'Quest-based adventure games with choices and rewards' },
+            { value: 'branched_narrative', label: 'Branched Story', description: 'Branching storylines with multiple endings' },
+            { value: 'web_simulation', label: 'Simulation', description: 'Interactive simulations with variables and controls' }
+        ];
+        
+        let selectedType = 'quiz';
+        
+        // Render content type cards
+        const contentTypesDiv = document.getElementById('contentTypes');
+        contentTypes.forEach(type => {
+            const card = document.createElement('div');
+            card.className = `content-type-card ${type.value === selectedType ? 'selected' : ''}`;
+            card.innerHTML = `<h3>${type.label}</h3><p>${type.description}</p>`;
+            card.onclick = () => {
+                selectedType = type.value;
+                document.querySelectorAll('.content-type-card').forEach(c => c.classList.remove('selected'));
+                card.classList.add('selected');
+            };
+            contentTypesDiv.appendChild(card);
+        });
+        
+        // Generate content
+        document.getElementById('generateBtn').onclick = async () => {
+            const topic = document.getElementById('topic').value.trim();
+            const errorDiv = document.getElementById('error');
+            
+            if (!topic) {
+                errorDiv.textContent = 'Please enter a topic';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+            
+            errorDiv.classList.add('hidden');
+            document.getElementById('result').classList.add('hidden');
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('generateBtn').disabled = true;
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/generate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        content_type: selectedType,
+                        topic: topic,
+                        parameters: {}
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to generate content');
+                }
+                
+                const data = await response.json();
+                
+                // Show agents involved
+                if (data.agents_involved && data.agents_involved.length > 0) {
+                    const agentList = document.getElementById('agentList');
+                    agentList.innerHTML = '';
+                    data.agents_involved.forEach(agent => {
+                        const li = document.createElement('li');
+                        li.className = 'agent-badge';
+                        li.textContent = agent.replace('_', ' ');
+                        agentList.appendChild(li);
+                    });
+                    document.getElementById('agentStatus').classList.remove('hidden');
+                }
+                
+                // Show result
+                document.getElementById('resultContent').textContent = JSON.stringify(data.content, null, 2);
+                document.getElementById('result').classList.remove('hidden');
+                
+            } catch (error) {
+                errorDiv.textContent = 'Failed to generate content. Please try again.';
+                errorDiv.classList.remove('hidden');
+                console.error('Error:', error);
+            } finally {
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('generateBtn').disabled = false;
+            }
+        };
+        
+        // Allow Enter key to generate
+        document.getElementById('topic').onkeypress = (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('generateBtn').click();
+            }
+        };
+    </script>
+</body>
+</html>
+

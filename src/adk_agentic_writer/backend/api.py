@@ -3,10 +3,13 @@
 import logging
 import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, Dict, List
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from ..agents import (
     CoordinatorAgent,
@@ -85,10 +88,42 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount static files
+static_dir = Path(__file__).parent.parent.parent.parent / "frontend" / "public"
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
 
 @app.get("/")
-async def root() -> Dict[str, str]:
-    """Root endpoint."""
+async def root():
+    """Serve the status page."""
+    index_path = Path(__file__).parent.parent.parent.parent / "frontend" / "public" / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
+    else:
+        # Fallback to API info if frontend file not found
+        return {
+            "message": "ADK Agentic Writer API",
+            "version": "0.1.0",
+            "status": "operational",
+            "docs": "/docs",
+            "frontend": "/frontend"
+        }
+
+
+@app.get("/frontend")
+async def frontend():
+    """Serve the content generator frontend."""
+    frontend_path = Path(__file__).parent.parent.parent.parent / "frontend" / "public" / "frontend.html"
+    if frontend_path.exists():
+        return FileResponse(frontend_path)
+    else:
+        raise HTTPException(status_code=404, detail="Frontend not found")
+
+
+@app.get("/api")
+async def api_info() -> Dict[str, str]:
+    """API information endpoint."""
     return {
         "message": "ADK Agentic Writer API",
         "version": "0.1.0",

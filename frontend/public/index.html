@@ -1,17 +1,326 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
-    <meta
-      name="description"
-      content="ADK Agentic Writer - Multi-agentic interactive content production system"
-    />
-    <title>ADK Agentic Writer</title>
-  </head>
-  <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root"></div>
-  </body>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADK Agentic Writer - API Status</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            width: 100%;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 50px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+        
+        .logo {
+            font-size: 4em;
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #666;
+            font-size: 1.2em;
+            margin-bottom: 30px;
+        }
+        
+        .version {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            margin-bottom: 30px;
+        }
+        
+        .status-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+        
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .status-item:last-child {
+            border-bottom: none;
+        }
+        
+        .status-label {
+            color: #666;
+            font-weight: 600;
+        }
+        
+        .status-value {
+            color: #333;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-size: 0.9em;
+            font-weight: 600;
+        }
+        
+        .status-healthy {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-loading {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .links {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 30px;
+        }
+        
+        .link-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-decoration: none;
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .link-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+        
+        .link-icon {
+            font-size: 2em;
+        }
+        
+        .link-title {
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+        
+        .link-desc {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+        
+        .agents-list {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        
+        .agents-list h3 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        
+        .agent-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+        
+        .agent-badge {
+            background: white;
+            border: 2px solid #667eea;
+            color: #667eea;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 600;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .footer {
+            margin-top: 30px;
+            color: #999;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="logo">🤖</div>
+            <h1>ADK Agentic Writer</h1>
+            <p class="subtitle">Multi-Agentic Interactive Content Production System</p>
+            <div class="version">Version 0.1.0</div>
+            
+            <div class="status-section">
+                <div class="status-item">
+                    <span class="status-label">API Status</span>
+                    <span class="status-value">
+                        <span id="apiStatus" class="status-badge status-loading">
+                            <span class="loading"></span> Checking...
+                        </span>
+                    </span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Active Agents</span>
+                    <span class="status-value" id="agentCount">—</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Content Types</span>
+                    <span class="status-value">4 (Quiz, Game, Story, Simulation)</span>
+                </div>
+            </div>
+            
+            <div class="links">
+                <a href="/frontend" class="link-card">
+                    <div class="link-icon">🎨</div>
+                    <div class="link-title">Content Generator</div>
+                    <div class="link-desc">Create interactive content</div>
+                </a>
+                
+                <a href="/docs" class="link-card">
+                    <div class="link-icon">📚</div>
+                    <div class="link-title">API Documentation</div>
+                    <div class="link-desc">Swagger UI</div>
+                </a>
+                
+                <a href="/redoc" class="link-card">
+                    <div class="link-icon">📖</div>
+                    <div class="link-title">ReDoc</div>
+                    <div class="link-desc">Alternative docs</div>
+                </a>
+                
+                <a href="/api" class="link-card">
+                    <div class="link-icon">⚡</div>
+                    <div class="link-title">API Info</div>
+                    <div class="link-desc">JSON endpoint</div>
+                </a>
+                
+                <a href="/agents" class="link-card">
+                    <div class="link-icon">🤖</div>
+                    <div class="link-title">Agents Status</div>
+                    <div class="link-desc">JSON agents list</div>
+                </a>
+            </div>
+            
+            <div class="agents-list" id="agentsList" style="display: none;">
+                <h3>Available Agents</h3>
+                <div class="agent-badges" id="agentBadges"></div>
+            </div>
+            
+            <div class="footer">
+                Built with FastAPI, React, and the Google Agent Development Kit
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Check API health and load agents
+        async function checkHealth() {
+            try {
+                const response = await fetch('/health');
+                const data = await response.json();
+                
+                if (data.status === 'healthy') {
+                    document.getElementById('apiStatus').className = 'status-badge status-healthy';
+                    document.getElementById('apiStatus').textContent = '✓ Healthy';
+                    
+                    // Load agents
+                    loadAgents();
+                } else {
+                    throw new Error('Unhealthy');
+                }
+            } catch (error) {
+                document.getElementById('apiStatus').className = 'status-badge status-error';
+                document.getElementById('apiStatus').textContent = '✗ Offline';
+            }
+        }
+        
+        async function loadAgents() {
+            try {
+                const response = await fetch('/agents');
+                const data = await response.json();
+                
+                if (data.agents && data.agents.length > 0) {
+                    document.getElementById('agentCount').textContent = data.agents.length;
+                    
+                    const agentBadges = document.getElementById('agentBadges');
+                    agentBadges.innerHTML = '';
+                    
+                    data.agents.forEach(agent => {
+                        const badge = document.createElement('div');
+                        badge.className = 'agent-badge';
+                        badge.textContent = agent.role.replace('_', ' ');
+                        agentBadges.appendChild(badge);
+                    });
+                    
+                    document.getElementById('agentsList').style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Failed to load agents:', error);
+            }
+        }
+        
+        // Check health on load
+        checkHealth();
+    </script>
+</body>
 </html>
