@@ -177,7 +177,7 @@ async def get_content_types() -> Dict[str, Any]:
 
 
 @app.post("/generate/quiz")
-async def generate_quiz(topic: str, num_questions: int = 5) -> Dict[str, Any]:
+async def generate_quiz(topic: str, num_questions: int = 5) -> ContentResponse:
     """Convenience endpoint for generating quizzes."""
     request = ContentRequest(
         content_type=ContentType.QUIZ,
@@ -188,7 +188,7 @@ async def generate_quiz(topic: str, num_questions: int = 5) -> Dict[str, Any]:
 
 
 @app.post("/generate/story")
-async def generate_story(topic: str, genre: str = "fantasy") -> Dict[str, Any]:
+async def generate_story(topic: str, genre: str = "fantasy") -> ContentResponse:
     """Convenience endpoint for generating branched narratives."""
     request = ContentRequest(
         content_type=ContentType.BRANCHED_NARRATIVE,
@@ -199,7 +199,7 @@ async def generate_story(topic: str, genre: str = "fantasy") -> Dict[str, Any]:
 
 
 @app.post("/generate/game")
-async def generate_game(topic: str, complexity: str = "medium") -> Dict[str, Any]:
+async def generate_game(topic: str, complexity: str = "medium") -> ContentResponse:
     """Convenience endpoint for generating quest games."""
     request = ContentRequest(
         content_type=ContentType.QUEST_GAME,
@@ -210,7 +210,7 @@ async def generate_game(topic: str, complexity: str = "medium") -> Dict[str, Any
 
 
 @app.post("/generate/simulation")
-async def generate_simulation(topic: str, simulation_type: str = "chart") -> Dict[str, Any]:
+async def generate_simulation(topic: str, simulation_type: str = "chart") -> ContentResponse:
     """Convenience endpoint for generating web simulations."""
     request = ContentRequest(
         content_type=ContentType.WEB_SIMULATION,

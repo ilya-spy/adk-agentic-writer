@@ -99,11 +99,15 @@ class CoordinatorAgent(BaseAgent):
     async def _execute_tasks(self, tasks: List[AgentTask]) -> Dict[str, Any]:
         """Execute a list of tasks using the appropriate agents."""
         results = {}
+        content_result = None
         
         for task in tasks:
             # Check dependencies
             if task.dependencies:
                 logger.info(f"Task {task.task_id} has dependencies: {task.dependencies}")
+                # Pass previous result to dependent tasks
+                if content_result and task.agent_role == AgentRole.REVIEWER:
+                    task.parameters["content"] = content_result
             
             # Find an available agent for this role
             agents = self.agent_registry.get(task.agent_role, [])
@@ -126,6 +130,10 @@ class CoordinatorAgent(BaseAgent):
             task.status = AgentStatus.COMPLETED
             
             results[task.task_id] = task_result
+            
+            # Store content result for next task
+            if task.agent_role != AgentRole.REVIEWER:
+                content_result = task_result
         
         # Return the final result (from the last task)
         if tasks:
