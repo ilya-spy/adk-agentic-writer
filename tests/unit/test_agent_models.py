@@ -1,7 +1,5 @@
 """Tests for agent models."""
 
-import pytest
-
 from adk_agentic_writer.models.agent_models import (
     AgentMessage,
     AgentRole,

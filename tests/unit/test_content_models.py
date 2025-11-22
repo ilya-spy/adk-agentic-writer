@@ -1,7 +1,5 @@
 """Tests for content models."""
 
-import pytest
-
 from adk_agentic_writer.models.content_models import (
     ContentType,
     Quiz,
