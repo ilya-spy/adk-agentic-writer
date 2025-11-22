@@ -33,25 +33,25 @@ A comprehensive multi-agentic system for interactive content production, built w
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                         Frontend (React)                     │
-│  ┌────────────┐  ┌────────────┐  ┌────────────┐           │
-│  │   Quiz UI  │  │  Story UI  │  │   Game UI  │           │
-│  └────────────┘  └────────────┘  └────────────┘           │
+│                         Frontend (React)                    │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐             │
+│  │   Quiz UI  │  │  Story UI  │  │   Game UI  │             │
+│  └────────────┘  └────────────┘  └────────────┘             │
 └─────────────────────────────────────────────────────────────┘
-                            │
-                            ▼
+                            │ ▲
+                            ▼ │
 ┌─────────────────────────────────────────────────────────────┐
-│                     Backend API (FastAPI)                    │
-│  ┌────────────────────────────────────────────────────┐    │
-│  │              Coordinator Agent                      │    │
-│  └────────────────────────────────────────────────────┘    │
-│                            │                                 │
-│    ┌───────────┬───────────┼───────────┬──────────┐        │
-│    ▼           ▼           ▼           ▼          ▼        │
-│  ┌──────┐  ┌──────┐  ┌──────┐  ┌──────┐  ┌──────┐        │
-│  │ Quiz │  │Story │  │ Game │  │ Sim  │  │Review│        │
-│  │Writer│  │Writer│  │Design│  │Design│  │ er   │        │
-│  └──────┘  └──────┘  └──────┘  └──────┘  └──────┘        │
+│                     Backend API (FastAPI)                   │
+│  ┌────────────────────────────────────────────────────┐     │
+│  │              Coordinator Agent                     │     │
+│  └────────────────────────────────────────────────────┘     │
+│                            │                                │
+│    ┌───────────┬───────────┼───────────┬──────────┐         │
+│    ▼           ▼           ▼           ▼          ▼         │
+│  ┌──────┐   ┌──────┐   ┌──────┐   ┌──────┐  ┌──────┐        │
+│  │ Quiz │   │Story │   │ Game │   │ Sim  │  │Review│        │
+│  │Writer│   │Writer│   │Design│   │Design│  │ er   │        │
+│  └──────┘   └──────┘   └──────┘   └──────┘  └──────┘        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -146,7 +146,7 @@ curl -X POST "http://localhost:8000/generate/simulation?topic=Physics"
 from adk_agentic_writer import CoordinatorAgent, ContentType
 from adk_agentic_writer.agents import QuizWriterAgent, ReviewerAgent
 
-# Initialize agents
+# Initialise agents
 coordinator = CoordinatorAgent()
 quiz_writer = QuizWriterAgent()
 reviewer = ReviewerAgent()
