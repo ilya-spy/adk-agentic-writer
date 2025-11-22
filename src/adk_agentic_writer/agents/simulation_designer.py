@@ -143,6 +143,10 @@ class SimulationDesignerAgent(BaseAgent):
         
         # Create a control for each variable
         for var in variables:
+            # Calculate safe step value
+            value_range = var.max_value - var.min_value
+            step = value_range / 100 if value_range > 0 else 1.0
+            
             control = SimulationControl(
                 control_id=f"{var.name}_slider",
                 label=f"Adjust {var.name.replace('_', ' ').title()}",
@@ -151,7 +155,7 @@ class SimulationDesignerAgent(BaseAgent):
                 parameters={
                     "min": var.min_value,
                     "max": var.max_value,
-                    "step": (var.max_value - var.min_value) / 100,
+                    "step": step,
                     "initial": var.initial_value,
                 },
             )
