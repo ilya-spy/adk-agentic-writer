@@ -7,7 +7,12 @@ They define WHAT agents can do, not HOW they do it.
 """
 
 from .agent_protocol import AgentProtocol
-from .content_protocol import ContentBlock, ContentBlockType, ContentProtocol
+from .content_protocol import (
+    ContentBlock,
+    ContentBlockType,
+    ContentPattern,
+    ContentProtocol,
+)
 from .editorial_protocol import EditorialProtocol
 
 __all__ = [
@@ -15,5 +20,6 @@ __all__ = [
     "ContentProtocol",
     "ContentBlock",
     "ContentBlockType",
+    "ContentPattern",
     "EditorialProtocol",
 ]

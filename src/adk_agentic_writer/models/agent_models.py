@@ -22,17 +22,42 @@ class AgentRole(str, Enum):
     REVIEWER = "reviewer"
 
 
+class WorkflowPattern(str, Enum):
+    """Workflow orchestration patterns."""
+
+    SEQUENTIAL = "sequential"
+    PARALLEL = "parallel"
+    LOOP = "loop"
+    CONDITIONAL = "conditional"
+
+
+class WorkflowScope(str, Enum):
+    """Scope of workflow application."""
+
+    AGENT = "agent"  # Agent-level workflow (coordinates between agent tasks)
+    CONTENT = "content"  # Content-level workflow (coordinates content generation)
+    EDITORIAL = "editorial"  # Editorial-level workflow (coordinates review/editing)
+
+
 class AgentConfig(BaseModel):
     """Configuration for an agent specialist."""
-    
+
     role: AgentRole = Field(..., description="Agent role")
     system_instruction: str = Field(..., description="System instruction for the agent")
     temperature: float = Field(0.7, description="Generation temperature")
     max_tokens: Optional[int] = Field(None, description="Maximum tokens to generate")
-    required_parameters: List[str] = Field(default_factory=list, description="Required parameters for this agent")
-    optional_parameters: Dict[str, Any] = Field(default_factory=dict, description="Optional parameters with defaults")
-    capabilities: List[str] = Field(default_factory=list, description="Agent capabilities")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+    required_parameters: List[str] = Field(
+        default_factory=list, description="Required parameters for this agent"
+    )
+    optional_parameters: Dict[str, Any] = Field(
+        default_factory=dict, description="Optional parameters with defaults"
+    )
+    capabilities: List[str] = Field(
+        default_factory=list, description="Agent capabilities"
+    )
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict, description="Additional metadata"
+    )
 
 
 # Team specialist definitions - our agent models
@@ -51,7 +76,11 @@ Guidelines:
 - Avoid trick questions or ambiguous wording""",
         temperature=0.7,
         required_parameters=["topic"],
-        optional_parameters={"num_questions": 5, "difficulty": "medium", "passing_score": 70},
+        optional_parameters={
+            "num_questions": 5,
+            "difficulty": "medium",
+            "passing_score": 70,
+        },
         capabilities=["quiz_generation", "educational_content", "question_design"],
     ),
     AgentRole.STORY_WRITER: AgentConfig(
@@ -145,10 +174,32 @@ Guidelines:
 # Base Agent Models (matching Google GenAI API)
 # ============================================================================
 
+
+class WorkflowMetadata(BaseModel):
+    """Metadata describing a workflow that an agent can use."""
+
+    name: str = Field(..., description="Workflow name")
+    pattern: WorkflowPattern = Field(..., description="Workflow orchestration pattern")
+    scope: WorkflowScope = Field(..., description="Workflow application scope")
+    description: str = Field(..., description="Description of what this workflow does")
+    agent_refs: List[str] = Field(
+        default_factory=list, description="References to other agents used in workflow"
+    )
+    max_iterations: Optional[int] = Field(
+        None, description="Max iterations for loop workflows"
+    )
+    merge_strategy: Optional[str] = Field(
+        None, description="Merge strategy for parallel workflows"
+    )
+    parameters: Dict[str, Any] = Field(
+        default_factory=dict, description="Workflow-specific parameters"
+    )
+
+
 class AgentModel(BaseModel):
     """
     Base Agent model matching Google GenAI API Agent structure.
-    
+
     Corresponds to google.adk.agents.Agent:
     ```python
     Agent(
@@ -160,86 +211,103 @@ class AgentModel(BaseModel):
     )
     ```
     """
-    
+
     name: str = Field(..., description="Agent name identifier")
     model_name: str = Field("gemini-2.5-flash-lite", description="Model to use")
-    instruction: str = Field(..., description="System instruction defining agent behavior")
+    instruction: str = Field(
+        ..., description="System instruction defining agent behavior"
+    )
     tools: List[str] = Field(default_factory=list, description="List of tool names")
-    output_key: Optional[str] = Field(None, description="Key to store output in session state")
+    output_key: Optional[str] = Field(
+        None, description="Key to store output in session state"
+    )
     temperature: float = Field(0.7, description="Generation temperature")
     max_tokens: Optional[int] = Field(None, description="Maximum tokens to generate")
+    workflows: List[WorkflowMetadata] = Field(
+        default_factory=list, description="Available workflows for this agent"
+    )
 
 
 class SequentialAgentModel(BaseModel):
     """
     Sequential Agent model matching Google ADK SequentialAgent.
-    
+
     Corresponds to google.adk.agents.SequentialAgent:
     ```python
     SequentialAgent(name="Pipeline", sub_agents=[agent1, agent2, agent3])
     ```
     """
-    
+
     name: str = Field(..., description="Sequential agent pipeline name")
-    sub_agents: List[str] = Field(..., description="List of sub-agent names to execute in order")
+    sub_agents: List[str] = Field(
+        ..., description="List of sub-agent names to execute in order"
+    )
 
 
 class ParallelAgentModel(BaseModel):
     """
     Parallel Agent model matching Google ADK ParallelAgent.
-    
+
     Corresponds to google.adk.agents.ParallelAgent:
     ```python
     ParallelAgent(name="ParallelTeam", sub_agents=[agent1, agent2, agent3])
     ```
     """
-    
+
     name: str = Field(..., description="Parallel agent team name")
-    sub_agents: List[str] = Field(..., description="List of sub-agent names to execute concurrently")
-    merge_strategy: str = Field("combine", description="How to merge results: combine, first, vote")
+    sub_agents: List[str] = Field(
+        ..., description="List of sub-agent names to execute concurrently"
+    )
+    merge_strategy: str = Field(
+        "combine", description="How to merge results: combine, first, vote"
+    )
 
 
 class LoopAgentModel(BaseModel):
     """
     Loop Agent model matching Google ADK LoopAgent.
-    
+
     Corresponds to google.adk.agents.LoopAgent:
     ```python
     LoopAgent(name="RefinementLoop", sub_agents=[critic, refiner], max_iterations=3)
     ```
     """
-    
+
     name: str = Field(..., description="Loop agent name")
-    sub_agents: List[str] = Field(..., description="List of sub-agent names to execute in loop")
+    sub_agents: List[str] = Field(
+        ..., description="List of sub-agent names to execute in loop"
+    )
     max_iterations: int = Field(10, description="Maximum number of loop iterations")
 
 
 class AgentToolModel(BaseModel):
     """
     Agent Tool model for wrapping agents as tools.
-    
+
     Corresponds to google.adk.tools.AgentTool:
     ```python
     AgentTool(sub_agent)
     ```
     """
-    
+
     agent_name: str = Field(..., description="Name of the agent to wrap as a tool")
 
 
 class FunctionToolModel(BaseModel):
     """
     Function Tool model for wrapping Python functions as tools.
-    
+
     Corresponds to google.adk.tools.FunctionTool:
     ```python
     FunctionTool(exit_loop)
     ```
     """
-    
+
     function_name: str = Field(..., description="Name of the function")
     description: str = Field(..., description="Function description for the agent")
-    parameters: Dict[str, Any] = Field(default_factory=dict, description="Function parameters schema")
+    parameters: Dict[str, Any] = Field(
+        default_factory=dict, description="Function parameters schema"
+    )
 
 
 class AgentStatus(str, Enum):
@@ -268,8 +336,12 @@ class AgentTask(BaseModel):
     task_id: str = Field(..., description="Unique task identifier")
     agent_role: AgentRole = Field(..., description="Agent role for this task")
     description: str = Field(..., description="Task description")
-    parameters: Dict[str, Any] = Field(default_factory=dict, description="Task parameters")
-    dependencies: List[str] = Field(default_factory=list, description="IDs of prerequisite tasks")
+    parameters: Dict[str, Any] = Field(
+        default_factory=dict, description="Task parameters"
+    )
+    dependencies: List[str] = Field(
+        default_factory=list, description="IDs of prerequisite tasks"
+    )
     status: AgentStatus = Field(AgentStatus.IDLE, description="Current task status")
 
 
@@ -280,5 +352,12 @@ class AgentState(BaseModel):
     role: AgentRole = Field(..., description="Agent role")
     status: AgentStatus = Field(AgentStatus.IDLE, description="Current status")
     current_task: Optional[str] = Field(None, description="Current task ID")
-    completed_tasks: List[str] = Field(default_factory=list, description="Completed task IDs")
-    metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional metadata")
+    completed_tasks: List[str] = Field(
+        default_factory=list, description="Completed task IDs"
+    )
+    variables: Dict[str, Any] = Field(
+        default_factory=dict, description="Runtime variable storage between stages"
+    )
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict, description="Additional metadata"
+    )
