@@ -198,32 +198,6 @@ curl http://localhost:8000/health
 
 ---
 
-## Architecture
-
-```
-src/adk_agentic_writer/
-├── protocols/          # Interface definitions
-│   ├── agent_protocol.py
-│   ├── editorial_protocol.py
-│   └── content_protocol.py
-├── models/             # Data structures
-│   ├── agent_models.py
-│   ├── content_models.py
-│   └── editorial_models.py
-├── workflows/          # Orchestration patterns
-│   ├── agent_workflows.py
-│   ├── editorial_workflows.py
-│   └── content_workflows.py
-└── agents/             # Agent implementations
-    ├── base_agent.py   # Single base for all agents
-    ├── static/         # Template-based (6 agents)
-    └── gemini/         # AI-powered (6 agents)
-```
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed documentation.
-
----
-
 ## Comparison: Static vs Gemini
 
 | Feature | Static Team | Gemini Team |
