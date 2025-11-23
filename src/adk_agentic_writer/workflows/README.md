@@ -4,7 +4,9 @@ Workflow patterns for orchestrating agents, editorial operations, and content ge
 
 ## Overview
 
-Workflows define orchestration patterns that inherit from base workflow classes.
+Workflows use metadata-driven orchestration patterns. All workflows inherit from the base `Workflow` class
+and specify their pattern (sequential, parallel, loop, conditional) through `WorkflowMetadata`.
+
 They correspond to the three protocol types:
 
 1. **Agent Workflows** - Orchestrate multiple agents
@@ -13,14 +15,13 @@ They correspond to the three protocol types:
 
 ## Workflow Types
 
-### Base Workflows (`base_workflow.py`)
+### Base Workflow (`base_workflow.py`)
 
-Foundation patterns that all workflows inherit from:
+The single `Workflow` class provides metadata-driven orchestration:
 
-- `SequentialWorkflow` - Execute in order: A → B → C
-- `ParallelWorkflow` - Execute concurrently: [A, B, C] → Merge
-- `LoopWorkflow` - Execute repeatedly: A → Check → A → ...
-- `ConditionalWorkflow` - Branch based on conditions: Condition → [A | B | C]
+- **Pattern**: Specified in metadata (SEQUENTIAL, PARALLEL, LOOP, CONDITIONAL)
+- **Scope**: Specified in metadata (AGENT, CONTENT, EDITORIAL)
+- **Execution**: Automatically routes to the appropriate execution method based on pattern
 
 ### Agent Workflows (`agent_workflows.py`)
 
@@ -115,10 +116,10 @@ workflow = ConditionalContentWorkflow(
 )
 ```
 
-## Workflow Hierarchy
+## Workflow Architecture
 
 ```
-base_workflow.py (foundation patterns)
+Workflow (base class with metadata-driven execution)
     ↓
 ├── agent_workflows.py (agent orchestration)
 ├── editorial_workflows.py (EditorialProtocol operations)
@@ -135,9 +136,9 @@ base_workflow.py (foundation patterns)
 
 ## Key Principles
 
-1. **Inheritance** - All workflows inherit from base patterns
-2. **Composition** - Workflows compose agents and operations
-3. **Patterns** - Reusable orchestration patterns
-4. **Flexibility** - Mix and match workflows as needed
-5. **Separation** - Clear separation between workflow types
+1. **Metadata-Driven** - Workflow behavior specified through WorkflowMetadata
+2. **Single Base Class** - All workflows inherit from one `Workflow` class
+3. **Pattern Flexibility** - Pattern (sequential/parallel/loop/conditional) specified per instance
+4. **Composition** - Workflows compose agents and operations
+5. **Separation** - Clear separation between workflow scopes (agent/content/editorial)
 

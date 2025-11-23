@@ -1,31 +1,24 @@
-"""Abstract agent workflow patterns - framework-agnostic agent orchestration.
+"""Agent workflow patterns and predefined instances.
 
-These patterns inherit from corresponding base_workflow classes.
-Implementations should be in agents/base/ or agents/gemini/ subdirectories.
+All workflows inherit from the base Workflow class and use metadata
+to specify their orchestration pattern.
 """
 
 import logging
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
-from .base_workflow import (
-    ConditionalWorkflow,
-    LoopWorkflow,
-    ParallelWorkflow,
-    SequentialWorkflow,
-)
+from ..models.agent_models import WorkflowPattern, WorkflowScope
+from .base_workflow import Workflow
 
 logger = logging.getLogger(__name__)
 
 
-class SequentialAgentWorkflow(SequentialWorkflow):
+class SequentialAgentWorkflow(Workflow):
     """
     Sequential agent workflow - executes agents in order.
-    
+
     Pattern: Agent A → Agent B → Agent C
     Each agent's output becomes the input for the next agent.
-    
-    Inherits from SequentialWorkflow base class.
-    Implementations should override execute() method.
     """
 
     def __init__(self, name: str, agents: List[Any]):
@@ -36,28 +29,25 @@ class SequentialAgentWorkflow(SequentialWorkflow):
             name: Workflow name
             agents: List of agents to execute sequentially
         """
-        super().__init__(name, agents)
-        logger.info(f"Sequential agent workflow '{name}' configured with {len(agents)} agents")
-    
-    async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute agents sequentially."""
-        result = input_data
-        for agent in self.agents:
-            task_desc = result.get("task_description", "Process task")
-            params = result.get("parameters", {})
-            result = await agent.process_task(task_desc, params)
-        return result
+        super().__init__(
+            name=name,
+            pattern=WorkflowPattern.SEQUENTIAL,
+            scope=WorkflowScope.AGENT,
+            description="Execute agents in sequence, output of each feeds into next",
+            agents=agents,
+            parameters={"execution_order": "strict"},
+        )
+        logger.info(
+            f"Sequential agent workflow '{name}' configured with {len(agents)} agents"
+        )
 
 
-class ParallelAgentWorkflow(ParallelWorkflow):
+class ParallelAgentWorkflow(Workflow):
     """
     Parallel agent workflow - executes agents concurrently.
-    
+
     Pattern: [Agent A, Agent B, Agent C] → Merge
     All agents receive the same input and execute simultaneously.
-    
-    Inherits from ParallelWorkflow base class.
-    Implementations should override execute() method.
     """
 
     def __init__(self, name: str, agents: List[Any], merge_strategy: str = "combine"):
@@ -69,42 +59,33 @@ class ParallelAgentWorkflow(ParallelWorkflow):
             agents: List of agents to execute in parallel
             merge_strategy: How to merge results - 'combine', 'first', 'vote'
         """
-        super().__init__(name, agents, merge_strategy)
-        logger.info(f"Parallel agent workflow '{name}' configured with {len(agents)} agents")
-    
-    async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute agents in parallel."""
-        import asyncio
-        task_desc = input_data.get("task_description", "Process task")
-        params = input_data.get("parameters", {})
-        
-        tasks = [agent.process_task(task_desc, params) for agent in self.agents]
-        results = await asyncio.gather(*tasks)
-        
-        if self.merge_strategy == "first":
-            return results[0]
-        elif self.merge_strategy == "combine":
-            return {"results": results, "merged": True}
-        else:
-            return {"results": results}
+        super().__init__(
+            name=name,
+            pattern=WorkflowPattern.PARALLEL,
+            scope=WorkflowScope.AGENT,
+            description="Execute agents concurrently and merge results",
+            agents=agents,
+            merge_strategy=merge_strategy,
+            parameters={"wait_for_all": True},
+        )
+        logger.info(
+            f"Parallel agent workflow '{name}' configured with {len(agents)} agents"
+        )
 
 
-class LoopAgentWorkflow(LoopWorkflow):
+class LoopAgentWorkflow(Workflow):
     """
     Loop agent workflow - executes an agent repeatedly until condition is met.
-    
+
     Pattern: Agent → Check → Agent → Check → ... → Done
     Useful for iterative refinement or multi-turn agent interactions.
-    
-    Inherits from LoopWorkflow base class.
-    Implementations should override execute() method.
     """
 
     def __init__(
         self,
         name: str,
         agent: Any,
-        condition: Any,
+        condition: Optional[Callable[[Dict[str, Any], int], bool]] = None,
         max_iterations: int = 10,
     ):
         """
@@ -116,46 +97,34 @@ class LoopAgentWorkflow(LoopWorkflow):
             condition: Function that returns True to continue looping
             max_iterations: Maximum number of iterations
         """
-        super().__init__(name)
-        self.agent = agent
-        self.condition = condition
-        self.max_iterations = max_iterations
-        logger.info(f"Loop agent workflow '{name}' configured with max {max_iterations} iterations")
-    
-    async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute agent in a loop until condition is met."""
-        result = input_data
-        iteration = 0
-        
-        while iteration < self.max_iterations:
-            task_desc = result.get("task_description", "Process task")
-            params = result.get("parameters", {})
-            result = await self.agent.process_task(task_desc, params)
-            
-            if not self.condition(result):
-                break
-            iteration += 1
-        
-        return result
+        super().__init__(
+            name=name,
+            pattern=WorkflowPattern.LOOP,
+            scope=WorkflowScope.AGENT,
+            description="Execute agent repeatedly until condition met",
+            agents=[agent],
+            condition=condition,
+            max_iterations=max_iterations,
+            parameters={"condition": "quality_threshold_met"},
+        )
+        logger.info(
+            f"Loop agent workflow '{name}' configured with max {max_iterations} iterations"
+        )
 
 
-class ConditionalAgentWorkflow(ConditionalWorkflow):
+class ConditionalAgentWorkflow(Workflow):
     """
     Conditional agent workflow - routes to different agents based on conditions.
-    
+
     Pattern: Condition → [Agent A | Agent B | Agent C]
     Useful for decision trees and branching agent logic.
-    
-    Inherits from ConditionalWorkflow base class.
-    Implementations should override execute() method.
     """
 
     def __init__(
         self,
         name: str,
-        condition: Any,
+        condition: Callable[[Dict[str, Any]], str],
         agents: Dict[str, Any],
-        default_agent: Any = None,
     ):
         """
         Initialize conditional agent workflow.
@@ -164,11 +133,16 @@ class ConditionalAgentWorkflow(ConditionalWorkflow):
             name: Workflow name
             condition: Function that returns agent key to execute
             agents: Dict mapping keys to agents
-            default_agent: Agent to use if condition returns unknown key
         """
-        super().__init__(name)
-        self.condition = condition
-        self.agents = agents
-        self.default_agent = default_agent
-        logger.info(f"Conditional agent workflow '{name}' configured with {len(agents)} branches")
-
+        super().__init__(
+            name=name,
+            pattern=WorkflowPattern.CONDITIONAL,
+            scope=WorkflowScope.AGENT,
+            description="Route to different agents based on conditions",
+            agents=agents,
+            condition=condition,
+            parameters={"routing_logic": "condition_based"},
+        )
+        logger.info(
+            f"Conditional agent workflow '{name}' configured with {len(agents)} branches"
+        )
