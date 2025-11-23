@@ -1,293 +1,175 @@
-# ADK Agentic Writer - Architecture Documentation
+# Architecture
+
+> Multi-agent content generation system with Static and Gemini teams
 
 ## System Overview
 
-The ADK Agentic Writer is a sophisticated multi-agent system designed for producing interactive educational content. The system leverages a team of specialized AI agents that collaborate to create high-quality, engaging content.
+ADK Agentic Writer generates interactive educational content (Quiz, Story, Game, Simulation) using coordinated agents. Two teams: **Static** (template-based, fast) and **Gemini** (AI-powered, quality).
 
-## Architecture Components
+**Key Principles**: Protocol-driven design, single base class, FastAPI backend serves both API and static HTML on port 8000.
 
-### 1. Multi-Agent System
+---
 
-The core of the system is a team of specialized agents, each with specific responsibilities:
-
-#### Coordinator Agent
-- **Role**: Orchestrates the entire content generation workflow
-- **Responsibilities**:
-  - Receives content generation requests
-  - Creates task plans based on content type
-  - Distributes tasks to appropriate agents
-  - Manages dependencies between tasks
-  - Aggregates and returns final results
-- **Implementation**: `CoordinatorAgent` class
-
-#### Content Writer Agents
-
-**Quiz Writer Agent**
-- Creates interactive multiple-choice quizzes
-- Generates questions with options and explanations
-- Supports difficulty levels and topic customization
-- Implementation: `QuizWriterAgent`
-
-**Story Writer Agent**
-- Generates branched narrative stories
-- Creates multiple story paths and endings
-- Supports different genres (fantasy, sci-fi, etc.)
-- Implementation: `StoryWriterAgent`
-
-**Game Designer Agent**
-- Builds quest-based adventure games
-- Creates interconnected game nodes with choices
-- Manages rewards and requirements system
-- Implementation: `GameDesignerAgent`
-
-**Simulation Designer Agent**
-- Creates interactive web simulations
-- Defines variables, controls, and rules
-- Supports various visualization types
-- Implementation: `SimulationDesignerAgent`
-
-**Reviewer Agent**
-- Reviews and validates generated content
-- Provides quality scores and suggestions
-- Adds metadata to content
-- Implementation: `ReviewerAgent`
-
-### 2. Backend API (FastAPI)
-
-The backend provides a RESTful API for content generation:
-
-#### Endpoints
-
-**Core Endpoints:**
-- `GET /` - Root endpoint with API info
-- `GET /health` - Health check
-- `GET /agents` - List all agents and their status
-- `GET /content-types` - Get available content types
-- `POST /generate` - Generic content generation endpoint
-
-**Convenience Endpoints:**
-- `POST /generate/quiz` - Generate a quiz
-- `POST /generate/story` - Generate a branched narrative
-- `POST /generate/game` - Generate a quest game
-- `POST /generate/simulation` - Generate a simulation
-
-#### Data Flow
+## Architecture
 
 ```
-Client Request
-     │
-     ▼
-FastAPI Endpoint
-     │
-     ▼
-Coordinator Agent
-     │
-     ├─────────┬─────────┬─────────┐
-     ▼         ▼         ▼         ▼
-Quiz Writer Story Writer Game Designer Simulation Designer
-     │         │         │         │
-     └─────────┴────┬────┴─────────┘
-                    ▼
-               Reviewer Agent
-                    │
-                    ▼
-            Response to Client
+Frontend (Static HTML: index.html, showcase.html, frontend.html)
+    ↓
+Backend (FastAPI :8000)
+    ↓
+Agent Teams (Static | Gemini)
+    ↓
+Protocols + Models + Workflows
 ```
 
-### 3. Data Models
+---
 
-#### Content Models
-- `Quiz` - Complete quiz structure with questions
-- `QuestGame` - Quest game with nodes and paths
-- `BranchedNarrative` - Story with branching paths
-- `WebSimulation` - Interactive simulation
-
-#### Agent Models
-- `AgentState` - Current state of an agent
-- `AgentTask` - Task assigned to an agent
-- `AgentMessage` - Inter-agent communication
-
-#### Request/Response Models
-- `ContentRequest` - Client request for content
-- `ContentResponse` - API response with generated content
-
-### 4. Frontend (React + TypeScript)
-
-The frontend provides a user-friendly interface for content generation:
-
-#### Components
-
-**Main App Component**
-- Content type selection cards
-- Topic input field
-- Generation controls
-- Results display
-
-**Features**
-- Real-time agent status updates
-- Beautiful gradient UI design
-- Responsive layout
-- Error handling and loading states
-
-### 5. Deployment
-
-#### Docker Architecture
+## Directory Structure
 
 ```
-┌─────────────────────────────────────┐
-│     Docker Compose Network          │
-│                                      │
-│  ┌────────────────┐                │
-│  │   Frontend     │  Port 3000     │
-│  │   (Nginx)      │                │
-│  └────────┬───────┘                │
-│           │                          │
-│           ▼                          │
-│  ┌────────────────┐                │
-│  │   Backend      │  Port 8000     │
-│  │   (Uvicorn)    │                │
-│  └────────────────┘                │
-│                                      │
-└─────────────────────────────────────┘
+adk-agentic-writer/
+├── src/adk_agentic_writer/
+│   ├── protocols/              # Interface definitions
+│   │   ├── agent_protocol.py   # AgentProtocol (process_task)
+│   │   ├── content_protocol.py # ContentProtocol (UX patterns)
+│   │   └── editorial_protocol.py # EditorialProtocol (review/refine)
+│   ├── models/                 # Data structures
+│   │   ├── agent_models.py     # Agent states, configs, roles
+│   │   ├── content_models.py   # Quiz, Story, Game, Simulation
+│   │   └── editorial_models.py # Feedback, QualityMetrics, Revisions
+│   ├── workflows/              # Orchestration patterns
+│   │   ├── base_workflow.py    # Sequential, Parallel, Loop, Conditional
+│   │   ├── agent_workflows.py
+│   │   ├── editorial_workflows.py
+│   │   └── content_workflows.py
+│   ├── agents/                 # Agent implementations
+│   │   ├── base_agent.py       # Single base class
+│   │   ├── static/             # Template-based (6 agents)
+│   │   └── gemini/             # AI-powered (6 agents)
+│   └── backend/
+│       └── api.py              # FastAPI server
+├── frontend/public/            # Static HTML files
+├── tests/                      # Unit & integration tests
+├── requirements.txt
+└── requirements-dev.txt
 ```
 
-## Request Flow Example
+---
 
-### Quiz Generation Flow
+## Core Components
 
-1. **User Action**: User enters topic "Python Programming" and selects "Quiz"
+### Protocols (Interfaces)
+- **AgentProtocol**: `process_task(task_description, parameters) -> Dict`
+- **EditorialProtocol**: `review_content()`, `refine_content()`, `validate_content()`
+- **ContentProtocol**: `stream_content()`, `generate_block()`, `interactive_update()`
 
-2. **Frontend Request**:
-```javascript
-POST /generate/quiz?topic=Python&num_questions=5
+### Models
+- **Agent**: `AgentRole`, `AgentState`, `AgentStatus`, `AgentMessage`, `AgentTask`
+- **Content**: `Quiz`, `BranchedNarrative`, `QuestGame`, `WebSimulation`
+- **Editorial**: `Feedback`, `QualityMetrics`, `ContentRevision`, `ValidationResult`
+
+### Agents
+
+**6 Types** × **2 Teams** = **12 Agents**
+
+| Type | Role | Responsibility |
+|------|------|----------------|
+| Coordinator | COORDINATOR | Orchestrates workflows |
+| Quiz Writer | CONTENT_CREATOR | Generates quizzes |
+| Story Writer | CONTENT_CREATOR | Generates narratives |
+| Game Designer | CONTENT_CREATOR | Generates games |
+| Simulation Designer | CONTENT_CREATOR | Generates simulations |
+| Reviewer | REVIEWER | Reviews content |
+
+**Teams**:
+- **Static** (`agents/static/`): Templates, no API, instant
+- **Gemini** (`agents/gemini/`): AI-powered, requires API key, 2-5s
+
+### Backend (FastAPI)
+
+**Endpoints** (port 8000):
+- `GET /` → index.html
+- `GET /showcase` → showcase.html
+- `GET /frontend` → frontend.html
+- `POST /generate` → Generate content
+- `GET /teams` → List teams
+- `GET /health` → Health check
+- `GET /docs` → OpenAPI docs
+
+---
+
+## Data Flow
+
+```
+1. User Request (HTTP)
+2. FastAPI (/generate)
+3. Coordinator Agent
+4. Specialized Agent (Quiz/Story/Game/Simulation)
+5. Optional: Reviewer Agent
+6. JSON Response
+7. Frontend Rendering
 ```
 
-3. **Backend Processing**:
-```python
-# API receives request
-request = ContentRequest(
-    content_type=ContentType.QUIZ,
-    topic="Python",
-    parameters={"num_questions": 5}
-)
+---
 
-# Coordinator creates task plan
-tasks = [
-    AgentTask(role=QUIZ_WRITER, ...),
-    AgentTask(role=REVIEWER, dependencies=[...])
-]
+## Content Types
 
-# Quiz Writer Agent generates quiz
-quiz = await quiz_writer.process_task(...)
+**Quiz**: `{title, questions: [{question, options, correct_answer, explanation}]}`
 
-# Reviewer Agent reviews content
-reviewed = await reviewer.process_task(..., content=quiz)
+**Branched Narrative**: `{title, synopsis, start_node, nodes: {node_id: {content, branches}}}`
 
-# Return response
-return ContentResponse(
-    content=reviewed,
-    agents_involved=["quiz_writer", "reviewer"]
-)
+**Quest Game**: `{title, description, quests: [{quest_id, objectives, rewards}]}`
+
+**Web Simulation**: `{title, variables, controls, rules, visualization_type}`
+
+---
+
+## Team Comparison
+
+| | Static | Gemini |
+|-|--------|--------|
+| Speed | ⚡ <100ms | 🐢 2-5s |
+| Quality | Good | Excellent |
+| Creativity | Template | AI-generated |
+| API Key | ❌ | ✅ Required |
+| Cost | Free | API costs |
+| Tasks | 1 basic | 9 specialized |
+
+---
+
+## Deployment
+
+**Local**:
+```bash
+pip install -r requirements.txt
+uvicorn src.adk_agentic_writer.backend.api:app --reload
+# http://localhost:8000
 ```
 
-4. **Frontend Display**: Shows quiz with metadata about agents involved
+**Docker**:
+```bash
+docker-compose up --build
+```
 
-## Agent Communication Protocol
+---
 
-Agents communicate through the coordinator using a task-based system:
+## Extension Points
 
-1. **Task Assignment**: Coordinator assigns tasks with parameters
-2. **Task Execution**: Agents process tasks and return results
-3. **Dependency Management**: Results passed to dependent tasks
-4. **Status Updates**: Agents update their status during execution
+**New Content Type**: Define model → Add to enum → Create agents → Update coordinator → Add frontend rendering
 
-## Extensibility
+**New Agent**: Inherit BaseAgent → Implement process_task() → Register with coordinator
 
-### Adding New Content Types
+**New Workflow**: Inherit base pattern → Implement execution logic
 
-1. Define new content model in `models/content_models.py`
-2. Create specialized agent class inheriting from `BaseAgent`
-3. Register agent with coordinator
-4. Add content type to `ContentType` enum
-5. Update coordinator's task plan logic
-6. Add convenience endpoint in API
-7. Update frontend UI
+---
 
-### Adding New Agent Capabilities
+## Design Decisions
 
-1. Extend base agent with new methods
-2. Implement task processing logic
-3. Update agent communication protocol
-4. Add tests for new functionality
+- **Single base class**: Reduces duplication, consistent behavior
+- **Protocol-driven**: Clear contracts, type-safe
+- **Static HTML frontend**: No build process, simple deployment, one port
+- **Two teams**: Fast prototyping (Static) + Production quality (Gemini)
 
-## Performance Considerations
+---
 
-- **Async Processing**: All agent operations use async/await
-- **Task Dependencies**: Parallel execution where possible
-- **Lightweight Agents**: Agents are stateless and can be scaled
-- **API Optimization**: FastAPI's async capabilities utilized
-
-## Security Considerations
-
-- **Input Validation**: All inputs validated with Pydantic
-- **CORS Configuration**: Configurable allowed origins
-- **Error Handling**: Comprehensive error handling
-- **Logging**: All operations logged for debugging
-
-## Testing Strategy
-
-### Unit Tests
-- Agent model creation and validation
-- Content model creation and validation
-- Individual agent functionality
-
-### Integration Tests
-- API endpoints
-- Multi-agent workflows
-- Full content generation flow
-
-### Test Coverage
-- Current: 100% of critical paths
-- Target: Maintain >80% coverage
-
-## Monitoring and Logging
-
-- **Agent Status**: Real-time status via `/agents` endpoint
-- **Request Tracking**: Unique request IDs for tracking
-- **Performance Metrics**: Agent execution times logged
-- **Error Tracking**: Comprehensive error logging
-
-## Future Enhancements
-
-1. **LLM Integration**: Connect to Google Gemini for content generation
-2. **Content Storage**: Database for saving generated content
-3. **User Accounts**: Authentication and personalization
-4. **Analytics**: Usage statistics and insights
-5. **Export Features**: PDF, HTML, JSON exports
-6. **Collaboration**: Multi-user content editing
-7. **Templates**: Customizable content templates
-8. **API Keys**: Rate limiting and access control
-
-## Technology Stack
-
-- **Backend**: Python 3.11+, FastAPI, Uvicorn
-- **Frontend**: React 18, TypeScript, Axios
-- **Data Validation**: Pydantic
-- **Testing**: Pytest, pytest-asyncio
-- **Code Quality**: Ruff, MyPy, Black
-- **Containerization**: Docker, Docker Compose
-- **Documentation**: OpenAPI/Swagger (auto-generated)
-
-## Development Workflow
-
-1. **Setup**: Run `./setup.sh` for quick setup
-2. **Development**: Use `make run-backend` and `make run-frontend`
-3. **Testing**: Use `make test` for running tests
-4. **Linting**: Use `make lint` for code quality checks
-5. **Docker**: Use `make docker-up` for containerized deployment
-
-## API Documentation
-
-Full interactive API documentation available at:
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+Built with FastAPI, Pydantic, and Google ADK.

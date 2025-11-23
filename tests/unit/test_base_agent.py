@@ -12,6 +12,18 @@ class DummyAgent(BaseAgent):
     async def process_task(self, task_description: str, parameters: dict) -> dict:
         """Simple test implementation."""
         return {"result": "completed", "description": task_description}
+    
+    async def generate_content(self, prompt: str, parameters: dict) -> dict:
+        """Simple test implementation."""
+        return {"content": "test content"}
+    
+    async def validate_content(self, content: dict) -> bool:
+        """Simple test implementation."""
+        return True
+    
+    async def refine_content(self, content: dict, feedback: str) -> dict:
+        """Simple test implementation."""
+        return content
 
 
 @pytest.mark.asyncio

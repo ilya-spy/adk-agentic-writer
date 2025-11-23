@@ -1,262 +1,360 @@
 """FastAPI backend server for the ADK Agentic Writer system."""
 
 import logging
+import os
 import uuid
 from contextlib import asynccontextmanager
-from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, Optional
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
 
-from ..agents import (
-    CoordinatorAgent,
-    GameDesignerAgent,
-    QuizWriterAgent,
-    ReviewerAgent,
-    SimulationDesignerAgent,
+from ..agents.static import (
+    CoordinatorAgent as StaticCoordinator,
+    StaticQuizWriterAgent,
     StoryWriterAgent,
+    GameDesignerAgent,
+    SimulationDesignerAgent,
+    ReviewerAgent as StaticReviewer,
 )
-from ..models import ContentRequest, ContentResponse, ContentType
+from ..models import ContentType
+
+# Load environment variables
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Global agent system
-agent_system: Dict[str, Any] = {}
+# Gemini agents are optional
+try:
+    from ..agents.gemini import (
+        GeminiCoordinatorAgent,
+        GeminiQuizWriterAgent,
+        GeminiStoryWriterAgent,
+        GeminiGameDesignerAgent,
+        GeminiSimulationDesignerAgent,
+        GeminiReviewerAgent,
+        SupportedTask,
+    )
+
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+    logger.warning("Gemini agents not available (google.adk not installed)")
+
+# Global agent systems - initialize with empty dicts
+agent_systems: Dict[str, Any] = {
+    "static": {"initialized": False, "coordinator": None},
+    "gemini": {"initialized": False, "coordinator": None},
+}
+
+
+class GenerateRequest(BaseModel):
+    """Request model for content generation."""
+
+    team: str = "static"  # "static" or "gemini"
+    content_type: str
+    topic: str
+    parameters: Dict[str, Any] = {}
+
+
+class GenerateResponse(BaseModel):
+    """Response model for content generation."""
+
+    request_id: str
+    team: str
+    content_type: str
+    content: Dict[str, Any]
+    status: str
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize and cleanup the agent system."""
-    # Startup: Initialize agents
-    logger.info("Initializing multi-agent system...")
-    
-    coordinator = CoordinatorAgent()
-    
-    # Create specialized agents
-    quiz_writer = QuizWriterAgent()
-    story_writer = StoryWriterAgent()
-    game_designer = GameDesignerAgent()
-    simulation_designer = SimulationDesignerAgent()
-    reviewer = ReviewerAgent()
-    
-    # Register agents with coordinator
-    coordinator.register_agent(quiz_writer)
-    coordinator.register_agent(story_writer)
-    coordinator.register_agent(game_designer)
-    coordinator.register_agent(simulation_designer)
-    coordinator.register_agent(reviewer)
-    
-    # Store in global state
-    agent_system["coordinator"] = coordinator
-    agent_system["agents"] = {
-        "quiz_writer": quiz_writer,
-        "story_writer": story_writer,
-        "game_designer": game_designer,
-        "simulation_designer": simulation_designer,
-        "reviewer": reviewer,
-    }
-    
-    logger.info("Multi-agent system initialized successfully")
-    
+    """Initialize and cleanup the agent systems."""
+    logger.info("Initializing ADK multi-agent systems...")
+
+    # Initialize Static Team
+    try:
+        static_coordinator = StaticCoordinator(agent_id="static_coordinator")
+        static_coordinator.register_agent(StaticQuizWriterAgent())
+        static_coordinator.register_agent(StoryWriterAgent())
+        static_coordinator.register_agent(GameDesignerAgent())
+        static_coordinator.register_agent(SimulationDesignerAgent())
+        static_coordinator.register_agent(StaticReviewer())
+
+        agent_systems["static"]["coordinator"] = static_coordinator
+        agent_systems["static"]["initialized"] = True
+        logger.info("Static team initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize static team: {e}")
+        agent_systems["static"]["initialized"] = False
+
+    # Initialize Gemini Team (if available)
+    if GEMINI_AVAILABLE:
+        api_key = os.getenv("GOOGLE_API_KEY")
+        if api_key:
+            try:
+                gemini_coordinator = GeminiCoordinatorAgent(
+                    agent_id="gemini_coordinator"
+                )
+                gemini_coordinator.register_agent(GeminiQuizWriterAgent())
+                gemini_coordinator.register_agent(GeminiStoryWriterAgent())
+                gemini_coordinator.register_agent(GeminiGameDesignerAgent())
+                gemini_coordinator.register_agent(GeminiSimulationDesignerAgent())
+                gemini_coordinator.register_agent(GeminiReviewerAgent())
+
+                agent_systems["gemini"]["coordinator"] = gemini_coordinator
+                agent_systems["gemini"]["initialized"] = True
+                logger.info("Gemini team initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize gemini team: {e}")
+                agent_systems["gemini"]["initialized"] = False
+        else:
+            logger.warning("No GOOGLE_API_KEY found - Gemini team unavailable")
+            agent_systems["gemini"]["initialized"] = False
+    else:
+        logger.warning("Gemini agents not available (google.adk package not installed)")
+        agent_systems["gemini"]["initialized"] = False
+
     yield
-    
+
     # Shutdown
-    logger.info("Shutting down multi-agent system...")
-    agent_system.clear()
+    logger.info("Shutting down ADK multi-agent systems...")
+    agent_systems.clear()
 
 
 # Create FastAPI app
 app = FastAPI(
     title="ADK Agentic Writer API",
     description="Multi-agentic system for interactive content production",
-    version="0.1.0",
+    version="1.0.0",
     lifespan=lifespan,
 )
 
 # Add CORS middleware
-# Note: For production, replace allow_origins=["*"] with specific allowed origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: Configure specific origins for production
+    allow_origins=["*"],  # Configure for production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Mount static files
-static_dir = Path(__file__).parent.parent.parent.parent / "frontend" / "public"
-if static_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
-
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 async def root():
-    """Serve the status page."""
-    index_path = Path(__file__).parent.parent.parent.parent / "frontend" / "public" / "index.html"
+    """Serve the server directory page."""
+    import pathlib
+
+    # Get the path to the frontend/public/index.html
+    current_file = pathlib.Path(__file__)
+    project_root = current_file.parent.parent.parent.parent
+    index_path = project_root / "frontend" / "public" / "index.html"
+
     if index_path.exists():
-        return FileResponse(index_path)
+        return index_path.read_text(encoding="utf-8")
     else:
-        # Fallback to API info if frontend file not found
-        return {
-            "message": "ADK Agentic Writer API",
-            "version": "0.1.0",
-            "status": "operational",
-            "docs": "/docs",
-            "frontend": "/frontend"
-        }
-
-
-@app.get("/frontend")
-async def frontend():
-    """Serve the content generator frontend."""
-    frontend_path = Path(__file__).parent.parent.parent.parent / "frontend" / "public" / "frontend.html"
-    if frontend_path.exists():
-        return FileResponse(frontend_path)
-    else:
-        raise HTTPException(status_code=404, detail="Frontend not found")
+        # Fallback to JSON response if file not found
+        return HTMLResponse(
+            content="""
+            <html>
+                <head><title>ADK Agentic Writer</title></head>
+                <body>
+                    <h1>ADK Agentic Writer API</h1>
+                    <p>Server is running!</p>
+                    <ul>
+                        <li><a href="/health">Health Check</a></li>
+                        <li><a href="/teams">Available Teams</a></li>
+                        <li><a href="/docs">API Documentation</a></li>
+                    </ul>
+                </body>
+            </html>
+            """,
+            status_code=200,
+        )
 
 
 @app.get("/api")
-async def api_info() -> Dict[str, str]:
+async def api_info():
     """API information endpoint."""
     return {
         "message": "ADK Agentic Writer API",
-        "version": "0.1.0",
-        "status": "operational",
-    }
-
-
-@app.get("/health")
-async def health() -> Dict[str, str]:
-    """Health check endpoint."""
-    return {"status": "healthy"}
-
-
-@app.get("/agents")
-async def list_agents() -> Dict[str, List[Dict[str, str]]]:
-    """List all available agents and their status."""
-    agents = agent_system.get("agents", {})
-    
-    agent_info = []
-    for agent_id, agent in agents.items():
-        state = agent.get_state()
-        agent_info.append({
-            "agent_id": state.agent_id,
-            "role": state.role.value,
-            "status": state.status.value,
-        })
-    
-    return {"agents": agent_info}
-
-
-@app.post("/generate", response_model=ContentResponse)
-async def generate_content(request: ContentRequest) -> ContentResponse:
-    """
-    Generate interactive content using the multi-agent system.
-    
-    Args:
-        request: ContentRequest with content_type, topic, and parameters
-        
-    Returns:
-        ContentResponse with generated content
-    """
-    logger.info(f"Received request to generate {request.content_type}: {request.topic}")
-    
-    coordinator = agent_system.get("coordinator")
-    if not coordinator:
-        raise HTTPException(status_code=503, detail="Agent system not initialized")
-    
-    try:
-        # Process the request through the coordinator
-        result = await coordinator.process_task(
-            task_description=request.topic,
-            parameters={
-                "content_type": request.content_type,
-                "topic": request.topic,
-                **request.parameters,
-            },
-        )
-        
-        # Create response
-        response = ContentResponse(
-            request_id=str(uuid.uuid4()),
-            content_type=request.content_type,
-            content=result.get("content", {}),
-            agents_involved=result.get("agents_involved", []),
-        )
-        
-        logger.info(f"Successfully generated {request.content_type} content")
-        return response
-        
-    except Exception as e:
-        logger.error(f"Error generating content: {e}")
-        raise HTTPException(status_code=500, detail=f"Content generation failed: {str(e)}")
-
-
-@app.get("/content-types")
-async def get_content_types() -> Dict[str, Any]:
-    """Get available content types."""
-    return {
-        "content_types": [ct.value for ct in ContentType],
-        "descriptions": {
-            ContentType.QUIZ.value: "Interactive quizzes with multiple choice questions",
-            ContentType.QUEST_GAME.value: "Quest-based adventure games with choices and rewards",
-            ContentType.BRANCHED_NARRATIVE.value: "Branching storylines with multiple endings",
-            ContentType.WEB_SIMULATION.value: "Interactive simulations with variables and controls",
+        "version": "1.0.0",
+        "teams": {
+            "static": agent_systems["static"].get("initialized", False),
+            "gemini": agent_systems["gemini"].get("initialized", False),
         },
     }
 
 
-@app.post("/generate/quiz")
-async def generate_quiz(topic: str, num_questions: int = 5) -> ContentResponse:
-    """Convenience endpoint for generating quizzes."""
-    request = ContentRequest(
-        content_type=ContentType.QUIZ,
-        topic=topic,
-        parameters={"num_questions": num_questions},
-    )
-    return await generate_content(request)
+@app.get("/health")
+async def health():
+    """Health check endpoint."""
+    return {
+        "status": "healthy",
+        "static_team": agent_systems["static"].get("initialized", False),
+        "gemini_team": agent_systems["gemini"].get("initialized", False),
+    }
 
 
-@app.post("/generate/story")
-async def generate_story(topic: str, genre: str = "fantasy") -> ContentResponse:
-    """Convenience endpoint for generating branched narratives."""
-    request = ContentRequest(
-        content_type=ContentType.BRANCHED_NARRATIVE,
-        topic=topic,
-        parameters={"genre": genre},
-    )
-    return await generate_content(request)
+@app.post("/generate", response_model=GenerateResponse)
+async def generate_content(request: GenerateRequest):
+    """Generate content using specified team."""
+    request_id = str(uuid.uuid4())
+
+    # Validate team
+    if request.team not in ["static", "gemini"]:
+        raise HTTPException(status_code=400, detail=f"Invalid team: {request.team}")
+
+    # Check if team is initialized
+    if not agent_systems[request.team].get("initialized"):
+        raise HTTPException(
+            status_code=503, detail=f"{request.team.capitalize()} team not available"
+        )
+
+    # Get coordinator
+    coordinator = agent_systems[request.team]["coordinator"]
+
+    try:
+        # Prepare parameters
+        params = {
+            "content_type": request.content_type,
+            "topic": request.topic,
+            **request.parameters,
+        }
+
+        # Generate content based on team
+        if request.team == "static":
+            # Static team uses simple task description
+            result = await coordinator.process_task(
+                f"Generate {request.content_type}", params
+            )
+        else:
+            # Gemini team uses structured tasks
+            if GEMINI_AVAILABLE and SupportedTask:
+                task_mapping = {
+                    "quiz": SupportedTask.GENERATE_QUIZ,
+                    "branched_narrative": SupportedTask.GENERATE_STORY,
+                    "quest_game": SupportedTask.GENERATE_GAME,
+                    "web_simulation": SupportedTask.GENERATE_SIMULATION,
+                }
+
+                task = task_mapping.get(
+                    request.content_type, SupportedTask.GENERATE_QUIZ
+                )
+                params["task"] = task
+
+            result = await coordinator.process_task(
+                f"Generate {request.content_type}", params
+            )
+
+        return GenerateResponse(
+            request_id=request_id,
+            team=request.team,
+            content_type=request.content_type,
+            content=result,
+            status="completed",
+        )
+
+    except Exception as e:
+        logger.error(f"Error generating content: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/generate/game")
-async def generate_game(topic: str, complexity: str = "medium") -> ContentResponse:
-    """Convenience endpoint for generating quest games."""
-    request = ContentRequest(
-        content_type=ContentType.QUEST_GAME,
-        topic=topic,
-        parameters={"complexity": complexity},
-    )
-    return await generate_content(request)
+@app.get("/showcase", response_class=HTMLResponse)
+async def showcase():
+    """Serve the showcase page."""
+    import pathlib
+
+    # Get the path to the frontend/public/showcase.html
+    current_file = pathlib.Path(__file__)
+    project_root = current_file.parent.parent.parent.parent
+    showcase_path = project_root / "frontend" / "public" / "showcase.html"
+
+    if showcase_path.exists():
+        return showcase_path.read_text(encoding="utf-8")
+    else:
+        return HTMLResponse(
+            content="<html><body><h1>Showcase page not found</h1></body></html>",
+            status_code=404,
+        )
 
 
-@app.post("/generate/simulation")
-async def generate_simulation(topic: str, simulation_type: str = "chart") -> ContentResponse:
-    """Convenience endpoint for generating web simulations."""
-    request = ContentRequest(
-        content_type=ContentType.WEB_SIMULATION,
-        topic=topic,
-        parameters={"simulation_type": simulation_type},
-    )
-    return await generate_content(request)
+@app.get("/frontend", response_class=HTMLResponse)
+async def frontend():
+    """Serve the legacy frontend page."""
+    import pathlib
+
+    current_file = pathlib.Path(__file__)
+    project_root = current_file.parent.parent.parent.parent
+    frontend_path = project_root / "frontend" / "public" / "frontend.html"
+
+    if frontend_path.exists():
+        return frontend_path.read_text(encoding="utf-8")
+    else:
+        return HTMLResponse(
+            content="<html><body><h1>Frontend page not found</h1></body></html>",
+            status_code=404,
+        )
+
+
+@app.get("/teams")
+async def get_teams():
+    """Get available teams and their status."""
+    return {
+        "teams": [
+            {
+                "id": "static",
+                "name": "Static Team",
+                "description": "Fast, template-based generation. No API calls required.",
+                "available": agent_systems["static"].get("initialized", False),
+                "icon": "⚡",
+            },
+            {
+                "id": "gemini",
+                "name": "Gemini Team",
+                "description": "AI-powered generation via Google ADK. High quality, creative.",
+                "available": agent_systems["gemini"].get("initialized", False),
+                "icon": "🤖",
+            },
+        ]
+    }
+
+
+@app.get("/content-types")
+async def get_content_types():
+    """Get available content types."""
+    return {
+        "content_types": [
+            {
+                "value": "quiz",
+                "label": "Quiz",
+                "description": "Interactive quizzes with multiple choice questions",
+            },
+            {
+                "value": "quest_game",
+                "label": "Quest Game",
+                "description": "Quest-based adventure games with choices and rewards",
+            },
+            {
+                "value": "branched_narrative",
+                "label": "Branched Story",
+                "description": "Branching storylines with multiple endings",
+            },
+            {
+                "value": "web_simulation",
+                "label": "Simulation",
+                "description": "Interactive simulations with variables and controls",
+            },
+        ]
+    }
 
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

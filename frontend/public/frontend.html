@@ -226,7 +226,23 @@
             <div class="api-links">
                 <a href="/">🏠 Home</a>
                 <a href="/docs" target="_blank">📚 API Documentation</a>
-                <a href="/agents" target="_blank">🤖 View Agents</a>
+                <a href="/showcase">🎨 Showcase</a>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Configuration</h2>
+            <div class="input-section">
+                <label for="apiKey">Google API Key (Required) 🔑</label>
+                <input
+                    id="apiKey"
+                    type="password"
+                    placeholder="Enter your Google AI API key (get it from https://aistudio.google.com/apikey)"
+                />
+                <small style="color: #666; display: block; margin-top: 5px;">
+                    Your API key is only used for this session and never stored on the server.
+                    Get your free API key at <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>
+                </small>
             </div>
         </div>
 
@@ -241,6 +257,19 @@
                     type="text"
                     placeholder="Enter a topic (e.g., 'Ancient Rome', 'Climate Change', 'Space Exploration')"
                 />
+            </div>
+
+            <div class="input-section">
+                <label for="workflow">Workflow Pattern</label>
+                <select id="workflow" style="width: 100%; padding: 15px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 1em;">
+                    <option value="sequential">Sequential (Writer → Reviewer)</option>
+                    <option value="parallel">Parallel (Multiple Variants)</option>
+                    <option value="loop">Loop (Iterative Refinement)</option>
+                    <option value="multi_variant">Multi-Variant (Best Quality)</option>
+                </select>
+                <small style="color: #666; display: block; margin-top: 5px;">
+                    Choose how agents collaborate to create your content
+                </small>
             </div>
 
             <button class="generate-button" id="generateBtn">Generate Content</button>
@@ -296,10 +325,18 @@
         // Generate content
         document.getElementById('generateBtn').onclick = async () => {
             const topic = document.getElementById('topic').value.trim();
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const workflow = document.getElementById('workflow').value;
             const errorDiv = document.getElementById('error');
             
             if (!topic) {
                 errorDiv.textContent = 'Please enter a topic';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+            
+            if (!apiKey) {
+                errorDiv.textContent = 'Please enter your Google API key';
                 errorDiv.classList.remove('hidden');
                 return;
             }
@@ -310,18 +347,31 @@
             document.getElementById('generateBtn').disabled = true;
             
             try {
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+                
+                // Add API key to headers
+                if (apiKey) {
+                    headers['X-API-Key'] = apiKey;
+                }
+                
                 const response = await fetch(`${API_BASE_URL}/generate`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: headers,
                     body: JSON.stringify({
+                        team: 'static',
                         content_type: selectedType,
                         topic: topic,
-                        parameters: {}
+                        parameters: {
+                            workflow_pattern: workflow
+                        }
                     })
                 });
                 
                 if (!response.ok) {
-                    throw new Error('Failed to generate content');
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.detail || 'Failed to generate content');
                 }
                 
                 const data = await response.json();

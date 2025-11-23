@@ -1,279 +1,356 @@
-# 🤖 ADK Agentic Writer
+# ADK Agentic Writer
 
-[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-green.svg)](https://fastapi.tiangolo.com/)
-[![React](https://img.shields.io/badge/React-18.2-blue.svg)](https://reactjs.org/)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+> Multi-agent content generation system with strategic orchestration
 
-A comprehensive multi-agentic system for interactive content production, built with the Google Agent Development Kit. This project demonstrates a team of specialized AI agents working together to create engaging educational content including quizzes, quest games, branched narratives, and interactive simulations.
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-18+-blue.svg)](https://reactjs.org/)
 
-## 🌟 Features
+Generate interactive educational content (quizzes, stories, games, simulations) using AI-powered multi-agent systems.
 
-- **Multi-Agent Architecture**: Coordinated team of specialized agents
-  - Coordinator Agent: Orchestrates the entire content generation process
-  - Quiz Writer Agent: Creates interactive quizzes with multiple choice questions
-  - Story Writer Agent: Generates branched narratives with multiple endings
-  - Game Designer Agent: Builds quest-based adventure games
-  - Simulation Designer Agent: Creates interactive web simulations
-  - Reviewer Agent: Reviews and improves content quality
+---
 
-- **Content Types**:
-  - 📝 **Quizzes**: Interactive multiple-choice quizzes with explanations
-  - 🎮 **Quest Games**: Choice-driven adventure games with rewards and requirements
-  - 📖 **Branched Narratives**: Non-linear stories with multiple paths and endings
-  - 🔬 **Web Simulations**: Interactive simulations with variables and controls
+## Features
 
-- **Modern Tech Stack**:
-  - Backend: FastAPI (Python 3.11+)
-  - Frontend: React with TypeScript
-  - Containerization: Docker & Docker Compose
-  - API Documentation: Auto-generated with OpenAPI/Swagger
+✅ **Two Agent Teams**
+- **Static Team**: Fast, template-based, no API calls
+- **Gemini Team**: AI-powered via Google ADK, high quality
 
-## 🏗️ Architecture
+✅ **4 Content Types**
+- Interactive Quizzes
+- Branched Narratives
+- Quest Games
+- Web Simulations
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                         Frontend (React)                    │
-│  ┌────────────┐  ┌────────────┐  ┌────────────┐             │
-│  │   Quiz UI  │  │  Story UI  │  │   Game UI  │             │
-│  └────────────┘  └────────────┘  └────────────┘             │
-└─────────────────────────────────────────────────────────────┘
-                            │ ▲
-                            ▼ │
-┌─────────────────────────────────────────────────────────────┐
-│                     Backend API (FastAPI)                   │
-│  ┌────────────────────────────────────────────────────┐     │
-│  │              Coordinator Agent                     │     │
-│  └────────────────────────────────────────────────────┘     │
-│                            │                                │
-│    ┌───────────┬───────────┼───────────┬──────────┐         │
-│    ▼           ▼           ▼           ▼          ▼         │
-│  ┌──────┐   ┌──────┐   ┌──────┐   ┌──────┐  ┌──────┐        │
-│  │ Quiz │   │Story │   │ Game │   │ Sim  │  │Review│        │
-│  │Writer│   │Writer│   │Design│   │Design│  │ er   │        │
-│  └──────┘   └──────┘   └──────┘   └──────┘  └──────┘        │
-└─────────────────────────────────────────────────────────────┘
-```
+✅ **9 Coordinator Tasks** (Gemini)
+- Generate Quiz/Story/Game/Simulation
+- Review/Refine/Validate Content
+- Complete Workflow (Generate → Review → Refine)
+- **Multimodal Generation** (4 strategies: Sequential, Loop, Conditional, Adaptive)
 
-## 🚀 Quick Start
+✅ **Quality Control**
+- Editorial models for feedback tracking
+- Automated review and refinement
+- Quality metrics and validation
 
-### Prerequisites
+✅ **Strategic Orchestration**
+- AI-driven planning via Google ADK
+- Supportive coordination pattern
+- Iterative refinement workflows
 
-- Python 3.11 or higher
-- Node.js 18 or higher (for frontend)
-- Docker and Docker Compose (optional, for containerized deployment)
+---
 
-### Installation
+## Quick Start
 
-1. **Clone the repository**:
+### 1. Install Dependencies
+
 ```bash
-git clone https://github.com/ilya-spy/adk-agentic-writer.git
-cd adk-agentic-writer
-```
-
-2. **Install Python dependencies**:
-```bash
+# Backend
 pip install -r requirements.txt
-```
 
-3. **Install frontend dependencies**:
-```bash
+# For Gemini team (optional)
+pip install google-adk
+
+# Frontend
 cd frontend
 npm install
-cd ..
 ```
 
-### Running the Application
-
-#### Option 1: Run with Docker Compose (Recommended)
+### 2. Configure API Key (for Gemini team)
 
 ```bash
-docker-compose up --build
+# Create .env file
+echo "GOOGLE_API_KEY=your-api-key-here" > .env
 ```
 
-- Backend API: http://localhost:8000
-- Frontend: http://localhost:3000
-- API Documentation: http://localhost:8000/docs
+### 3. Run Backend
 
-#### Option 2: Run Manually
-
-**Start the backend**:
 ```bash
-uvicorn src.adk_agentic_writer.backend.api:app --reload --host 0.0.0.0 --port 8000
+# From project root
+python -m src.adk_agentic_writer.backend.api
+
+# Or with uvicorn
+uvicorn src.adk_agentic_writer.backend.api:app --reload
 ```
 
-**Start the frontend** (in a separate terminal):
+Backend runs at: `http://localhost:8000`
+
+### 4. Run Frontend
+
 ```bash
 cd frontend
 npm start
 ```
 
-## 📖 Usage
+Frontend runs at: `http://localhost:3000`
 
-### Web Interface
+---
 
-1. Open http://localhost:3000 in your browser
-2. Select a content type (Quiz, Quest Game, Branched Story, or Simulation)
-3. Enter a topic (e.g., "Ancient Rome", "Climate Change", "Space Exploration")
-4. Click "Generate Content"
-5. View the generated content with agent collaboration details
+## Usage
 
-### API Usage
+### Web UI
 
-**Generate a quiz**:
-```bash
-curl -X POST "http://localhost:8000/generate/quiz?topic=Python&num_questions=5"
-```
-
-**Generate a branched narrative**:
-```bash
-curl -X POST "http://localhost:8000/generate/story?topic=Space%20Adventure&genre=sci-fi"
-```
-
-**Generate a quest game**:
-```bash
-curl -X POST "http://localhost:8000/generate/game?topic=Ancient%20Treasure"
-```
-
-**Generate a simulation**:
-```bash
-curl -X POST "http://localhost:8000/generate/simulation?topic=Physics"
-```
+1. Open `http://localhost:3000`
+2. **Select Agent Team**: Choose Static (fast) or Gemini (AI-powered)
+3. **Select Content Type**: Quiz, Story, Game, or Simulation
+4. **Enter Topic**: e.g., "Ancient Rome", "Climate Change"
+5. **Generate**: Click to create content
 
 ### Python API
 
+#### Static Team
+
 ```python
-from adk_agentic_writer import CoordinatorAgent, ContentType
-from adk_agentic_writer.agents import QuizWriterAgent, ReviewerAgent
+from adk_agentic_writer.agents.static import (
+    CoordinatorAgent,
+    StaticQuizWriterAgent,
+    ReviewerAgent
+)
 
-# Initialise agents
+# Initialize
 coordinator = CoordinatorAgent()
-quiz_writer = QuizWriterAgent()
-reviewer = ReviewerAgent()
+coordinator.register_agent(StaticQuizWriterAgent())
+coordinator.register_agent(ReviewerAgent())
 
-# Register agents
-coordinator.register_agent(quiz_writer)
-coordinator.register_agent(reviewer)
-
-# Generate content
+# Generate
 result = await coordinator.process_task(
-    "Create a quiz about Python",
+    "Generate quiz",
     {
-        "content_type": ContentType.QUIZ,
-        "topic": "Python programming",
-        "num_questions": 5,
+        "content_type": "quiz",
+        "topic": "Python Programming",
+        "num_questions": 10
     }
 )
 ```
 
-## 🧪 Testing
+#### Gemini Team
 
-Run the test suite:
+```python
+from adk_agentic_writer.agents.gemini import (
+    GeminiCoordinatorAgent,
+    GeminiQuizWriterAgent,
+    GeminiReviewerAgent,
+    SupportedTask
+)
+
+# Initialize
+coordinator = GeminiCoordinatorAgent()
+coordinator.register_agent(GeminiQuizWriterAgent())
+coordinator.register_agent(GeminiReviewerAgent())
+
+# Simple generation
+result = await coordinator.process_task(
+    "Generate quiz",
+    {
+        "task": SupportedTask.GENERATE_QUIZ,
+        "topic": "Machine Learning",
+        "num_questions": 15
+    }
+)
+
+# Complete workflow (Generate → Review → Refine)
+result = await coordinator.process_task(
+    "Generate with quality control",
+    {
+        "task": SupportedTask.COMPLETE_WORKFLOW,
+        "content_type": "quiz",
+        "topic": "Data Science",
+        "num_questions": 20
+    }
+)
+
+# Multimodal generation
+result = await coordinator.process_task(
+    "Create learning module",
+    {
+        "task": SupportedTask.GENERATE_MULTIMODAL,
+        "topic": "Web Development",
+        "content_strategy": "sequential",
+        "components": [
+            {"type": "story", "purpose": "introduction"},
+            {"type": "quiz", "purpose": "assessment", "num_questions": 10},
+            {"type": "simulation", "purpose": "practice"}
+        ],
+        "quality_threshold": 85.0
+    }
+)
+```
+
+### REST API
 
 ```bash
-# Install development dependencies
-pip install -r requirements-dev.txt
+# Generate with Static team
+curl -X POST http://localhost:8000/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "team": "static",
+    "content_type": "quiz",
+    "topic": "Python",
+    "parameters": {"num_questions": 10}
+  }'
 
+# Generate with Gemini team
+curl -X POST http://localhost:8000/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "team": "gemini",
+    "content_type": "quiz",
+    "topic": "Machine Learning",
+    "parameters": {"num_questions": 15, "difficulty": "medium"}
+  }'
+
+# Check available teams
+curl http://localhost:8000/teams
+
+# Health check
+curl http://localhost:8000/health
+```
+
+---
+
+## Architecture
+
+```
+src/adk_agentic_writer/
+├── protocols/          # Interface definitions
+│   ├── agent_protocol.py
+│   ├── editorial_protocol.py
+│   └── content_protocol.py
+├── models/             # Data structures
+│   ├── agent_models.py
+│   ├── content_models.py
+│   └── editorial_models.py
+├── workflows/          # Orchestration patterns
+│   ├── agent_workflows.py
+│   ├── editorial_workflows.py
+│   └── content_workflows.py
+└── agents/             # Agent implementations
+    ├── base_agent.py   # Single base for all agents
+    ├── static/         # Template-based (6 agents)
+    └── gemini/         # AI-powered (6 agents)
+```
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed documentation.
+
+---
+
+## Comparison: Static vs Gemini
+
+| Feature | Static Team | Gemini Team |
+|---------|-------------|-------------|
+| **Speed** | ⚡ Fast | 🐢 Moderate |
+| **Quality** | ✅ Good | 🌟 Excellent |
+| **Creativity** | 📋 Template-based | 🎨 AI-powered |
+| **API Calls** | ❌ None | ✅ Required |
+| **Cost** | 💰 Free | 💳 API costs |
+| **Use Case** | Testing, prototyping | Production, high-quality |
+| **Tasks** | Basic orchestration | 9 specialized tasks |
+| **Multimodal** | ❌ No | ✅ Yes (4 strategies) |
+
+**Choose Static** for: Fast prototyping, testing, no API costs
+**Choose Gemini** for: Production, high-quality, creative content
+
+---
+
+## Live Demo
+
+Try the interactive showcase (no server needed):
+```bash
+start frontend/public/showcase.html  # Windows
+open frontend/public/showcase.html   # Mac/Linux
+```
+
+Features:
+- Real-time agent logs
+- All 4 content types
+- Minimalistic rendering
+- Works offline!
+
+---
+
+## Documentation
+
+- [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture
+- [QUICKSTART.md](QUICKSTART.md) - Quick start guide
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Contributing guidelines
+
+---
+
+## Testing
+
+```bash
 # Run all tests
 pytest
 
 # Run with coverage
-pytest --cov=src/adk_agentic_writer --cov-report=html
+pytest --cov=src/adk_agentic_writer
 
-# Run specific test file
+# Run specific test
 pytest tests/unit/test_quiz_writer.py
 ```
 
-## 📁 Project Structure
+---
 
+## Development
+
+```bash
+# Install dev dependencies
+pip install -r requirements-dev.txt
+
+# Format code
+black src/ tests/
+
+# Lint
+ruff check src/ tests/
+
+# Type check
+mypy src/
 ```
-adk-agentic-writer/
-├── src/
-│   └── adk_agentic_writer/
-│       ├── agents/              # Agent implementations
-│       │   ├── base_agent.py
-│       │   ├── coordinator.py
-│       │   ├── quiz_writer.py
-│       │   ├── story_writer.py
-│       │   ├── game_designer.py
-│       │   ├── simulation_designer.py
-│       │   └── reviewer.py
-│       ├── backend/             # FastAPI backend
-│       │   └── api.py
-│       ├── models/              # Data models
-│       │   ├── agent_models.py
-│       │   └── content_models.py
-│       └── templates/           # Content templates
-├── frontend/                    # React frontend
-│   ├── public/
-│   └── src/
-│       ├── App.tsx
-│       ├── App.css
-│       └── index.tsx
-├── tests/                       # Test suite
-│   ├── unit/
-│   └── integration/
-├── Dockerfile                   # Backend Docker config
-├── docker-compose.yml          # Multi-container setup
-├── pyproject.toml              # Python project config
-├── requirements.txt            # Python dependencies
-└── README.md
-```
-
-## 🔧 Configuration
-
-### Environment Variables
-
-Create a `.env` file in the root directory:
-
-```env
-# Backend
-PYTHONUNBUFFERED=1
-
-# Frontend
-REACT_APP_API_URL=http://localhost:8000
-```
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 📝 API Documentation
-
-Once the backend is running, visit:
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
-
-## 🎯 Roadmap
-
-- [ ] Integration with Google Gemini API for enhanced content generation
-- [ ] User authentication and content saving
-- [ ] Export content to various formats (PDF, HTML, JSON)
-- [ ] Real-time collaboration features
-- [ ] Advanced content customization options
-- [ ] Analytics dashboard for content performance
-- [ ] Plugin system for custom content types
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🙏 Acknowledgments
-
-- Built with [Google Agent Development Kit](https://github.com/google/adk)
-- Powered by [FastAPI](https://fastapi.tiangolo.com/)
-- UI built with [React](https://reactjs.org/)
-
-## 📧 Contact
-
-Project Link: [https://github.com/ilya-spy/adk-agentic-writer](https://github.com/ilya-spy/adk-agentic-writer)
 
 ---
 
-Made with ❤️ for the Agent Development Kit community
+## Project Structure
+
+```
+adk-agentic-writer/
+├── src/adk_agentic_writer/    # Main package
+├── frontend/                   # React UI
+├── examples/                   # Usage examples
+├── tests/                      # Test suite
+├── requirements.txt            # Dependencies
+├── README.md                   # This file
+└── ARCHITECTURE.md             # Architecture docs
+```
+
+---
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+---
+
+## Contributing
+
+Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+---
+
+## Support
+
+- 🐛 [Issue Tracker](https://github.com/yourusername/adk-agentic-writer/issues)
+- 💬 [Discussions](https://github.com/yourusername/adk-agentic-writer/discussions)
+
+---
+
+## Acknowledgments
+
+Built with:
+- [Google ADK](https://github.com/google/adk) - Agent Development Kit
+- [FastAPI](https://fastapi.tiangolo.com/) - Backend framework
+- [React](https://reactjs.org/) - Frontend framework
+- [Pydantic](https://pydantic-docs.helpmanual.io/) - Data validation
+
+---
+
+Made with ❤️ by the ADK Agentic Writer team

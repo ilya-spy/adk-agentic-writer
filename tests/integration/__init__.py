@@ -1,1 +1,1 @@
-"""Integration tests package."""
+"""Integration tests for ADK Agentic Writer."""

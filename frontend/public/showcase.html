@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Content Showcase - ADK Agentic Writer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .controls {
+            max-width: 900px;
+            margin: 0 auto 20px;
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        .controls h1 {
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+
+        .home-link {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            color: #667eea;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+        }
+
+        .home-link:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #2c3e50;
+        }
+
+        .form-group select,
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+
+        .form-group select:focus,
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #667eea;
+            font-size: 18px;
+        }
+
+        .error {
+            background: #f8d7da;
+            border: 2px solid #f5c6cb;
+            color: #721c24;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .logs-container {
+            background: #1e1e1e;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+        }
+
+        .log-entry {
+            padding: 8px 12px;
+            margin: 4px 0;
+            border-left: 3px solid #667eea;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 4px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .log-timestamp {
+            color: #888;
+            font-size: 11px;
+            margin-right: 8px;
+        }
+
+        .log-agent {
+            color: #667eea;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+
+        .log-message {
+            color: #e0e0e0;
+        }
+
+        .log-success {
+            border-left-color: #28a745;
+            background: rgba(40, 167, 69, 0.1);
+        }
+
+        .log-error {
+            border-left-color: #dc3545;
+            background: rgba(220, 53, 69, 0.1);
+        }
+
+        .log-info {
+            border-left-color: #17a2b8;
+            background: rgba(23, 162, 184, 0.1);
+        }
+
+        h1 {
+            color: #667eea;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+
+        h2 {
+            color: #667eea;
+            font-size: 18px;
+            margin: 20px 0 10px;
+        }
+
+        .card {
+            background: #f8f9fa;
+            border-left: 3px solid #667eea;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 6px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        }
+
+        .question {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 8px;
+            font-size: 15px;
+        }
+
+        .option {
+            padding: 8px 12px;
+            margin: 4px 0;
+            background: white;
+            border-radius: 4px;
+            border: 1px solid #e0e0e0;
+            font-size: 14px;
+        }
+
+        .correct {
+            background: #d4edda !important;
+            border-color: #28a745 !important;
+            font-weight: 600;
+        }
+
+        .summary {
+            background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border: 2px solid #667eea;
+        }
+
+        .summary-item {
+            display: inline-block;
+            margin-right: 20px;
+            font-size: 14px;
+        }
+
+        .summary-label {
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .node {
+            background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 10px;
+            border: 2px solid #667eea;
+        }
+
+        .branches {
+            margin-top: 15px;
+        }
+
+        .branch {
+            display: inline-block;
+            padding: 8px 16px;
+            margin: 5px;
+            background: #667eea;
+            color: white;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+
+        .meta {
+            color: #6c757d;
+            font-size: 0.9em;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #dee2e6;
+        }
+
+        .meta strong {
+            color: #2c3e50;
+        }
+    </style>
+</head>
+<body>
+    <a href="/" class="home-link">🏠 Home</a>
+    <div class="controls">
+        <h1>📺 Content Showcase</h1>
+        <div class="form-group">
+            <label for="team">Team:</label>
+            <select id="team">
+                <option value="static">Static Team (Fast, Template-based)</option>
+                <option value="gemini">Gemini Team (AI-powered, Requires API Key)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="contentType">Content Type:</label>
+            <select id="contentType">
+                <option value="quiz">Quiz</option>
+                <option value="branched_narrative">Branched Story</option>
+                <option value="quest_game">Quest Game</option>
+                <option value="web_simulation">Simulation</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="topic">Topic:</label>
+            <input type="text" id="topic" value="Python Programming" placeholder="Enter a topic...">
+        </div>
+        <button onclick="generateContent()" id="generateBtn">Generate & Display</button>
+    </div>
+
+    <div id="output"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        let logs = [];
+
+        function addLog(agent, message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            logs.push({ timestamp, agent, message, type });
+            updateLogsDisplay();
+        }
+
+        function updateLogsDisplay() {
+            const logsContainer = document.getElementById('logs');
+            if (!logsContainer) return;
+
+            logsContainer.innerHTML = logs.map(log => `
+                <div class="log-entry log-${log.type}">
+                    <span class="log-timestamp">${log.timestamp}</span>
+                    <span class="log-agent">[${log.agent}]</span>
+                    <span class="log-message">${log.message}</span>
+                </div>
+            `).join('');
+            
+            // Auto-scroll to bottom
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+        }
+
+        async function generateContent() {
+            const team = document.getElementById('team').value;
+            const contentType = document.getElementById('contentType').value;
+            const topic = document.getElementById('topic').value;
+            const output = document.getElementById('output');
+            const btn = document.getElementById('generateBtn');
+
+            // Reset logs
+            logs = [];
+
+            // Show loading with logs
+            output.innerHTML = `
+                <div class="container">
+                    <h2>🔄 Generation Process</h2>
+                    <div class="logs-container" id="logs"></div>
+                    <div class="loading">⏳ Generating content...</div>
+                </div>
+            `;
+            btn.disabled = true;
+
+            try {
+                // Simulate agent logs
+                addLog('System', `Starting ${team} team`, 'info');
+                addLog('Coordinator', `Received request: ${contentType} about "${topic}"`, 'info');
+                
+                await new Promise(resolve => setTimeout(resolve, 300));
+                addLog('Coordinator', `Routing to ${contentType} agent`, 'info');
+                
+                await new Promise(resolve => setTimeout(resolve, 200));
+                addLog('Agent', `Initializing ${contentType} generation`, 'info');
+
+                // Generate content
+                const startTime = Date.now();
+                const response = await fetch(`${API_BASE}/generate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        team: team,
+                        content_type: contentType,
+                        topic: topic,
+                        parameters: {
+                            num_questions: 3,
+                            num_branches: 3
+                        }
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('API Response:', data);
+                
+                // Extract content - API returns nested structure with reviewer wrapping
+                let content;
+                if (data.content && data.content.content && data.content.content.original_content) {
+                    // Reviewed content (has original_content from reviewer)
+                    content = data.content.content.original_content;
+                } else if (data.content && data.content.content) {
+                    // Direct content
+                    content = data.content.content;
+                } else if (data.content) {
+                    content = data.content;
+                } else {
+                    content = data;
+                }
+                
+                console.log('Extracted content:', content);
+                const duration = Date.now() - startTime;
+
+                addLog('Agent', `Generated ${contentType} successfully`, 'success');
+                addLog('Coordinator', `Workflow completed in ${duration}ms`, 'success');
+                addLog('System', `Ready to display`, 'success');
+
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                // Render content
+                output.innerHTML = renderContent(contentType, content, topic, team, data);
+                
+                // If it's a story, render the first node
+                if (contentType === 'branched_narrative') {
+                    window.storyPath = [];
+                    renderStoryNode(window.currentNode);
+                }
+
+            } catch (error) {
+                addLog('System', `Error: ${error.message}`, 'error');
+                output.innerHTML = `
+                    <div class="container">
+                        <h2>🔄 Generation Process</h2>
+                        <div class="logs-container" id="logs"></div>
+                        <div class="error">
+                            <strong>Error:</strong> ${error.message}
+                            <br><br>
+                            Make sure the backend server is running at ${API_BASE}
+                        </div>
+                    </div>
+                `;
+                updateLogsDisplay();
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function renderContent(contentType, content, topic, team, fullData) {
+            console.log('renderContent called with:', {contentType, content, topic, team, fullData});
+            
+            let html = '<div class="container">';
+            
+            // Show logs first
+            html += '<h2>🔄 Generation Process</h2>';
+            html += '<div class="logs-container" id="logs"></div>';
+            
+            // Summary
+            html += '<div class="summary">';
+            html += '<div class="summary-item"><span class="summary-label">Team:</span> ' + team.toUpperCase() + '</div>';
+            html += '<div class="summary-item"><span class="summary-label">Type:</span> ' + contentType.replace('_', ' ').toUpperCase() + '</div>';
+            html += '<div class="summary-item"><span class="summary-label">Topic:</span> ' + topic + '</div>';
+            if (fullData?.content?.agents_involved) {
+                html += '<div class="summary-item"><span class="summary-label">Agents:</span> ' + fullData.content.agents_involved.length + '</div>';
+            }
+            html += '</div>';
+            
+            html += '<h2>📄 Generated Content</h2>';
+            
+            // Debug: show what we received
+            if (!content || Object.keys(content).length === 0) {
+                html += '<div class="error">No content received. Check console for details.</div>';
+                html += '<pre style="font-size: 11px; background: #f5f5f5; padding: 10px;">' + JSON.stringify(fullData, null, 2) + '</pre>';
+            }
+
+            if (contentType === 'quiz') {
+                html += `<h3>${content.title || 'Quiz'}</h3>`;
+
+                (content.questions || []).forEach((q, i) => {
+                    html += `
+                        <div class="card">
+                            <div class="question">Q${i + 1}. ${q.question}</div>
+                    `;
+                    (q.options || []).forEach((opt, j) => {
+                        const isCorrect = j === q.correct_answer;
+                        const cssClass = isCorrect ? 'option correct' : 'option';
+                        const checkmark = isCorrect ? '✓ ' : '';
+                        html += `<div class="${cssClass}">${checkmark}${opt}</div>`;
+                    });
+                    html += `</div>`;
+                });
+
+            } else if (contentType === 'branched_narrative') {
+                html += `<h3>${content.title || 'Story'}</h3>`;
+                html += `<p style="font-style: italic; color: #666;">${content.synopsis || ''}</p>`;
+
+                const nodes = content.nodes || {};
+                const startNode = content.start_node || 'start';
+
+                // Store nodes globally for navigation
+                window.storyNodes = nodes;
+                window.currentNode = startNode;
+
+                html += `<div id="story-container"></div>`;
+
+            } else if (contentType === 'web_simulation') {
+                html += `<h3>${content.title || 'Simulation'}</h3>`;
+                html += `<p style="font-style: italic; color: #666; margin-bottom: 20px;">${content.description || ''}</p>`;
+
+                // Variables Section
+                if (content.variables && content.variables.length > 0) {
+                    html += `<h4 style="color: #667eea; margin-top: 20px; margin-bottom: 10px;">📊 Variables</h4>`;
+                    html += `<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 20px;">`;
+                    
+                    content.variables.forEach(variable => {
+                        const defaultVal = variable.initial_value !== undefined ? variable.initial_value : 
+                                          variable.default !== undefined ? variable.default : 
+                                          variable.min_value !== undefined ? variable.min_value : 0;
+                        const minVal = variable.min_value !== undefined ? variable.min_value : variable.min !== undefined ? variable.min : 0;
+                        const maxVal = variable.max_value !== undefined ? variable.max_value : variable.max !== undefined ? variable.max : 100;
+                        const unit = variable.unit ? ` ${variable.unit}` : '';
+                        
+                        html += `
+                            <div class="card" style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-left: 4px solid #3b82f6;">
+                                <div style="font-weight: 600; color: #1e40af; margin-bottom: 8px; font-size: 15px;">
+                                    ${variable.name}
+                                </div>
+                                <div style="background: white; padding: 8px; border-radius: 6px; margin-bottom: 8px;">
+                                    <div style="font-size: 24px; font-weight: 700; color: #3b82f6;">
+                                        ${defaultVal}${unit}
+                                    </div>
+                                    <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
+                                        Range: ${minVal}${unit} - ${maxVal}${unit}
+                                    </div>
+                                </div>
+                                <p style="font-size: 12px; color: #475569; line-height: 1.4;">
+                                    ${variable.description || 'No description'}
+                                </p>
+                            </div>
+                        `;
+                    });
+                    
+                    html += `</div>`;
+                }
+
+                // Controls Section
+                if (content.controls && content.controls.length > 0) {
+                    html += `<h4 style="color: #667eea; margin-top: 20px; margin-bottom: 10px;">🎛️ Controls</h4>`;
+                    html += `<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 20px;">`;
+                    
+                    content.controls.forEach(control => {
+                        const typeIcon = control.type === 'slider' ? '🎚️' : control.type === 'button' ? '🔘' : '🔲';
+                        const typeColor = control.type === 'slider' ? '#8b5cf6' : control.type === 'button' ? '#10b981' : '#f59e0b';
+                        
+                        html += `
+                            <div class="card" style="background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%); border-left: 4px solid ${typeColor};">
+                                <div style="font-weight: 600; color: #6b21a8; margin-bottom: 8px; font-size: 14px;">
+                                    ${typeIcon} ${control.label}
+                                </div>
+                                <div style="background: white; padding: 8px; border-radius: 6px; margin-bottom: 8px;">
+                                    <div style="font-size: 12px; color: #64748b;">
+                                        <strong>Type:</strong> ${control.type}
+                                    </div>
+                                    ${control.target_variable ? `<div style="font-size: 12px; color: #64748b;"><strong>Target:</strong> ${control.target_variable}</div>` : ''}
+                                    ${control.min !== undefined ? `<div style="font-size: 12px; color: #64748b;"><strong>Range:</strong> ${control.min} - ${control.max}</div>` : ''}
+                                    ${control.action ? `<div style="font-size: 12px; color: #64748b;"><strong>Action:</strong> ${control.action}</div>` : ''}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += `</div>`;
+                }
+
+                // Rules Section
+                if (content.rules && content.rules.length > 0) {
+                    html += `<h4 style="color: #667eea; margin-top: 20px; margin-bottom: 10px;">📜 Simulation Rules</h4>`;
+                    html += `<div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">`;
+                    
+                    content.rules.forEach((rule, index) => {
+                        html += `
+                            <div class="card" style="background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%); border-left: 4px solid #eab308;">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <div style="
+                                        background: #eab308; 
+                                        color: white; 
+                                        width: 28px; 
+                                        height: 28px; 
+                                        border-radius: 50%; 
+                                        display: flex; 
+                                        align-items: center; 
+                                        justify-content: center; 
+                                        font-weight: 700;
+                                        font-size: 13px;
+                                        flex-shrink: 0;
+                                    ">
+                                        ${index + 1}
+                                    </div>
+                                    <div style="font-size: 13px; color: #713f12; line-height: 1.5;">
+                                        ${rule}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += `</div>`;
+                }
+
+                // Initial State Summary
+                if (content.initial_state) {
+                    html += `<h4 style="color: #667eea; margin-top: 20px; margin-bottom: 10px;">🎯 Initial State</h4>`;
+                    html += `
+                        <div class="card" style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-left: 4px solid #22c55e;">
+                            <pre style="font-size: 12px; color: #166534; margin: 0; white-space: pre-wrap; word-wrap: break-word;">${JSON.stringify(content.initial_state, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+
+            } else if (contentType === 'quest_game') {
+                html += `<h3>${content.title || 'Quest Game'}</h3>`;
+                html += `<p style="font-style: italic; color: #666; margin-bottom: 20px;">${content.description || ''}</p>`;
+                
+                // Show all nodes with all choices
+                if (content.nodes && Object.keys(content.nodes).length > 0) {
+                    const nodeCount = Object.keys(content.nodes).length;
+                    html += `
+                        <div class="card" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-left: 4px solid #f59e0b; margin-bottom: 20px;">
+                            <div style="font-weight: 600; color: #92400e; margin-bottom: 8px;">
+                                🗺️ Complete Game Map
+                            </div>
+                            <div style="font-size: 13px; color: #78350f;">
+                                <strong>${nodeCount}</strong> scenes with all choices
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Show ALL nodes with ALL choices
+                    Object.entries(content.nodes).forEach(([nodeId, node], index) => {
+                        const isEnding = node.is_ending || (node.choices && node.choices.length === 0);
+                        html += `
+                            <div class="card" style="margin-bottom: 15px; ${isEnding ? 'border-left: 4px solid #ef4444;' : ''}">
+                                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                    <div style="background: #667eea; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0;">
+                                        ${index + 1}
+                                    </div>
+                                    <div style="font-weight: 600; color: #667eea; font-size: 15px;">
+                                        ${node.title || nodeId}
+                                        ${isEnding ? ' <span style="background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">ENDING</span>' : ''}
+                                    </div>
+                                </div>
+                                <p style="font-size: 13px; color: #666; margin-bottom: 12px; line-height: 1.5;">
+                                    ${node.description || ''}
+                                </p>
+                                ${node.choices && node.choices.length > 0 ? `
+                                    <div style="background: #f8fafc; padding: 12px; border-radius: 8px; border-left: 3px solid #94a3b8;">
+                                        <div style="font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 8px;">
+                                            ⚡ Choices:
+                                        </div>
+                                        ${node.choices.map((choice, i) => `
+                                            <div style="display: flex; align-items: start; gap: 8px; margin-bottom: 6px;">
+                                                <div style="background: #94a3b8; color: white; min-width: 20px; height: 20px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0;">
+                                                    ${i + 1}
+                                                </div>
+                                                <div style="font-size: 12px; color: #334155;">
+                                                    ${choice.text} <span style="color: #94a3b8;">→ ${choice.next_node_id}</span>
+                                                </div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                ` : isEnding ? `
+                                    <div style="background: #fef2f2; padding: 10px; border-radius: 8px; border-left: 3px solid #ef4444;">
+                                        <div style="font-size: 12px; color: #991b1b; font-weight: 600;">
+                                            🏁 Game ends here
+                                        </div>
+                                    </div>
+                                ` : ''}
+                                ${node.requirements && node.requirements.length > 0 ? `
+                                    <div style="background: #fef3c7; padding: 8px; border-radius: 6px; margin-top: 10px; border-left: 3px solid #f59e0b;">
+                                        <div style="font-size: 11px; color: #92400e;">
+                                            <strong>Requires:</strong> ${node.requirements.join(', ')}
+                                        </div>
+                                    </div>
+                                ` : ''}
+                                ${node.rewards && node.rewards.length > 0 ? `
+                                    <div style="background: #dcfce7; padding: 8px; border-radius: 6px; margin-top: 10px; border-left: 3px solid #22c55e;">
+                                        <div style="font-size: 11px; color: #166534;">
+                                            <strong>Rewards:</strong> ${node.rewards.join(', ')}
+                                        </div>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `;
+                    });
+                }
+
+            } else {
+                html += `<h3>${contentType.replace('_', ' ').toUpperCase()}</h3>`;
+                html += `<pre style="font-size: 12px; background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto;">${JSON.stringify(content, null, 2)}</pre>`;
+            }
+
+            html += `</div>`;
+
+            // Update logs after rendering
+            setTimeout(updateLogsDisplay, 100);
+
+            return html;
+        }
+
+        // Story navigation functions
+        function renderStoryNode(nodeId) {
+            const container = document.getElementById('story-container');
+            if (!container || !window.storyNodes) return;
+
+            const node = window.storyNodes[nodeId];
+            if (!node) {
+                container.innerHTML = '<div class="error">Node not found: ' + nodeId + '</div>';
+                return;
+            }
+
+            let html = '<div class="card">';
+            
+            // Node content
+            html += `<p style="font-size: 15px; line-height: 1.6; margin-bottom: 20px;">${node.content}</p>`;
+            
+            // Branches as buttons
+            const branches = node.branches || [];
+            if (branches.length > 0) {
+                html += '<div style="display: flex; flex-direction: column; gap: 10px;">';
+                branches.forEach((branch, i) => {
+                    html += `
+                        <button 
+                            onclick="navigateToNode('${branch.next_node_id}')" 
+                            class="story-choice-btn"
+                            style="
+                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                                color: white;
+                                border: none;
+                                padding: 12px 20px;
+                                border-radius: 8px;
+                                font-size: 14px;
+                                cursor: pointer;
+                                transition: transform 0.2s, box-shadow 0.2s;
+                                text-align: left;
+                            "
+                            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.4)'"
+                            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'"
+                        >
+                            → ${branch.text}
+                        </button>
+                    `;
+                });
+                html += '</div>';
+            } else {
+                // Ending node
+                html += '<div style="margin-top: 20px; padding: 15px; background: #f0f9ff; border-left: 4px solid #3b82f6; border-radius: 4px;">';
+                html += '<strong style="color: #1e40af;">🎬 The End</strong>';
+                html += '<p style="margin-top: 8px; color: #1e40af; font-size: 13px;">You have reached an ending!</p>';
+                html += '<button onclick="navigateToNode(window.storyNodes[Object.keys(window.storyNodes)[0]].node_id || \'start\')" style="margin-top: 10px; padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">↺ Start Over</button>';
+                html += '</div>';
+            }
+            
+            html += '</div>';
+            
+            // Path history
+            if (!window.storyPath) window.storyPath = [];
+            window.storyPath.push(nodeId);
+            
+            if (window.storyPath.length > 1) {
+                html += '<div style="margin-top: 15px; font-size: 12px; color: #888;">';
+                html += '<strong>Your Path:</strong> ' + window.storyPath.join(' → ');
+                html += '</div>';
+            }
+            
+            container.innerHTML = html;
+        }
+
+        function navigateToNode(nodeId) {
+            window.currentNode = nodeId;
+            renderStoryNode(nodeId);
+        }
+
+        // Auto-generate on page load
+        window.addEventListener('load', () => {
+            generateContent();
+        });
+    </script>
+</body>
+</html>
+

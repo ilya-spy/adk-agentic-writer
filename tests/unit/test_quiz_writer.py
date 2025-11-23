@@ -2,23 +2,23 @@
 
 import pytest
 
-from adk_agentic_writer.agents.quiz_writer import QuizWriterAgent
+from adk_agentic_writer.agents import StaticQuizWriterAgent
 from adk_agentic_writer.models.agent_models import AgentStatus
 
 
 @pytest.mark.asyncio
 async def test_quiz_writer_initialization() -> None:
     """Test quiz writer agent initialization."""
-    agent = QuizWriterAgent()
+    agent = StaticQuizWriterAgent()
     
-    assert agent.agent_id == "quiz_writer_1"
+    assert agent.agent_id == "static_quiz_writer"
     assert agent.state.status == AgentStatus.IDLE
 
 
 @pytest.mark.asyncio
 async def test_quiz_writer_generate_quiz() -> None:
     """Test generating a quiz."""
-    agent = QuizWriterAgent()
+    agent = StaticQuizWriterAgent()
     
     result = await agent.process_task(
         "Create a quiz about Python programming",

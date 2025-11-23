@@ -1,1 +1,1 @@
-"""Tests package."""
+"""Test package for ADK Agentic Writer."""

@@ -1,7 +1,9 @@
-"""Base agent class for all agents in the system."""
+"""Base agent class - single source of truth for all agents.
+
+Both static/ and gemini/ agents inherit from this base class.
+"""
 
 import logging
-from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 
 from ..models.agent_models import AgentRole, AgentState, AgentStatus
@@ -9,10 +11,25 @@ from ..models.agent_models import AgentRole, AgentState, AgentStatus
 logger = logging.getLogger(__name__)
 
 
-class BaseAgent(ABC):
-    """Base class for all agents in the multi-agentic system."""
+class BaseAgent:
+    """Base class for all agents (static and gemini).
+    
+    Provides core functionality:
+    - State management
+    - Status updates
+    - Message handling
+    
+    Implements AgentProtocol interface.
+    
+    Subclasses should implement:
+    - process_task() - Required by AgentProtocol
+    - EditorialProtocol methods (if applicable)
+    - ContentProtocol methods (if applicable)
+    """
 
-    def __init__(self, agent_id: str, role: AgentRole, config: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self, agent_id: str, role: AgentRole, config: Optional[Dict[str, Any]] = None
+    ):
         """
         Initialize the base agent.
 
@@ -31,30 +48,30 @@ class BaseAgent(ABC):
         )
         logger.info(f"Initialized agent {agent_id} with role {role}")
 
-    @abstractmethod
-    async def process_task(self, task_description: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Process a task assigned to this agent.
+    async def update_status(self, status: AgentStatus) -> None:
+        """Update the agent's status.
+        
+        Implements AgentProtocol.
 
         Args:
-            task_description: Description of the task to perform
-            parameters: Parameters for the task
-
-        Returns:
-            Dict containing the task results
+            status: New status for the agent
         """
-        pass
-
-    async def update_status(self, status: AgentStatus) -> None:
-        """Update the agent's status."""
         self.state.status = status
         logger.debug(f"Agent {self.agent_id} status updated to {status}")
 
     def get_state(self) -> AgentState:
-        """Get the current state of the agent."""
+        """Get the current state of the agent.
+        
+        Implements AgentProtocol.
+
+        Returns:
+            Current agent state
+        """
         return self.state
 
-    async def receive_message(self, message: str, sender: str, data: Optional[Dict[str, Any]] = None) -> Optional[str]:
+    async def receive_message(
+        self, message: str, sender: str, data: Optional[Dict[str, Any]] = None
+    ) -> Optional[str]:
         """
         Receive a message from another agent.
 
@@ -68,3 +85,7 @@ class BaseAgent(ABC):
         """
         logger.info(f"Agent {self.agent_id} received message from {sender}: {message}")
         return None
+
+
+__all__ = ["BaseAgent"]
+
