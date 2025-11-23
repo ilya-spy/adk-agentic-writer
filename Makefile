@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test lint format clean run-backend run-frontend docker-up docker-down
+.PHONY: help install install-dev test lint format clean run-backend docker-up docker-down
 
 help:
 	@echo "Available commands:"
@@ -9,7 +9,6 @@ help:
 	@echo "  make format        - Format code"
 	@echo "  make clean         - Clean build artifacts"
 	@echo "  make run-backend   - Run backend server"
-	@echo "  make run-frontend  - Run frontend dev server"
 	@echo "  make docker-up     - Start with Docker Compose"
 	@echo "  make docker-down   - Stop Docker Compose"
 
@@ -38,9 +37,6 @@ clean:
 
 run-backend:
 	uvicorn src.adk_agentic_writer.backend.api:app --reload --host 0.0.0.0 --port 8000
-
-run-frontend:
-	cd frontend && npm start
 
 docker-up:
 	docker-compose up --build

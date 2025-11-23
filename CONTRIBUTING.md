@@ -19,15 +19,16 @@ Thank you for your interest in contributing to ADK Agentic Writer! This document
 # Install dependencies
 pip install -r requirements-dev.txt
 
-# Install frontend dependencies
-cd frontend && npm install && cd ..
-
 # Run tests
 pytest
 
 # Run linters
 ruff check src/ tests/
 mypy src/
+
+# Format code
+black src/ tests/
+ruff check --fix src/ tests/
 ```
 
 ## Code Style
@@ -69,7 +70,8 @@ To add a new content type:
 2. Create a specialized agent for the content type
 3. Update the coordinator to handle the new type
 4. Add API endpoints in `backend/api.py`
-5. Update frontend UI to support the new type
+5. Update static HTML UI in `frontend/public/` to support the new type
+6. Add tests in `tests/unit/` and `tests/integration/`
 
 ## Questions?
 
