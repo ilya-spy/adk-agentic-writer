@@ -37,7 +37,6 @@ class SequentialEditorialWorkflow(Workflow):
             scope=WorkflowScope.EDITORIAL,
             description="Review → Refine → Validate in sequence",
             agents=stages,
-            parameters={"steps": ["review", "refine", "validate"]},
         )
         logger.info(
             f"Sequential editorial workflow '{name}' configured with {len(stages)} stages"
@@ -72,7 +71,6 @@ class ParallelEditorialWorkflow(Workflow):
             description="Multiple reviewers provide feedback concurrently",
             agents=generators,
             merge_strategy=selection_strategy,
-            parameters={"consensus_strategy": "majority_vote"},
         )
         self.selection_strategy = selection_strategy
         logger.info(
@@ -116,7 +114,6 @@ class IterativeEditorialWorkflow(Workflow):
             agents=[generator],
             condition=condition_fn,
             max_iterations=max_iterations,
-            parameters={"quality_threshold": 80.0, "exit_on_quality": True},
         )
         self.evaluator = evaluator
         logger.info(
@@ -154,10 +151,6 @@ class AdaptiveEditorialWorkflow(Workflow):
             scope=WorkflowScope.EDITORIAL,
             description="Route to different review strategies based on content type",
             agents=[type_analyzer],
-            parameters={
-                "routing_criteria": "content_complexity",
-                "fallback": "basic_reviewer",
-            },
         )
         self.type_analyzer = type_analyzer
         self.strategies = strategies

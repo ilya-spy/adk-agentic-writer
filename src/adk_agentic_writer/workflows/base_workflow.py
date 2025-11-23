@@ -26,7 +26,6 @@ class Workflow:
         condition: Optional[Callable] = None,
         max_iterations: Optional[int] = None,
         merge_strategy: Optional[str] = None,
-        parameters: Optional[Dict[str, Any]] = None,
     ):
         """
         Initialize workflow with metadata.
@@ -36,11 +35,10 @@ class Workflow:
             pattern: Orchestration pattern (SEQUENTIAL, PARALLEL, LOOP, CONDITIONAL)
             scope: Application scope (AGENT, CONTENT, EDITORIAL)
             description: What this workflow does
-            agents: List or dict of agents/generators to execute
-            condition: Condition function for loop/conditional workflows
+            agents: List or dict of agents/generators to execute (internal, not in metadata)
+            condition: Condition function for loop/conditional workflows (internal, not in metadata)
             max_iterations: Maximum iterations for loop workflows
             merge_strategy: Strategy for parallel workflows
-            parameters: Additional workflow-specific parameters
         """
         self.name = name
         self.agents = agents or []
@@ -48,6 +46,8 @@ class Workflow:
         self.max_iterations = max_iterations
         self.merge_strategy = merge_strategy
 
+        # Metadata contains only descriptive information for agents to evaluate workflows
+        # External interface details (agents, condition, parameters) are excluded
         self.metadata = WorkflowMetadata(
             name=name,
             pattern=pattern,
@@ -55,7 +55,6 @@ class Workflow:
             description=description,
             max_iterations=max_iterations,
             merge_strategy=merge_strategy,
-            parameters=parameters or {},
         )
 
         logger.info(

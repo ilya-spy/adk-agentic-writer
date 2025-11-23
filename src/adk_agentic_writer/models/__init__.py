@@ -11,9 +11,12 @@ from .agent_models import (
     AgentTask,
     AgentToolModel,
     FunctionToolModel,
-    LoopAgentModel,
-    ParallelAgentModel,
-    SequentialAgentModel,
+    OrchestrationStrategy,
+    TeamMetadata,
+    WorkflowDecision,
+    WorkflowMetadata,
+    WorkflowPattern,
+    WorkflowScope,
 )
 from .content_models import (
     BranchedNarrative,
@@ -46,13 +49,17 @@ __all__ = [
     "AgentTask",
     "AgentConfig",
     "AGENT_TEAM_CONFIGS",
-    # Base agent models (matching Google GenAI API)
     "AgentModel",
-    "SequentialAgentModel",
-    "ParallelAgentModel",
-    "LoopAgentModel",
     "AgentToolModel",
     "FunctionToolModel",
+    # Workflow and team models
+    "TeamMetadata",
+    "WorkflowMetadata",
+    "WorkflowPattern",
+    "WorkflowScope",
+    # Orchestration strategy
+    "OrchestrationStrategy",
+    "WorkflowDecision",
     # Content models
     "BranchedNarrative",
     "ContentRequest",

@@ -35,7 +35,6 @@ class SequentialAgentWorkflow(Workflow):
             scope=WorkflowScope.AGENT,
             description="Execute agents in sequence, output of each feeds into next",
             agents=agents,
-            parameters={"execution_order": "strict"},
         )
         logger.info(
             f"Sequential agent workflow '{name}' configured with {len(agents)} agents"
@@ -66,7 +65,6 @@ class ParallelAgentWorkflow(Workflow):
             description="Execute agents concurrently and merge results",
             agents=agents,
             merge_strategy=merge_strategy,
-            parameters={"wait_for_all": True},
         )
         logger.info(
             f"Parallel agent workflow '{name}' configured with {len(agents)} agents"
@@ -105,7 +103,6 @@ class LoopAgentWorkflow(Workflow):
             agents=[agent],
             condition=condition,
             max_iterations=max_iterations,
-            parameters={"condition": "quality_threshold_met"},
         )
         logger.info(
             f"Loop agent workflow '{name}' configured with max {max_iterations} iterations"
@@ -141,7 +138,6 @@ class ConditionalAgentWorkflow(Workflow):
             description="Route to different agents based on conditions",
             agents=agents,
             condition=condition,
-            parameters={"routing_logic": "condition_based"},
         )
         logger.info(
             f"Conditional agent workflow '{name}' configured with {len(agents)} branches"
