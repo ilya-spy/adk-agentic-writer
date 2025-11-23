@@ -3,324 +3,467 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ADK Agentic Writer - API Status</title>
+    <title>ADK Agentic Writer - Server Directory</title>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
+            padding: 40px 20px;
         }
-        
+
         .container {
-            max-width: 800px;
-            width: 100%;
-        }
-        
-        .card {
+            max-width: 900px;
+            margin: 0 auto;
             background: white;
             border-radius: 20px;
-            padding: 50px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
         }
-        
-        .logo {
-            font-size: 4em;
-            margin-bottom: 20px;
-        }
-        
+
         h1 {
-            color: #333;
-            font-size: 2.5em;
+            color: #667eea;
             margin-bottom: 10px;
+            font-size: 32px;
         }
-        
+
         .subtitle {
             color: #666;
-            font-size: 1.2em;
             margin-bottom: 30px;
+            font-size: 16px;
         }
-        
-        .version {
-            display: inline-block;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 8px 20px;
-            border-radius: 20px;
-            font-size: 0.9em;
+
+        .status {
+            background: #f0f9ff;
+            border-left: 4px solid #3b82f6;
+            padding: 15px;
             margin-bottom: 30px;
+            border-radius: 8px;
         }
-        
-        .status-section {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 30px;
+
+        .status.healthy {
+            background: #f0fdf4;
+            border-left-color: #22c55e;
         }
-        
-        .status-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px 0;
-            border-bottom: 1px solid #e0e0e0;
+
+        .status.error {
+            background: #fef2f2;
+            border-left-color: #ef4444;
         }
-        
-        .status-item:last-child {
-            border-bottom: none;
+
+        .status-text {
+            font-weight: 600;
+            margin-bottom: 5px;
         }
-        
-        .status-label {
+
+        .status-detail {
+            font-size: 14px;
             color: #666;
-            font-weight: 600;
         }
-        
-        .status-value {
-            color: #333;
+
+        .section {
+            margin-bottom: 30px;
         }
-        
-        .status-badge {
-            display: inline-block;
-            padding: 5px 15px;
-            border-radius: 15px;
-            font-size: 0.9em;
-            font-weight: 600;
-        }
-        
-        .status-healthy {
-            background: #d4edda;
-            color: #155724;
-        }
-        
-        .status-loading {
-            background: #fff3cd;
-            color: #856404;
-        }
-        
-        .status-error {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        
-        .links {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-top: 30px;
-        }
-        
-        .link-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 10px;
-            text-decoration: none;
-            transition: transform 0.2s, box-shadow 0.2s;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .link-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
-        }
-        
-        .link-icon {
-            font-size: 2em;
-        }
-        
-        .link-title {
-            font-weight: 600;
-            font-size: 1.1em;
-        }
-        
-        .link-desc {
-            font-size: 0.9em;
-            opacity: 0.9;
-        }
-        
-        .agents-list {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 10px;
-            margin-top: 20px;
-        }
-        
-        .agents-list h3 {
+
+        .section h2 {
             color: #333;
             margin-bottom: 15px;
-        }
-        
-        .agent-badges {
+            font-size: 20px;
             display: flex;
-            flex-wrap: wrap;
+            align-items: center;
             gap: 10px;
-            justify-content: center;
         }
-        
-        .agent-badge {
-            background: white;
-            border: 2px solid #667eea;
-            color: #667eea;
-            padding: 8px 15px;
-            border-radius: 20px;
-            font-size: 0.9em;
+
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .card {
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+
+        .card:hover {
+            border-color: #667eea;
+            transform: translateY(-4px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.2);
+        }
+
+        .card-title {
             font-weight: 600;
+            margin-bottom: 8px;
+            color: #667eea;
+            font-size: 16px;
         }
-        
+
+        .card-description {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.5;
+        }
+
+        .endpoint-list {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .endpoint-wrapper {
+            margin-bottom: 8px;
+        }
+
+        .endpoint {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .endpoint:hover {
+            border-color: #667eea;
+            background: #f0f9ff;
+        }
+
+        .method {
+            font-weight: 700;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-right: 12px;
+            min-width: 50px;
+            text-align: center;
+        }
+
+        .method.get {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .method.post {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .endpoint-path {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #333;
+        }
+
         .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .spinner {
             border: 3px solid #f3f3f3;
             border-top: 3px solid #667eea;
             border-radius: 50%;
+            width: 40px;
+            height: 40px;
             animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
         }
-        
+
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        
-        .footer {
-            margin-top: 30px;
-            color: #999;
-            font-size: 0.9em;
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .badge.online {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .badge.offline {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .response-container {
+            display: none;
+            margin-top: 8px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            overflow: hidden;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        .response-container.visible {
+            display: block;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                max-height: 0;
+            }
+            to {
+                opacity: 1;
+                max-height: 500px;
+            }
+        }
+
+        .response-header {
+            background: #667eea;
+            color: white;
+            padding: 10px 15px;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .response-status {
+            font-size: 11px;
+            padding: 3px 10px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        .response-json {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.5;
+            overflow-x: auto;
+            white-space: pre;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 0 5px;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+
+        .close-btn:hover {
+            opacity: 1;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="card">
-            <div class="logo">🤖</div>
-            <h1>ADK Agentic Writer</h1>
-            <p class="subtitle">Multi-Agentic Interactive Content Production System</p>
-            <div class="version">Version 0.1.0</div>
-            
-            <div class="status-section">
-                <div class="status-item">
-                    <span class="status-label">API Status</span>
-                    <span class="status-value">
-                        <span id="apiStatus" class="status-badge status-loading">
-                            <span class="loading"></span> Checking...
-                        </span>
-                    </span>
-                </div>
-                <div class="status-item">
-                    <span class="status-label">Active Agents</span>
-                    <span class="status-value" id="agentCount">—</span>
-                </div>
-                <div class="status-item">
-                    <span class="status-label">Content Types</span>
-                    <span class="status-value">4 (Quiz, Game, Story, Simulation)</span>
-                </div>
+        <h1>🚀 ADK Agentic Writer</h1>
+        <p class="subtitle">Multi-Agent Content Generation System</p>
+
+        <div id="status" class="status">
+            <div class="loading">
+                <div class="spinner"></div>
+                <div>Checking server status...</div>
             </div>
-            
-            <div class="links">
-                <a href="/frontend" class="link-card">
-                    <div class="link-icon">🎨</div>
-                    <div class="link-title">Content Generator</div>
-                    <div class="link-desc">Create interactive content</div>
+        </div>
+
+        <div class="section">
+            <h2>📄 Pages</h2>
+            <div class="card-grid">
+                <a href="/showcase" class="card">
+                    <div class="card-title">🎨 Interactive Showcase</div>
+                    <div class="card-description">
+                        Generate content with real-time agent logs. Test all 4 content types with both Static and Gemini teams.
+                    </div>
                 </a>
-                
-                <a href="/docs" class="link-card">
-                    <div class="link-icon">📚</div>
-                    <div class="link-title">API Documentation</div>
-                    <div class="link-desc">Swagger UI</div>
+                <a href="/frontend" class="card">
+                    <div class="card-title">⚙️ Legacy Frontend</div>
+                    <div class="card-description">
+                        Original test interface with workflow pattern selection and API key input.
+                    </div>
                 </a>
-                
-                <a href="/redoc" class="link-card">
-                    <div class="link-icon">📖</div>
-                    <div class="link-title">ReDoc</div>
-                    <div class="link-desc">Alternative docs</div>
-                </a>
-                
-                <a href="/api" class="link-card">
-                    <div class="link-icon">⚡</div>
-                    <div class="link-title">API Info</div>
-                    <div class="link-desc">JSON endpoint</div>
-                </a>
-                
-                <a href="/agents" class="link-card">
-                    <div class="link-icon">🤖</div>
-                    <div class="link-title">Agents Status</div>
-                    <div class="link-desc">JSON agents list</div>
+                <a href="/docs" class="card" target="_blank">
+                    <div class="card-title">📖 API Documentation</div>
+                    <div class="card-description">
+                        OpenAPI documentation with interactive API testing interface.
+                    </div>
                 </a>
             </div>
-            
-            <div class="agents-list" id="agentsList" style="display: none;">
-                <h3>Available Agents</h3>
-                <div class="agent-badges" id="agentBadges"></div>
-            </div>
-            
-            <div class="footer">
-                Built with FastAPI, React, and the Google Agent Development Kit
+        </div>
+
+        <div class="section">
+            <h2>🔌 API Endpoints</h2>
+            <div class="endpoint-list">
+                <div class="endpoint-wrapper">
+                    <div class="endpoint" onclick="testEndpoint('GET', '/health', this)">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-path">/health</span>
+                    </div>
+                    <div class="response-container"></div>
+                </div>
+                <div class="endpoint-wrapper">
+                    <div class="endpoint" onclick="testEndpoint('GET', '/teams', this)">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-path">/teams</span>
+                    </div>
+                    <div class="response-container"></div>
+                </div>
+                <div class="endpoint-wrapper">
+                    <div class="endpoint" onclick="testEndpoint('GET', '/content-types', this)">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-path">/content-types</span>
+                    </div>
+                    <div class="response-container"></div>
+                </div>
+                <div class="endpoint-wrapper">
+                    <div class="endpoint" onclick="showGenerateInfo(this)">
+                        <span class="method post">POST</span>
+                        <span class="endpoint-path">/generate</span>
+                    </div>
+                    <div class="response-container"></div>
+                </div>
             </div>
         </div>
     </div>
-    
+
     <script>
-        // Check API health and load agents
-        async function checkHealth() {
+        const API_BASE = 'http://localhost:8000';
+
+        async function checkServerStatus() {
+            const statusDiv = document.getElementById('status');
+            
             try {
-                const response = await fetch('/health');
+                const response = await fetch(`${API_BASE}/health`);
                 const data = await response.json();
                 
-                if (data.status === 'healthy') {
-                    document.getElementById('apiStatus').className = 'status-badge status-healthy';
-                    document.getElementById('apiStatus').textContent = '✓ Healthy';
-                    
-                    // Load agents
-                    loadAgents();
-                } else {
-                    throw new Error('Unhealthy');
-                }
+                statusDiv.className = 'status healthy';
+                statusDiv.innerHTML = `
+                    <div class="status-text">✅ Server Online</div>
+                    <div class="status-detail">
+                        Static Team: ${data.static_team ? '✓ Available' : '✗ Unavailable'} | 
+                        Gemini Team: ${data.gemini_team ? '✓ Available' : '✗ Unavailable'}
+                    </div>
+                `;
             } catch (error) {
-                document.getElementById('apiStatus').className = 'status-badge status-error';
-                document.getElementById('apiStatus').textContent = '✗ Offline';
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = `
+                    <div class="status-text">❌ Server Offline</div>
+                    <div class="status-detail">
+                        Cannot connect to ${API_BASE}. 
+                        <br>Start server: <code>uvicorn adk_agentic_writer.backend.api:app --reload</code>
+                    </div>
+                `;
             }
         }
-        
-        async function loadAgents() {
+
+        async function testEndpoint(method, path, element) {
+            const wrapper = element.parentElement;
+            const container = wrapper.querySelector('.response-container');
+            
+            // Toggle if already visible
+            if (container.classList.contains('visible')) {
+                container.classList.remove('visible');
+                return;
+            }
+            
+            // Show loading
+            container.innerHTML = `
+                <div class="response-header">
+                    <span>${method} ${path}</span>
+                    <span class="response-status">⏳ Fetching...</span>
+                </div>
+                <div class="response-json">Loading...</div>
+            `;
+            container.classList.add('visible');
+            
             try {
-                const response = await fetch('/agents');
+                const startTime = Date.now();
+                const response = await fetch(`${API_BASE}${path}`);
                 const data = await response.json();
+                const duration = Date.now() - startTime;
                 
-                if (data.agents && data.agents.length > 0) {
-                    document.getElementById('agentCount').textContent = data.agents.length;
-                    
-                    const agentBadges = document.getElementById('agentBadges');
-                    agentBadges.innerHTML = '';
-                    
-                    data.agents.forEach(agent => {
-                        const badge = document.createElement('div');
-                        badge.className = 'agent-badge';
-                        badge.textContent = agent.role.replace('_', ' ');
-                        agentBadges.appendChild(badge);
-                    });
-                    
-                    document.getElementById('agentsList').style.display = 'block';
-                }
+                container.innerHTML = `
+                    <div class="response-header">
+                        <span>${method} ${path}</span>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <span class="response-status">✅ ${response.status} • ${duration}ms</span>
+                            <button class="close-btn" onclick="this.closest('.response-container').classList.remove('visible')">✕</button>
+                        </div>
+                    </div>
+                    <div class="response-json">${JSON.stringify(data, null, 2)}</div>
+                `;
             } catch (error) {
-                console.error('Failed to load agents:', error);
+                container.innerHTML = `
+                    <div class="response-header" style="background: #ef4444;">
+                        <span>${method} ${path}</span>
+                        <button class="close-btn" onclick="this.closest('.response-container').classList.remove('visible')">✕</button>
+                    </div>
+                    <div class="response-json" style="color: #ef4444;">Error: ${error.message}</div>
+                `;
             }
         }
-        
-        // Check health on load
-        checkHealth();
+
+        function showGenerateInfo(element) {
+            const wrapper = element.parentElement;
+            const container = wrapper.querySelector('.response-container');
+            
+            // Toggle if already visible
+            if (container.classList.contains('visible')) {
+                container.classList.remove('visible');
+                return;
+            }
+            
+            container.innerHTML = `
+                <div class="response-header" style="background: #22c55e;">
+                    <span>POST /generate</span>
+                    <button class="close-btn" onclick="this.closest('.response-container').classList.remove('visible')">✕</button>
+                </div>
+                <div style="padding: 15px; background: white;">
+                    <p style="margin-bottom: 10px; color: #333;"><strong>Test this endpoint:</strong></p>
+                    <div style="display: flex; gap: 10px;">
+                        <a href="/showcase" style="display: inline-block; background: #667eea; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 13px;">
+                            🎨 Showcase
+                        </a>
+                        <a href="/frontend" style="display: inline-block; background: #764ba2; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 13px;">
+                            ⚙️ Frontend
+                        </a>
+                    </div>
+                </div>
+            `;
+            container.classList.add('visible');
+        }
+
+        // Check status on load
+        checkServerStatus();
+
+        // Refresh status every 5 seconds
+        setInterval(checkServerStatus, 5000);
     </script>
 </body>
 </html>

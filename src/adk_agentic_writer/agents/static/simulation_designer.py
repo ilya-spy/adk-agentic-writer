@@ -3,9 +3,9 @@
 import logging
 from typing import Any, Dict
 
-from ..models.agent_models import AgentRole, AgentStatus
-from ..models.content_models import SimulationControl, SimulationVariable, WebSimulation
-from .base_agent import BaseAgent
+from ...models.agent_models import AgentRole, AgentStatus
+from ...models.content_models import SimulationControl, SimulationVariable, WebSimulation
+from ..base_agent import BaseAgent
 
 logger = logging.getLogger(__name__)
 
@@ -209,3 +209,59 @@ class SimulationDesignerAgent(BaseAgent):
             ]
         
         return rules
+
+    async def generate_content(self, prompt: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Generate simulation content based on prompt and parameters.
+
+        Args:
+            prompt: Content generation prompt
+            parameters: Generation parameters
+
+        Returns:
+            Dict containing generated simulation
+        """
+        return await self.process_task(prompt, parameters)
+
+    async def validate_content(self, content: Dict[str, Any]) -> bool:
+        """
+        Validate generated simulation content.
+
+        Args:
+            content: Simulation content to validate
+
+        Returns:
+            True if content is valid, False otherwise
+        """
+        try:
+            # Validate simulation structure
+            simulation = WebSimulation(**content)
+            
+            # Check that we have variables and controls
+            if not simulation.variables or not simulation.controls:
+                return False
+            
+            # Check that we have rules
+            if not simulation.rules:
+                return False
+            
+            return True
+        except Exception as e:
+            logger.error(f"Content validation failed: {e}")
+            return False
+
+    async def refine_content(self, content: Dict[str, Any], feedback: str) -> Dict[str, Any]:
+        """
+        Refine simulation content based on feedback.
+
+        Args:
+            content: Simulation content to refine
+            feedback: Feedback for refinement
+
+        Returns:
+            Dict containing refined simulation
+        """
+        # For base implementation, just return the content
+        # Subclasses can implement more sophisticated refinement
+        logger.info(f"Refining simulation content based on feedback: {feedback}")
+        return content

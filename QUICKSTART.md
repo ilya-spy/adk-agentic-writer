@@ -1,214 +1,174 @@
-# Quick Start Guide
+# Quick Start
 
-This guide will help you get the ADK Agentic Writer up and running in minutes.
+> Get running in 5 minutes
 
-## Prerequisites
-
-- Python 3.11+ 
-- Node.js 18+ (for frontend)
-- pip (Python package manager)
-- npm (Node package manager)
-
-## Installation Steps
-
-### 1. Clone the Repository
+## Installation
 
 ```bash
-git clone https://github.com/ilya-spy/adk-agentic-writer.git
-cd adk-agentic-writer
-```
+# 1. Create virtual environment
+python -m venv venv
+venv\Scripts\activate  # Windows
+source venv/bin/activate  # Mac/Linux
 
-### 2. Quick Setup with Script
-
-```bash
-chmod +x setup.sh
-./setup.sh
-```
-
-This will:
-- Check Python version
-- Create virtual environment
-- Install all dependencies
-- Set up frontend
-- Create .env file
-
-### 3. Manual Setup (Alternative)
-
-If you prefer manual setup:
-
-```bash
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install Python dependencies
+# 2. Install dependencies
 pip install -r requirements.txt
-pip install -r requirements-dev.txt
 
-# Install frontend dependencies
-cd frontend
-npm install
-cd ..
-
-# Create environment file
-cp .env.example .env
+# 3. Optional: Configure Gemini team
+echo "GOOGLE_API_KEY=your-key" > .env
 ```
 
-## Running the Application
+---
 
-### Option 1: Using Docker (Recommended for Production)
+## Run
 
 ```bash
+# Method 1: Makefile
+make run-backend
+
+# Method 2: Direct
+uvicorn src.adk_agentic_writer.backend.api:app --reload --host 0.0.0.0 --port 8000
+
+# Method 3: Docker
 docker-compose up --build
 ```
 
-Access:
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- API Docs: http://localhost:8000/docs
+**Access**: http://localhost:8000
 
-### Option 2: Running Locally (Development)
+---
 
-**Terminal 1 - Backend:**
-```bash
-source venv/bin/activate
-make run-backend
-# Or: uvicorn src.adk_agentic_writer.backend.api:app --reload
-```
+## Usage
 
-**Terminal 2 - Frontend:**
-```bash
-cd frontend
-npm start
-```
+### Web UI
+1. Open http://localhost:8000
+2. Choose team (Static/Gemini)
+3. Select content type
+4. Enter topic
+5. Generate
 
-Access:
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- API Docs: http://localhost:8000/docs
-
-## First Steps
-
-1. **Open the Web Interface** at http://localhost:3000
-
-2. **Select a Content Type:**
-   - Quiz
-   - Quest Game
-   - Branched Story
-   - Simulation
-
-3. **Enter a Topic:**
-   Examples:
-   - "Ancient Rome"
-   - "Climate Change"
-   - "Space Exploration"
-   - "Python Programming"
-
-4. **Generate Content:**
-   Click the "Generate Content" button and watch the agents work!
-
-## Testing the API Directly
+### REST API
 
 ```bash
-# Generate a quiz
-curl -X POST "http://localhost:8000/generate/quiz?topic=Python&num_questions=5"
+# Generate Quiz
+curl -X POST http://localhost:8000/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "team": "static",
+    "content_type": "quiz",
+    "topic": "Python",
+    "parameters": {"num_questions": 5}
+  }'
 
-# Generate a story
-curl -X POST "http://localhost:8000/generate/story?topic=Adventure&genre=fantasy"
-
-# List available agents
-curl http://localhost:8000/agents
-
-# Get health status
-curl http://localhost:8000/health
+# Check teams
+curl http://localhost:8000/teams
 ```
 
-## Running Tests
+### Python API
+
+**Static Team**:
+```python
+from adk_agentic_writer.agents.static import CoordinatorAgent, StaticQuizWriterAgent
+
+coordinator = CoordinatorAgent()
+coordinator.register_agent(StaticQuizWriterAgent())
+
+result = await coordinator.process_task(
+    "Generate quiz",
+    {"content_type": "quiz", "topic": "Python", "num_questions": 10}
+)
+```
+
+**Gemini Team**:
+```python
+from adk_agentic_writer.agents.gemini import GeminiCoordinatorAgent, GeminiQuizWriterAgent, SupportedTask
+
+coordinator = GeminiCoordinatorAgent()
+coordinator.register_agent(GeminiQuizWriterAgent())
+
+result = await coordinator.process_task(
+    "Generate quiz",
+    {"task": SupportedTask.GENERATE_QUIZ, "topic": "ML", "num_questions": 15}
+)
+```
+
+---
+
+## Content Types
+
+| Type | Parameters |
+|------|------------|
+| **Quiz** | `num_questions`, `difficulty` |
+| **Branched Narrative** | `genre`, `num_nodes` |
+| **Quest Game** | `num_quests`, `difficulty` |
+| **Web Simulation** | `num_variables`, `visualization_type` |
+
+---
+
+## Teams
+
+| | Static | Gemini |
+|-|--------|--------|
+| Speed | Instant | 2-5 sec |
+| Quality | Good | Excellent |
+| API Key | Not needed | Required |
+| Use for | Testing | Production |
+
+---
+
+## Makefile Commands
 
 ```bash
-# Activate virtual environment
-source venv/bin/activate
-
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=src/adk_agentic_writer
-
-# Run specific tests
-pytest tests/unit/
-pytest tests/integration/
+make run-backend    # Run server
+make test           # Run tests
+make lint           # Run linters
+make format         # Format code
+make docker-up      # Docker start
+make clean          # Clean artifacts
 ```
 
-## Common Issues and Solutions
+---
 
-### Port Already in Use
+## Troubleshooting
 
-If port 8000 or 3000 is already in use:
-
-**Backend:**
+**Port 8000 in use**:
 ```bash
-uvicorn src.adk_agentic_writer.backend.api:app --reload --port 8001
+uvicorn src.adk_agentic_writer.backend.api:app --port 8080
 ```
 
-**Frontend:**
-Update `frontend/package.json` to use a different port or set:
-```bash
-PORT=3001 npm start
-```
+**Gemini unavailable**: Check `GOOGLE_API_KEY` in `.env`
 
-### Import Errors
-
-Make sure the package is installed in development mode:
+**Import errors**:
 ```bash
 pip install -e .
 ```
 
-### Docker Issues
+---
+
+## Testing
 
 ```bash
-# Rebuild containers
-docker-compose down
-docker-compose up --build
-
-# View logs
-docker-compose logs -f
+pytest                                    # Run all
+pytest --cov=src/adk_agentic_writer      # With coverage
+pytest tests/unit/test_quiz_writer.py    # Specific test
 ```
+
+---
+
+## Offline Demo
+
+```bash
+# No server needed!
+start frontend/public/showcase.html  # Windows
+open frontend/public/showcase.html   # Mac
+```
+
+---
 
 ## Next Steps
 
-- Explore the [API Documentation](http://localhost:8000/docs)
-- Read the [Contributing Guide](CONTRIBUTING.md)
-- Check out the [Full README](README.md)
-- Experiment with different content types and topics
+- 📖 [ARCHITECTURE.md](ARCHITECTURE.md) - System design
+- 🤝 [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution guide
+- 📚 http://localhost:8000/docs - API documentation
 
-## Getting Help
+---
 
-If you encounter any issues:
-1. Check the logs for error messages
-2. Ensure all dependencies are installed
-3. Verify Python and Node versions
-4. Open an issue on GitHub
-
-## Architecture Overview
-
-```
-┌─────────────────┐
-│  React Frontend │ (Port 3000)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  FastAPI Backend│ (Port 8000)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────────────────────────┐
-│        Multi-Agent System           │
-│  ┌──────────┐  ┌──────────┐        │
-│  │Quiz Agent│  │Story Agent│   ...  │
-│  └──────────┘  └──────────┘        │
-└─────────────────────────────────────┘
-```
-
-Happy content creating! 🚀
+🚀 Start at http://localhost:8000
