@@ -27,6 +27,7 @@ from ...workflows import (
     LoopAgentWorkflow,
     ConditionalAgentWorkflow,
 )
+from ...utils import substitute_variables
 from ..base_agent import BaseAgent
 
 logger = logging.getLogger(__name__)
@@ -1150,6 +1151,31 @@ Provide a coordination plan in JSON format:
             for role, agents in self.agent_registry.items()
         }
 
+    def format_task_prompt(self, prompt_template: str, agent_state: Any) -> str:
+        """
+        Format a task prompt using variable substitution.
+
+        Coordinators can use {variable} syntax in task prompts to inject values
+        from the agent's runtime variable storage.
+
+        Args:
+            prompt_template: Template string with {variable} placeholders
+            agent_state: Agent state containing variables dict
+
+        Returns:
+            Formatted prompt with variables substituted
+
+        Examples:
+            >>> state.variables = {"topic": "Python", "difficulty": "medium", "num_questions": 10}
+            >>> template = "Create a {difficulty} quiz about {topic} with {num_questions} questions"
+            >>> coordinator.format_task_prompt(template, state)
+            'Create a medium quiz about Python with 10 questions'
+        """
+        if not hasattr(agent_state, "variables"):
+            logger.warning("Agent state does not have variables attribute")
+            return prompt_template
+
+        return substitute_variables(prompt_template, agent_state.variables)
+
 
 __all__ = ["GeminiCoordinatorAgent", "SupportedTask"]
-
