@@ -182,9 +182,6 @@ class WorkflowMetadata(BaseModel):
     pattern: WorkflowPattern = Field(..., description="Workflow orchestration pattern")
     scope: WorkflowScope = Field(..., description="Workflow application scope")
     description: str = Field(..., description="Description of what this workflow does")
-    agent_refs: List[str] = Field(
-        default_factory=list, description="References to other agents used in workflow"
-    )
     max_iterations: Optional[int] = Field(
         None, description="Max iterations for loop workflows"
     )

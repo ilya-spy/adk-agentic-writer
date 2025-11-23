@@ -1,36 +1,19 @@
-"""Abstract workflow patterns for agent, editorial, and content orchestration.
+"""Workflow system with metadata-driven orchestration.
 
-Workflow implementations are in:
-- agents/base/workflows.py (base implementations using Python)
-- agents/gemini/workflows.py (Gemini implementations using ADK)
+All workflows inherit from the base Workflow class and use WorkflowMetadata
+to specify their pattern (sequential, parallel, loop, conditional) and scope.
 """
 
-# Base workflow patterns
-from .base_workflow import (
-    ConditionalWorkflow,
-    LoopWorkflow,
-    ParallelWorkflow,
-    SequentialWorkflow,
-    WorkflowPattern,
-)
+# Base workflow class
+from .base_workflow import Workflow
 
-# Agent workflows (for agent orchestration)
+# Predefined workflow instances
 from .agent_workflows import (
     ConditionalAgentWorkflow,
     LoopAgentWorkflow,
     ParallelAgentWorkflow,
     SequentialAgentWorkflow,
 )
-
-# Editorial workflows (for content editing/refinement - corresponds to EditorialProtocol)
-from .editorial_workflows import (
-    AdaptiveEditorialWorkflow,
-    IterativeEditorialWorkflow,
-    ParallelEditorialWorkflow,
-    SequentialEditorialWorkflow,
-)
-
-# Content workflows (for UX interaction patterns - corresponds to ContentProtocol)
 from .content_workflows import (
     AdaptiveContentWorkflow,
     ConditionalContentWorkflow,
@@ -39,30 +22,31 @@ from .content_workflows import (
     SequentialContentWorkflow,
     StreamingContentWorkflow,
 )
+from .editorial_workflows import (
+    AdaptiveEditorialWorkflow,
+    IterativeEditorialWorkflow,
+    ParallelEditorialWorkflow,
+    SequentialEditorialWorkflow,
+)
 
 __all__ = [
-    # Base workflow patterns
-    "WorkflowPattern",
-    "SequentialWorkflow",
-    "ParallelWorkflow",
-    "LoopWorkflow",
-    "ConditionalWorkflow",
+    # Base class
+    "Workflow",
     # Agent workflows
     "SequentialAgentWorkflow",
     "ParallelAgentWorkflow",
     "LoopAgentWorkflow",
     "ConditionalAgentWorkflow",
-    # Editorial workflows (EditorialProtocol)
-    "SequentialEditorialWorkflow",
-    "ParallelEditorialWorkflow",
-    "IterativeEditorialWorkflow",
-    "AdaptiveEditorialWorkflow",
-    # Content workflows (ContentProtocol)
+    # Content workflows
     "SequentialContentWorkflow",
     "LoopedContentWorkflow",
     "ConditionalContentWorkflow",
     "InteractiveContentWorkflow",
     "AdaptiveContentWorkflow",
     "StreamingContentWorkflow",
+    # Editorial workflows
+    "SequentialEditorialWorkflow",
+    "ParallelEditorialWorkflow",
+    "IterativeEditorialWorkflow",
+    "AdaptiveEditorialWorkflow",
 ]
-

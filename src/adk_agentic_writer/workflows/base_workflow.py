@@ -1,34 +1,70 @@
-"""Abstract base workflow patterns - framework-agnostic orchestration."""
+"""Base workflow class - metadata-driven orchestration."""
 
 import logging
-from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List, Optional
+
+from ..models.agent_models import WorkflowMetadata, WorkflowPattern, WorkflowScope
 
 logger = logging.getLogger(__name__)
 
 
-class WorkflowPattern(ABC):
+class Workflow:
     """
-    Abstract base class for workflow orchestration patterns.
-    
-    This defines the interface that any workflow implementation must follow,
-    keeping the orchestration logic separate from the underlying framework (ADK, LangChain, etc.)
+    Base workflow class with metadata-driven behavior.
+
+    The workflow pattern (sequential, parallel, loop, conditional) is specified
+    in the metadata, not through inheritance. This keeps the code simple and flexible.
     """
 
-    def __init__(self, name: str):
+    def __init__(
+        self,
+        name: str,
+        pattern: WorkflowPattern,
+        scope: WorkflowScope,
+        description: str,
+        agents: Optional[List[Any]] = None,
+        condition: Optional[Callable] = None,
+        max_iterations: Optional[int] = None,
+        merge_strategy: Optional[str] = None,
+        parameters: Optional[Dict[str, Any]] = None,
+    ):
         """
-        Initialize workflow pattern.
+        Initialize workflow with metadata.
 
         Args:
-            name: Name identifier for this workflow
+            name: Workflow name
+            pattern: Orchestration pattern (SEQUENTIAL, PARALLEL, LOOP, CONDITIONAL)
+            scope: Application scope (AGENT, CONTENT, EDITORIAL)
+            description: What this workflow does
+            agents: List or dict of agents/generators to execute
+            condition: Condition function for loop/conditional workflows
+            max_iterations: Maximum iterations for loop workflows
+            merge_strategy: Strategy for parallel workflows
+            parameters: Additional workflow-specific parameters
         """
         self.name = name
-        logger.info(f"Initialized workflow pattern: {name}")
+        self.agents = agents or []
+        self.condition = condition
+        self.max_iterations = max_iterations
+        self.merge_strategy = merge_strategy
 
-    @abstractmethod
+        self.metadata = WorkflowMetadata(
+            name=name,
+            pattern=pattern,
+            scope=scope,
+            description=description,
+            max_iterations=max_iterations,
+            merge_strategy=merge_strategy,
+            parameters=parameters or {},
+        )
+
+        logger.info(
+            f"Initialized {pattern.value} workflow '{name}' for {scope.value} scope"
+        )
+
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Execute the workflow pattern.
+        Execute the workflow based on its pattern.
 
         Args:
             input_data: Input data for the workflow
@@ -36,131 +72,85 @@ class WorkflowPattern(ABC):
         Returns:
             Output data from the workflow execution
         """
-        pass
+        pattern = self.metadata.pattern
 
+        if pattern == WorkflowPattern.SEQUENTIAL:
+            return await self._execute_sequential(input_data)
+        elif pattern == WorkflowPattern.PARALLEL:
+            return await self._execute_parallel(input_data)
+        elif pattern == WorkflowPattern.LOOP:
+            return await self._execute_loop(input_data)
+        elif pattern == WorkflowPattern.CONDITIONAL:
+            return await self._execute_conditional(input_data)
+        else:
+            raise ValueError(f"Unknown workflow pattern: {pattern}")
 
-class SequentialWorkflow(WorkflowPattern):
-    """
-    Abstract sequential workflow - executes agents in order.
-    
-    Pattern: A → B → C
-    Each agent's output becomes the input for the next agent.
-    """
-
-    def __init__(self, name: str, agents: List[Any]):
-        """
-        Initialize sequential workflow.
-
-        Args:
-            name: Workflow name
-            agents: List of agents to execute sequentially
-        """
-        super().__init__(name)
-        self.agents = agents
-        logger.info(f"Sequential workflow '{name}' configured with {len(agents)} agents")
-
-    @abstractmethod
-    async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def _execute_sequential(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """Execute agents sequentially."""
-        pass
+        result = input_data
+        for agent in self.agents:
+            task_desc = result.get("task_description", "Process task")
+            params = result.get("parameters", {})
+            result = await agent.process_task(task_desc, params)
+        return result
 
-
-class ParallelWorkflow(WorkflowPattern):
-    """
-    Abstract parallel workflow - executes agents concurrently.
-    
-    Pattern: [A, B, C] → Merge
-    All agents receive the same input and execute simultaneously.
-    """
-
-    def __init__(self, name: str, agents: List[Any], merge_strategy: str = "combine"):
-        """
-        Initialize parallel workflow.
-
-        Args:
-            name: Workflow name
-            agents: List of agents to execute in parallel
-            merge_strategy: How to merge results - 'combine', 'first', 'vote'
-        """
-        super().__init__(name)
-        self.agents = agents
-        self.merge_strategy = merge_strategy
-        logger.info(f"Parallel workflow '{name}' configured with {len(agents)} agents")
-
-    @abstractmethod
-    async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def _execute_parallel(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """Execute agents in parallel."""
-        pass
+        import asyncio
 
+        task_desc = input_data.get("task_description", "Process task")
+        params = input_data.get("parameters", {})
 
-class LoopWorkflow(WorkflowPattern):
-    """
-    Abstract loop workflow - executes an agent repeatedly until condition is met.
-    
-    Pattern: A → Check → A → Check → ... → Done
-    Useful for iterative refinement or multi-turn interactions.
-    """
+        tasks = [agent.process_task(task_desc, params) for agent in self.agents]
+        results = await asyncio.gather(*tasks)
 
-    def __init__(
-        self,
-        name: str,
-        agent: Any,
-        condition: Callable[[Dict[str, Any], int], bool],
-        max_iterations: int = 10,
-    ):
-        """
-        Initialize loop workflow.
+        if self.merge_strategy == "first":
+            return results[0]
+        elif self.merge_strategy == "combine":
+            return {"results": results, "merged": True}
+        else:
+            return {"results": results}
 
-        Args:
-            name: Workflow name
-            agent: Agent to execute in loop
-            condition: Function that returns True to continue looping
-            max_iterations: Maximum number of iterations
-        """
-        super().__init__(name)
-        self.agent = agent
-        self.condition = condition
-        self.max_iterations = max_iterations
-        logger.info(f"Loop workflow '{name}' configured with max {max_iterations} iterations")
-
-    @abstractmethod
-    async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def _execute_loop(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """Execute agent in a loop until condition is met."""
-        pass
+        result = input_data
+        iteration = 0
+        agent = self.agents[0] if self.agents else None
 
+        if not agent:
+            raise ValueError("Loop workflow requires at least one agent")
 
-class ConditionalWorkflow(WorkflowPattern):
-    """
-    Abstract conditional workflow - routes to different agents based on conditions.
-    
-    Pattern: Condition → [A | B | C]
-    Useful for decision trees and branching logic.
-    """
+        max_iter = self.max_iterations or 10
 
-    def __init__(
-        self,
-        name: str,
-        condition: Callable[[Dict[str, Any]], str],
-        agents: Dict[str, Any],
-        default_agent: Optional[Any] = None,
-    ):
-        """
-        Initialize conditional workflow.
+        while iteration < max_iter:
+            task_desc = result.get("task_description", "Process task")
+            params = result.get("parameters", {})
+            result = await agent.process_task(task_desc, params)
 
-        Args:
-            name: Workflow name
-            condition: Function that returns agent key to execute
-            agents: Dict mapping keys to agents
-            default_agent: Agent to use if condition returns unknown key
-        """
-        super().__init__(name)
-        self.condition = condition
-        self.agents = agents
-        self.default_agent = default_agent
-        logger.info(f"Conditional workflow '{name}' configured with {len(agents)} branches")
+            if self.condition and not self.condition(result, iteration):
+                break
+            iteration += 1
 
-    @abstractmethod
-    async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        return result
+
+    async def _execute_conditional(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """Execute appropriate agent based on condition."""
-        pass
+        if not self.condition:
+            raise ValueError("Conditional workflow requires a condition function")
 
+        # For conditional workflows, agents should be a dict
+        agents_dict = (
+            self.agents
+            if isinstance(self.agents, dict)
+            else {i: a for i, a in enumerate(self.agents)}
+        )
+
+        key = self.condition(input_data)
+        agent = agents_dict.get(key)
+
+        if not agent:
+            raise ValueError(f"No agent found for condition key: {key}")
+
+        task_desc = input_data.get("task_description", "Process task")
+        params = input_data.get("parameters", {})
+        return await agent.process_task(task_desc, params)
