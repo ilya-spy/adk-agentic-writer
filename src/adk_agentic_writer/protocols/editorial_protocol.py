@@ -12,20 +12,32 @@ class EditorialProtocol(Protocol):
     """Protocol defining the interface for editorial operations.
     
     This protocol is for agents that perform editorial tasks such as:
+    - Reviewing content and generating feedback
     - Validating content quality and correctness
-    - Refining content based on feedback
+    - Refining content based on review feedback
     - Improving content through iterative editing
     """
     
-    async def generate_content(self, prompt: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate content based on prompt and parameters.
+    async def review_content(
+        self, content: Dict[str, Any], review_criteria: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Review content and generate detailed feedback.
+        
+        This generates a review that can be used as input to refine_content.
         
         Args:
-            prompt: Content generation prompt
-            parameters: Generation parameters
+            content: Content to review
+            review_criteria: Criteria for review (e.g., {"focus": "clarity", "depth": "detailed"})
             
         Returns:
-            Dict containing generated content
+            Dict containing review feedback:
+            {
+                "overall_score": float,
+                "feedback": str or List[str],
+                "issues_found": List[Dict],
+                "suggestions": List[Dict],
+                "quality_metrics": Dict
+            }
         """
         ...
     
@@ -40,12 +52,14 @@ class EditorialProtocol(Protocol):
         """
         ...
     
-    async def refine_content(self, content: Dict[str, Any], feedback: str) -> Dict[str, Any]:
-        """Refine content based on feedback.
+    async def refine_content(
+        self, content: Dict[str, Any], feedback: str | Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Refine content based on review feedback.
         
         Args:
             content: Content to refine
-            feedback: Feedback for refinement
+            feedback: Feedback from review_content() or string feedback
             
         Returns:
             Dict containing refined content

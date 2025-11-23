@@ -22,16 +22,19 @@ class AgentProtocol(Protocol):
 Core agent operations that every agent must support.
 
 ### EditorialProtocol (Optional)
-**For agents that edit and refine content.**
+**For agents that review, validate, and refine content.**
 
 ```python
 class EditorialProtocol(Protocol):
-    async def generate_content(self, prompt: str, parameters: Dict[str, Any]) -> Dict[str, Any]: ...
+    async def review_content(self, content: Dict[str, Any], review_criteria: Dict[str, Any]) -> Dict[str, Any]: ...
     async def validate_content(self, content: Dict[str, Any]) -> bool: ...
-    async def refine_content(self, content: Dict[str, Any], feedback: str) -> Dict[str, Any]: ...
+    async def refine_content(self, content: Dict[str, Any], feedback: str | Dict[str, Any]) -> Dict[str, Any]: ...
 ```
 
-For content generation, validation, and refinement operations.
+For content review, validation, and refinement operations:
+- **review_content**: Generate detailed review/feedback (used as input to refine)
+- **validate_content**: Check if content meets basic validity requirements
+- **refine_content**: Improve content based on review feedback
 
 ### ContentProtocol (Optional)
 **For agents that generate structured content with user interaction patterns.**
@@ -90,16 +93,16 @@ class MyAgent:
         pass
     
     # EditorialProtocol methods (optional)
-    async def generate_content(self, prompt: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
-        # Implementation
+    async def review_content(self, content: Dict[str, Any], review_criteria: Dict[str, Any]) -> Dict[str, Any]:
+        # Generate review and feedback
         pass
     
     async def validate_content(self, content: Dict[str, Any]) -> bool:
-        # Implementation
+        # Validate content
         pass
     
-    async def refine_content(self, content: Dict[str, Any], feedback: str) -> Dict[str, Any]:
-        # Implementation
+    async def refine_content(self, content: Dict[str, Any], feedback: str | Dict[str, Any]) -> Dict[str, Any]:
+        # Refine based on feedback
         pass
 ```
 
@@ -112,11 +115,14 @@ def process_agent(agent: AgentProtocol) -> None:
     """Function that accepts any agent implementing AgentProtocol."""
     result = await agent.process_task("task", {})
 
-def edit_content(agent: EditorialProtocol, content: Dict[str, Any]) -> None:
+async def edit_content(agent: EditorialProtocol, content: Dict[str, Any]) -> None:
     """Function that accepts any agent implementing EditorialProtocol."""
-    is_valid = await agent.validate_content(content)
-    if not is_valid:
-        content = await agent.refine_content(content, "improve quality")
+    # First review the content
+    review = await agent.review_content(content, {"focus": "quality"})
+    
+    # Then refine based on review feedback
+    if review.get("issues_found"):
+        content = await agent.refine_content(content, review["feedback"])
 ```
 
 ## Protocol Composition
