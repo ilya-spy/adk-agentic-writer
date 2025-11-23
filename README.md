@@ -45,15 +45,10 @@ Generate interactive educational content (quizzes, stories, games, simulations) 
 ### 1. Install Dependencies
 
 ```bash
-# Backend
 pip install -r requirements.txt
 
 # For Gemini team (optional)
 pip install google-adk
-
-# Frontend
-cd frontend
-npm install
 ```
 
 ### 2. Configure API Key (for Gemini team)
@@ -63,26 +58,20 @@ npm install
 echo "GOOGLE_API_KEY=your-api-key-here" > .env
 ```
 
-### 3. Run Backend
+### 3. Run Server
 
 ```bash
-# From project root
-python -m src.adk_agentic_writer.backend.api
-
-# Or with uvicorn
+# Method 1: Direct
 uvicorn src.adk_agentic_writer.backend.api:app --reload
+
+# Method 2: Makefile
+make run-backend
+
+# Method 3: Docker
+docker-compose up --build
 ```
 
-Backend runs at: `http://localhost:8000`
-
-### 4. Run Frontend
-
-```bash
-cd frontend
-npm start
-```
-
-Frontend runs at: `http://localhost:3000`
+Server runs at: `http://localhost:8000`
 
 ---
 
@@ -90,18 +79,19 @@ Frontend runs at: `http://localhost:3000`
 
 ### Web UI
 
-1. Open `http://localhost:3000`
-2. **Select Agent Team**: Choose Static (fast) or Gemini (AI-powered)
-3. **Select Content Type**: Quiz, Story, Game, or Simulation
-4. **Enter Topic**: e.g., "Ancient Rome", "Climate Change"
-5. **Generate**: Click to create content
+1. Open `http://localhost:8000`
+2. Navigate to **Showcase** or **Legacy Frontend**
+3. **Select Agent Team**: Choose Static (fast) or Gemini (AI-powered)
+4. **Select Content Type**: Quiz, Story, Game, or Simulation
+5. **Enter Topic**: e.g., "Ancient Rome", "Climate Change"
+6. **Generate**: Click to create content
 
 ### Python API
 
 #### Static Team
 
 ```python
-from adk_agentic_writer.agents.static import (
+from src.adk_agentic_writer.agents.static import (
     CoordinatorAgent,
     StaticQuizWriterAgent,
     ReviewerAgent
@@ -126,7 +116,7 @@ result = await coordinator.process_task(
 #### Gemini Team
 
 ```python
-from adk_agentic_writer.agents.gemini import (
+from src.adk_agentic_writer.agents.gemini import (
     GeminiCoordinatorAgent,
     GeminiQuizWriterAgent,
     GeminiReviewerAgent,
@@ -252,22 +242,6 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed documentation.
 
 ---
 
-## Live Demo
-
-Try the interactive showcase (no server needed):
-```bash
-start frontend/public/showcase.html  # Windows
-open frontend/public/showcase.html   # Mac/Linux
-```
-
-Features:
-- Real-time agent logs
-- All 4 content types
-- Minimalistic rendering
-- Works offline!
-
----
-
 ## Documentation
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture
@@ -314,12 +288,16 @@ mypy src/
 ```
 adk-agentic-writer/
 ├── src/adk_agentic_writer/    # Main package
-├── frontend/                   # React UI
-├── examples/                   # Usage examples
-├── tests/                      # Test suite
-├── requirements.txt            # Dependencies
-├── README.md                   # This file
-└── ARCHITECTURE.md             # Architecture docs
+│   ├── agents/                # Agent implementations (Static & Gemini)
+│   ├── backend/               # FastAPI server
+│   ├── models/                # Data models
+│   ├── protocols/             # Interface definitions
+│   └── workflows/             # Orchestration patterns
+├── frontend/public/           # Static HTML UI files
+├── tests/                     # Test suite
+├── requirements.txt           # Dependencies
+├── README.md                  # This file
+└── ARCHITECTURE.md            # Architecture docs
 ```
 
 ---
@@ -336,19 +314,11 @@ Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ---
 
-## Support
-
-- 🐛 [Issue Tracker](https://github.com/yourusername/adk-agentic-writer/issues)
-- 💬 [Discussions](https://github.com/yourusername/adk-agentic-writer/discussions)
-
----
-
 ## Acknowledgments
 
 Built with:
 - [Google ADK](https://github.com/google/adk) - Agent Development Kit
 - [FastAPI](https://fastapi.tiangolo.com/) - Backend framework
-- [React](https://reactjs.org/) - Frontend framework
 - [Pydantic](https://pydantic-docs.helpmanual.io/) - Data validation
 
 ---

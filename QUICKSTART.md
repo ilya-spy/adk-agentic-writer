@@ -66,7 +66,7 @@ curl http://localhost:8000/teams
 
 **Static Team**:
 ```python
-from adk_agentic_writer.agents.static import CoordinatorAgent, StaticQuizWriterAgent
+from src.adk_agentic_writer.agents.static import CoordinatorAgent, StaticQuizWriterAgent
 
 coordinator = CoordinatorAgent()
 coordinator.register_agent(StaticQuizWriterAgent())
@@ -79,7 +79,7 @@ result = await coordinator.process_task(
 
 **Gemini Team**:
 ```python
-from adk_agentic_writer.agents.gemini import GeminiCoordinatorAgent, GeminiQuizWriterAgent, SupportedTask
+from src.adk_agentic_writer.agents.gemini import GeminiCoordinatorAgent, GeminiQuizWriterAgent, SupportedTask
 
 coordinator = GeminiCoordinatorAgent()
 coordinator.register_agent(GeminiQuizWriterAgent())
@@ -149,16 +149,6 @@ pip install -e .
 pytest                                    # Run all
 pytest --cov=src/adk_agentic_writer      # With coverage
 pytest tests/unit/test_quiz_writer.py    # Specific test
-```
-
----
-
-## Offline Demo
-
-```bash
-# No server needed!
-start frontend/public/showcase.html  # Windows
-open frontend/public/showcase.html   # Mac
 ```
 
 ---
