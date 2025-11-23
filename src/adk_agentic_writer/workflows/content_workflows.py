@@ -41,7 +41,6 @@ class SequentialContentWorkflow(Workflow):
             scope=WorkflowScope.CONTENT,
             description="Generate content blocks in linear sequence for reading",
             agents=[generator],
-            parameters={"maintain_context": True, "block_ordering": "strict"},
         )
         self.block_types = block_types
         self.generator = generator
@@ -92,10 +91,6 @@ class LoopedContentWorkflow(Workflow):
             agents=[generator],
             condition=condition_fn,
             max_iterations=max_iterations,
-            parameters={
-                "exit_condition": "user_decision",
-                "allow_back_navigation": True,
-            },
         )
         self.block_type = block_type
         self.validator = validator
@@ -137,7 +132,6 @@ class ConditionalContentWorkflow(Workflow):
             description="Generate content blocks based on user state/conditions",
             agents=generators,
             condition=condition_fn,
-            parameters={"condition_evaluation": "runtime", "default_behavior": "hide"},
         )
         logger.info(
             f"Conditional content workflow '{name}' configured with {len(generators)} branches"
@@ -177,7 +171,6 @@ class InteractiveContentWorkflow(Workflow):
             description="Generate content with user interaction points",
             agents=[generator],
             max_iterations=max_interactions,
-            parameters={"interaction_type": "user_choice", "branching": True},
         )
         self.generator = generator
         self.interaction_handler = interaction_handler
@@ -219,7 +212,6 @@ class AdaptiveContentWorkflow(Workflow):
             scope=WorkflowScope.CONTENT,
             description="Adapt content generation based on user behavior",
             agents=[default_generator],
-            parameters={"adaptation_strategy": "behavior_driven", "learning": True},
         )
         self.behavior_analyzer = behavior_analyzer
         self.generators = generators
@@ -261,7 +253,6 @@ class StreamingContentWorkflow(Workflow):
             scope=WorkflowScope.CONTENT,
             description="Generate and stream content blocks progressively",
             agents=[generator],
-            parameters={"buffer_size": buffer_size, "stream_mode": "realtime"},
         )
         self.generator = generator
         self.stream_handler = stream_handler

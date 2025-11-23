@@ -188,9 +188,14 @@ class WorkflowMetadata(BaseModel):
     merge_strategy: Optional[str] = Field(
         None, description="Merge strategy for parallel workflows"
     )
-    parameters: Dict[str, Any] = Field(
-        default_factory=dict, description="Workflow-specific parameters"
-    )
+
+
+class TeamMetadata(BaseModel):
+    """Metadata describing a team of agents."""
+
+    name: str = Field(..., description="Team name")
+    scope: WorkflowScope = Field(..., description="Team application scope")
+    agent_ids: List[str] = Field(..., description="List of agent IDs in this team")
 
 
 class AgentModel(BaseModel):
@@ -223,58 +228,9 @@ class AgentModel(BaseModel):
     workflows: List[WorkflowMetadata] = Field(
         default_factory=list, description="Available workflows for this agent"
     )
-
-
-class SequentialAgentModel(BaseModel):
-    """
-    Sequential Agent model matching Google ADK SequentialAgent.
-
-    Corresponds to google.adk.agents.SequentialAgent:
-    ```python
-    SequentialAgent(name="Pipeline", sub_agents=[agent1, agent2, agent3])
-    ```
-    """
-
-    name: str = Field(..., description="Sequential agent pipeline name")
-    sub_agents: List[str] = Field(
-        ..., description="List of sub-agent names to execute in order"
+    teams: List[TeamMetadata] = Field(
+        default_factory=list, description="Teams of agents this agent can coordinate"
     )
-
-
-class ParallelAgentModel(BaseModel):
-    """
-    Parallel Agent model matching Google ADK ParallelAgent.
-
-    Corresponds to google.adk.agents.ParallelAgent:
-    ```python
-    ParallelAgent(name="ParallelTeam", sub_agents=[agent1, agent2, agent3])
-    ```
-    """
-
-    name: str = Field(..., description="Parallel agent team name")
-    sub_agents: List[str] = Field(
-        ..., description="List of sub-agent names to execute concurrently"
-    )
-    merge_strategy: str = Field(
-        "combine", description="How to merge results: combine, first, vote"
-    )
-
-
-class LoopAgentModel(BaseModel):
-    """
-    Loop Agent model matching Google ADK LoopAgent.
-
-    Corresponds to google.adk.agents.LoopAgent:
-    ```python
-    LoopAgent(name="RefinementLoop", sub_agents=[critic, refiner], max_iterations=3)
-    ```
-    """
-
-    name: str = Field(..., description="Loop agent name")
-    sub_agents: List[str] = Field(
-        ..., description="List of sub-agent names to execute in loop"
-    )
-    max_iterations: int = Field(10, description="Maximum number of loop iterations")
 
 
 class AgentToolModel(BaseModel):
@@ -328,18 +284,40 @@ class AgentMessage(BaseModel):
 
 
 class AgentTask(BaseModel):
-    """Task assigned to an agent."""
+    """
+    Task assigned to an agent.
+
+    All agents communicate via process_task using AgentTask.
+    Higher-level protocols (ContentProtocol, EditorialProtocol) are expressed as tasks
+    so agents can decide which teams and workflows to use.
+    """
 
     task_id: str = Field(..., description="Unique task identifier")
     agent_role: AgentRole = Field(..., description="Agent role for this task")
     description: str = Field(..., description="Task description")
     parameters: Dict[str, Any] = Field(
-        default_factory=dict, description="Task parameters"
+        default_factory=dict, description="Task parameters and input data"
     )
     dependencies: List[str] = Field(
         default_factory=list, description="IDs of prerequisite tasks"
     )
     status: AgentStatus = Field(AgentStatus.IDLE, description="Current task status")
+
+    # Workflow and team hints for orchestration
+    suggested_workflow: Optional[str] = Field(
+        None, description="Suggested workflow name to use"
+    )
+    suggested_team: Optional[str] = Field(
+        None, description="Suggested team name to use"
+    )
+
+    # Output management for stage reuse
+    output_key: Optional[str] = Field(
+        None, description="Key to store output for later stages"
+    )
+    input_keys: List[str] = Field(
+        default_factory=list, description="Keys of previous outputs to use as input"
+    )
 
 
 class AgentState(BaseModel):
@@ -358,3 +336,170 @@ class AgentState(BaseModel):
     metadata: Dict[str, Any] = Field(
         default_factory=dict, description="Additional metadata"
     )
+
+
+class WorkflowDecision(BaseModel):
+    """Decision about which workflow to use for a task."""
+
+    workflow_name: str = Field(..., description="Selected workflow name")
+    team_name: Optional[str] = Field(None, description="Selected team name")
+    reason: str = Field(..., description="Reason for this decision")
+    confidence: float = Field(..., description="Confidence score (0-1)")
+
+
+class OrchestrationStrategy(BaseModel):
+    """
+    Strategy for agent orchestration decisions.
+
+    Helps agents decide which teams and workflows to use based on task characteristics.
+    """
+
+    name: str = Field(..., description="Strategy name")
+
+    # Decision criteria
+    task_complexity_threshold: float = Field(
+        0.5, description="Threshold for considering task complex (0-1)"
+    )
+    parallel_threshold: int = Field(
+        3, description="Min independent subtasks to use parallel workflow"
+    )
+    iteration_threshold: int = Field(
+        2, description="Min expected iterations to use loop workflow"
+    )
+
+    # Team selection rules
+    scope_to_team: Dict[str, str] = Field(
+        default_factory=dict, description="Map workflow scope to team name"
+    )
+    role_to_team: Dict[str, str] = Field(
+        default_factory=dict, description="Map agent role to team name"
+    )
+
+    def select_workflow(
+        self,
+        task: AgentTask,
+        available_workflows: List[WorkflowMetadata],
+        task_context: Optional[Dict[str, Any]] = None,
+    ) -> WorkflowDecision:
+        """
+        Select appropriate workflow based on task characteristics.
+
+        Args:
+            task: The task to execute
+            available_workflows: List of available workflows
+            task_context: Additional context for decision making
+
+        Returns:
+            WorkflowDecision with selected workflow and reasoning
+        """
+        context = task_context or {}
+
+        # Check for explicit suggestions
+        if task.suggested_workflow:
+            matching = [
+                w for w in available_workflows if w.name == task.suggested_workflow
+            ]
+            if matching:
+                return WorkflowDecision(
+                    workflow_name=task.suggested_workflow,
+                    team_name=task.suggested_team,
+                    reason=f"Task explicitly suggests workflow: {task.suggested_workflow}",
+                    confidence=1.0,
+                )
+
+        # Analyze task characteristics
+        num_subtasks = context.get("num_subtasks", 1)
+        expected_iterations = context.get("expected_iterations", 1)
+        requires_review = context.get("requires_review", False)
+
+        # Decision logic
+        if num_subtasks >= self.parallel_threshold:
+            parallel_wf = [
+                w for w in available_workflows if w.pattern == WorkflowPattern.PARALLEL
+            ]
+            if parallel_wf:
+                return WorkflowDecision(
+                    workflow_name=parallel_wf[0].name,
+                    team_name=self._select_team(task, parallel_wf[0].scope),
+                    reason=f"Task has {num_subtasks} independent subtasks",
+                    confidence=0.8,
+                )
+
+        if expected_iterations >= self.iteration_threshold or requires_review:
+            loop_wf = [
+                w for w in available_workflows if w.pattern == WorkflowPattern.LOOP
+            ]
+            if loop_wf:
+                return WorkflowDecision(
+                    workflow_name=loop_wf[0].name,
+                    team_name=self._select_team(task, loop_wf[0].scope),
+                    reason=f"Task requires {expected_iterations} iterations or review",
+                    confidence=0.7,
+                )
+
+        # Default to sequential
+        seq_wf = [
+            w for w in available_workflows if w.pattern == WorkflowPattern.SEQUENTIAL
+        ]
+        if seq_wf:
+            return WorkflowDecision(
+                workflow_name=seq_wf[0].name,
+                team_name=self._select_team(task, seq_wf[0].scope),
+                reason="Default sequential workflow for standard task",
+                confidence=0.6,
+            )
+
+        # Fallback
+        return WorkflowDecision(
+            workflow_name=(
+                available_workflows[0].name if available_workflows else "default"
+            ),
+            team_name=None,
+            reason="No matching workflow found, using first available",
+            confidence=0.3,
+        )
+
+    def _select_team(self, task: AgentTask, scope: WorkflowScope) -> Optional[str]:
+        """Select team based on task and scope."""
+        # Check explicit suggestion
+        if task.suggested_team:
+            return task.suggested_team
+
+        # Check scope mapping
+        if scope.value in self.scope_to_team:
+            return self.scope_to_team[scope.value]
+
+        # Check role mapping
+        if task.agent_role.value in self.role_to_team:
+            return self.role_to_team[task.agent_role.value]
+
+        return None
+
+    def evaluate_condition(self, condition_type: str, context: Dict[str, Any]) -> bool:
+        """
+        Evaluate a condition for workflow control flow.
+
+        Args:
+            condition_type: Type of condition to evaluate
+            context: Current execution context
+
+        Returns:
+            True if condition is met, False otherwise
+        """
+        if condition_type == "quality_threshold":
+            quality = context.get("quality_score", 0)
+            threshold = context.get("threshold", 0.8)
+            return quality >= threshold
+
+        elif condition_type == "max_iterations":
+            iteration = context.get("iteration", 0)
+            max_iter = context.get("max_iterations", 10)
+            return iteration < max_iter
+
+        elif condition_type == "task_complete":
+            return context.get("status") == "completed"
+
+        elif condition_type == "approval_received":
+            return context.get("approved", False)
+
+        return False
