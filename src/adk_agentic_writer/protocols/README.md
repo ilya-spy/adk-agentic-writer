@@ -28,7 +28,10 @@ class AgentProtocol(Protocol):
     def get_state(self) -> AgentState: ...
 ```
 
-Core agent operations that every agent must support. The `process_task` method is the universal interface for all agent communication.
+**Functions:**
+- `process_task`: Universal interface for all agent communication, accepts task description and parameters
+- `update_status`: Update agent status (IDLE, WORKING, COMPLETED, ERROR)
+- `get_state`: Retrieve current agent state including variables and metadata
 
 ### EditorialProtocol (Optional)
 **For agents that review, validate, and refine content.**
@@ -40,22 +43,22 @@ class EditorialProtocol(Protocol):
     async def refine_content(self, content: Dict[str, Any], feedback: str | Dict[str, Any]) -> Dict[str, Any]: ...
 ```
 
+**Functions:**
+- `review_content`: Analyze content and generate detailed feedback/suggestions
+- `validate_content`: Check if content meets quality and correctness requirements
+- `refine_content`: Improve content based on review feedback
+
 **Expressed as AgentTask:**
 ```python
 AgentTask(
-    task_id="review_1",
+    task_id="review_content",  # Matches function name
     agent_role=AgentRole.REVIEWER,
-    description="Review story content",
-    parameters={"content": {...}, "review_criteria": {...}},
-    output_key="review_feedback",  # Store for later use
-    input_keys=["story_draft"]  # Use previous output
+    prompt="Review the {content_type} content from {story_draft} and provide feedback",
+    parameters={"content_type": "story", "review_criteria": {...}},
+    output_key="review_feedback"
 )
+# Variables like {story_draft} are resolved from AgentState.variables
 ```
-
-For content review, validation, and refinement operations:
-- **review_content**: Generate detailed review/feedback (used as input to refine)
-- **validate_content**: Check if content meets basic validity requirements
-- **refine_content**: Improve content based on review feedback
 
 ### ContentProtocol (Optional)
 **For agents that generate content blocks with specific user interaction patterns.**
@@ -73,33 +76,29 @@ class ContentProtocol(Protocol):
                                       context: Dict[str, Any]) -> List[ContentBlock]: ...
     async def generate_conditional_blocks(self, blocks_config: List[Dict[str, Any]],
                                          context: Dict[str, Any]) -> List[ContentBlock]: ...
-    async def validate_block(self, block: ContentBlock) -> bool: ...
 ```
+
+**Functions:**
+- `generate_block`: Create single content block with context awareness
+- `generate_sequential_blocks`: Linear content progression (chapters, scenes)
+- `generate_looped_blocks`: Repeatable content with exit conditions (practice, flashcards)
+- `generate_branched_blocks`: Choice-based navigation (interactive stories)
+- `generate_conditional_blocks`: State-based visibility (unlockable content)
 
 **Expressed as AgentTask:**
 ```python
 AgentTask(
-    task_id="content_1",
+    task_id="generate_sequential_blocks",  # Matches function name
     agent_role=AgentRole.STORY_WRITER,
-    description="Generate sequential story blocks",
-    parameters={
-        "num_blocks": 5,
-        "block_type": "SCENE",
-        "context": {"topic": "adventure", "genre": "fantasy"}
-    },
-    suggested_workflow="sequential_content",  # Hint for workflow selection
-    suggested_team="content_team",  # Hint for team selection
+    prompt="Generate {num_blocks} sequential {block_type} blocks about {topic} in {genre} style",
+    parameters={"num_blocks": 5, "block_type": "SCENE", "topic": "adventure", "genre": "fantasy"},
+    suggested_workflow="sequential_content",
+    suggested_team="content_team",
     output_key="story_blocks"
 )
 ```
 
-For creating content blocks (scenes, cards, chapters) that define **user interaction patterns**:
-- **Sequential**: Linear reading/navigation (A → B → C)
-- **Looped**: Repeatable content with exit conditions (practice loops, flashcards)
-- **Branched**: Choice-based navigation (choose-your-own-adventure)
-- **Conditional**: State-based content visibility (unlockable sections)
-
-**Key Concept**: These methods specify the **content block pattern** (how users interact with the content structure), NOT the generation process (how the agent internally creates the content). The agent can use any internal workflow to generate the blocks, but the output must match the specified interaction pattern.
+**Key Concept**: Methods specify content block patterns (user interaction model), not generation process (internal workflow).
 
 ## Usage
 
@@ -183,214 +182,84 @@ editor: EditorialProtocol = StoryWriterAgent()
 generator: ContentProtocol = StoryWriterAgent()
 ```
 
-## Content Block Patterns Explained
-
-The `ContentProtocol` defines methods for generating content blocks with specific **user interaction patterns**. These patterns describe the structure and navigation model of the content from the user's perspective, not how the agent generates it internally.
-
-### Sequential Pattern (Linear Reading)
-```python
-blocks = await agent.generate_sequential_blocks(
-    num_blocks=5,
-    block_type=ContentBlockType.CHAPTER,
-    context={"topic": "Python basics"}
-)
-```
-
-**Output**: Chapter 1 → Chapter 2 → Chapter 3 → Chapter 4 → Chapter 5
-
-**User Interaction Pattern**: Linear progression, users read/navigate in order  
-**Use Cases**: Books, courses, tutorials, presentations
-
-**What this means**: The agent generates blocks where each builds on the previous one, creating a linear narrative or learning path. Users experience the content sequentially.
-
-### Looped Pattern (Repeatable Content)
-```python
-blocks = await agent.generate_looped_blocks(
-    num_blocks=3,
-    block_type=ContentBlockType.CARD,
-    context={"topic": "Vocabulary quiz"},
-    exit_condition={"score": ">=80", "or": "attempts>=3"},
-    allow_back=True
-)
-```
-
-**Output**: Card 1 ⟲ Card 2 ⟲ Card 3 ⟲ (repeat until score ≥80 or 3 attempts)
-
-**User Interaction Pattern**: Users can repeat the content set multiple times until exit condition is met  
-**Use Cases**: 
-- Practice exercises (repeat until mastery)
-- Mini-games (play again button)
-- Flashcards (review loop)
-- Skill drills
-
-**What this means**: The agent generates blocks with navigation metadata that allows users to go back, repeat sections, and continue looping until they meet the exit condition (e.g., pass the quiz, reach mastery level).
-
-**Block Features**:
-- Navigation: Back button support
-- Exit condition: When users can leave the loop
-- Progress tracking: Metadata for iteration count
-
-### Branched Pattern (Choice-Based Navigation)
-```python
-blocks = await agent.generate_branched_blocks(
-    branch_points=[
-        {
-            "block_type": ContentBlockType.SCENE,
-            "content": "You reach a fork in the road",
-            "choices": [
-                {"text": "Go left", "leads_to": "forest_scene"},
-                {"text": "Go right", "leads_to": "mountain_scene"},
-                {"text": "Turn back", "leads_to": "village_scene"}
-            ]
-        }
-    ],
-    context={"story": "Adventure"}
-)
-```
-
-**Output**: Branch point with multiple paths based on user choice
-
-**User Interaction Pattern**: Users make choices that determine which content blocks they see next  
-**Use Cases**:
-- Interactive stories
-- Decision trees
-- Scenario-based learning
-- Multiple endings
-
-**What this means**: The agent generates blocks with choice metadata that creates branching paths. Users navigate through different content based on their decisions, creating a non-linear experience.
-
-### Conditional Pattern (State-Based Display)
-```python
-blocks = await agent.generate_conditional_blocks(
-    blocks_config=[
-        {
-            "block_type": ContentBlockType.SECTION,
-            "condition": {"user_level": ">=3"},
-            "content_spec": {"topic": "Advanced concepts"}
-        },
-        {
-            "block_type": ContentBlockType.SECTION,
-            "condition": {"completed": ["intro", "basics"]},
-            "content_spec": {"topic": "Next steps"}
-        }
-    ],
-    context={"course": "Python"}
-)
-```
-
-**Output**: Blocks with condition metadata determining when they're shown
-
-**User Interaction Pattern**: Content visibility depends on runtime conditions (user state, progress, etc.)  
-**Use Cases**:
-- Adaptive learning paths
-- Unlockable content
-- Prerequisite-based sections
-- Personalized experiences
-
-**What this means**: The agent generates blocks with condition metadata. The content exists but is only displayed to users when their state/progress meets the specified conditions (e.g., completed prerequisites, reached certain level).
-
 ## Orchestration with Teams and Workflows
 
-### Agent Orchestration Model
+Agents coordinate teams and workflows to execute complex tasks. See `utils/README.md` for details on `OrchestrationStrategy` and `TaskCollection`.
 
-Agents can coordinate teams and workflows to execute complex tasks:
+### Example: Agent with Teams and Workflows
 
 ```python
-from adk_agentic_writer.models import (
-    AgentModel, AgentTask, TeamMetadata, WorkflowMetadata,
-    OrchestrationStrategy, WorkflowPattern, WorkflowScope
-)
+from adk_agentic_writer.models import AgentModel, TeamMetadata, WorkflowMetadata
 
-# Define team
-team = TeamMetadata(
-    name="content_team",
-    scope=WorkflowScope.CONTENT,
-    agent_ids=["writer", "editor", "reviewer"]
-)
-
-# Define workflows
-workflow = WorkflowMetadata(
-    name="review_loop",
-    pattern=WorkflowPattern.LOOP,
-    scope=WorkflowScope.EDITORIAL,
-    description="Iterative review and refinement",
-    max_iterations=3
-)
-
-# Create agent with teams and workflows
+# Agent with team and workflow
 agent = AgentModel(
     name="coordinator",
     model_name="gemini-2.5-flash-lite",
     instruction="Coordinate content creation",
-    teams=[team],
-    workflows=[workflow]
+    teams=[TeamMetadata(name="content_team", scope=WorkflowScope.CONTENT, 
+                        agent_ids=["writer", "editor"])],
+    workflows=[WorkflowMetadata(name="review_loop", pattern=WorkflowPattern.LOOP,
+                                scope=WorkflowScope.EDITORIAL, description="Review loop")]
 )
-
-# Create task with output management
-task = AgentTask(
-    task_id="create_story",
-    agent_role=AgentRole.COORDINATOR,
-    description="Create and review story",
-    parameters={"topic": "adventure", "length": "medium"},
-    suggested_workflow="review_loop",
-    suggested_team="content_team",
-    output_key="final_story",  # Store output
-    input_keys=["story_outline"]  # Use previous output
-)
-
-# Use strategy to select workflow
-strategy = OrchestrationStrategy(
-    name="default",
-    scope_to_team={"content": "content_team", "editorial": "review_team"}
-)
-
-decision = strategy.select_workflow(
-    task, 
-    agent.workflows,
-    {"expected_iterations": 2, "requires_review": True}
-)
-# Returns: WorkflowDecision(workflow_name="review_loop", confidence=0.7, ...)
 ```
 
-### Output Reuse Across Stages
-
-Tasks can reference outputs from previous stages:
+### Example: Task Pipeline with Variable Reuse
 
 ```python
-# Stage 1: Generate draft
+# Task outputs stored in AgentState.variables, referenced in subsequent prompts
 task1 = AgentTask(
-    task_id="draft",
-    description="Write story draft",
-    parameters={"topic": "adventure"},
-    output_key="story_draft"  # Store for later
+    task_id="generate_content",
+    prompt="Write a story about {topic}",
+    output_key="story_draft"  # Stored in variables["story_draft"]
 )
 
-# Stage 2: Review draft (uses output from stage 1)
 task2 = AgentTask(
-    task_id="review",
-    description="Review story",
-    parameters={"review_criteria": {...}},
-    input_keys=["story_draft"],  # Reference previous output
+    task_id="review_content", 
+    prompt="Review this story: {story_draft}",  # References variables["story_draft"]
     output_key="review_feedback"
 )
 
-# Stage 3: Refine based on feedback (uses outputs from stages 1 & 2)
 task3 = AgentTask(
-    task_id="refine",
-    description="Refine story based on feedback",
-    parameters={},
-    input_keys=["story_draft", "review_feedback"],  # Use both
+    task_id="refine_content",
+    prompt="Refine {story_draft} based on: {review_feedback}",  # Uses both variables
     output_key="final_story"
 )
 ```
 
-### Strategy Decision Methods
+### Example: Protocol Interface via Task Delegation
 
-`OrchestrationStrategy` provides methods for workflow selection:
+```python
+from adk_agentic_writer.tasks import GENERATE_SEQUENTIAL_BLOCKS, REVIEW_CONTENT, REFINE_CONTENT
+from adk_agentic_writer.teams import STORY_WRITER, EDITORIAL_REVIEWER, EDITORIAL_REFINER
+from adk_agentic_writer.utils.variable_substitution import substitute_variables
 
-- **`select_workflow()`**: Choose workflow based on task characteristics
-- **`evaluate_condition()`**: Evaluate conditions for workflow control flow
-- **`_select_team()`**: Select appropriate team based on scope and role
+# Implement protocol by delegating to team members
+class ContentCoordinator:
+    async def create_and_review_content(self, topic, genre, num_blocks):
+        # Step 1: Generate content with specialized writer
+        self.state.variables.update({
+            "topic": topic,
+            "genre": genre,
+            "num_blocks": num_blocks,
+            "block_type": "SCENE"
+        })
+        
+        prompt = substitute_variables(GENERATE_SEQUENTIAL_BLOCKS.prompt, self.state.variables)
+        content = await self.execute_with_agent(STORY_WRITER, prompt)
+        self.state.variables["content_draft"] = content
+        
+        # Step 2: Review content with editorial reviewer
+        prompt = substitute_variables(REVIEW_CONTENT.prompt, self.state.variables)
+        feedback = await self.execute_with_agent(EDITORIAL_REVIEWER, prompt)
+        self.state.variables["feedback"] = feedback
+        
+        # Step 3: Refine content with editorial refiner
+        prompt = substitute_variables(REFINE_CONTENT.prompt, self.state.variables)
+        refined = await self.execute_with_agent(EDITORIAL_REFINER, prompt)
+        self.state.variables["refined_content"] = refined
+        
+        return refined
+```
 
 ## Key Principles
 

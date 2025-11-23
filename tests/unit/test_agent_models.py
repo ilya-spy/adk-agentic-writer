@@ -29,13 +29,13 @@ def test_agent_task_creation() -> None:
     task = AgentTask(
         task_id="task_1",
         agent_role=AgentRole.QUIZ_WRITER,
-        description="Create a quiz about Python",
+        prompt="Create a quiz about Python",
         parameters={"num_questions": 5},
     )
     
     assert task.task_id == "task_1"
     assert task.agent_role == AgentRole.QUIZ_WRITER
-    assert task.description == "Create a quiz about Python"
+    assert task.prompt == "Create a quiz about Python"
     assert task.parameters["num_questions"] == 5
     assert task.status == AgentStatus.IDLE
 

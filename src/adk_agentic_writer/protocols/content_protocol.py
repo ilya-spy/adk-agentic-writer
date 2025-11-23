@@ -217,14 +217,3 @@ class ContentProtocol(Protocol):
             List of conditional content blocks with display rules
         """
         ...
-
-    async def validate_block(self, block: ContentBlock) -> bool:
-        """Validate a content block structure and navigation.
-
-        Args:
-            block: Content block to validate
-
-        Returns:
-            True if block is valid (has proper navigation, exit conditions, etc.)
-        """
-        ...
