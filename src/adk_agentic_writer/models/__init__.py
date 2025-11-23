@@ -1,7 +1,6 @@
 """Models package initialization."""
 
 from .agent_models import (
-    AGENT_TEAM_CONFIGS,
     AgentConfig,
     AgentMessage,
     AgentModel,
@@ -11,7 +10,6 @@ from .agent_models import (
     AgentTask,
     AgentToolModel,
     FunctionToolModel,
-    OrchestrationStrategy,
     TeamMetadata,
     WorkflowDecision,
     WorkflowMetadata,
@@ -48,7 +46,6 @@ __all__ = [
     "AgentStatus",
     "AgentTask",
     "AgentConfig",
-    "AGENT_TEAM_CONFIGS",
     "AgentModel",
     "AgentToolModel",
     "FunctionToolModel",
@@ -57,8 +54,6 @@ __all__ = [
     "WorkflowMetadata",
     "WorkflowPattern",
     "WorkflowScope",
-    # Orchestration strategy
-    "OrchestrationStrategy",
     "WorkflowDecision",
     # Content models
     "BranchedNarrative",

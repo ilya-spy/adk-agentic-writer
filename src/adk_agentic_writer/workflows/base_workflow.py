@@ -87,9 +87,14 @@ class Workflow:
     async def _execute_sequential(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """Execute agents sequentially."""
         result = input_data
-        for agent in self.agents:
+        for i, agent in enumerate(self.agents):
             task_desc = result.get("task_description", "Process task")
             params = result.get("parameters", {})
+            
+            # After first agent, pass the result as content to next agent
+            if i > 0:
+                params = {**params, "content": result}
+            
             result = await agent.process_task(task_desc, params)
         return result
 
