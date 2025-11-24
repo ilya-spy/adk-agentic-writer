@@ -4,10 +4,7 @@ from enum import Enum
 
 from ..models.agent_models import (
     AgentConfig,
-    AgentRole,
     TeamMetadata,
-    WorkflowMetadata,
-    WorkflowPattern,
     WorkflowScope,
 )
 
@@ -21,7 +18,7 @@ class EditorialRole(str, Enum):
 
 # Editorial Reviewer Configuration
 EDITORIAL_REVIEWER = AgentConfig(
-    role=EditorialRole.EDITORIAL_REVIEWER,  # Base role
+    role=EditorialRole.EDITORIAL_REVIEWER,
     system_instruction="""You are an expert content reviewer specializing in quality assurance.
 Your role is to review content for quality, accuracy, and effectiveness.
 
@@ -37,25 +34,11 @@ Guidelines:
 - Focus on educational value and user experience""",
     temperature=0.5,
     max_tokens=1536,
-    workflows=[
-        WorkflowMetadata(
-            name="content_review",
-            pattern=WorkflowPattern.SEQUENTIAL,
-            scope=WorkflowScope.EDITORIAL,
-            description="Review content and provide feedback",
-        ),
-        WorkflowMetadata(
-            name="content_validation",
-            pattern=WorkflowPattern.SEQUENTIAL,
-            scope=WorkflowScope.EDITORIAL,
-            description="Validate content meets standards",
-        ),
-    ],
 )
 
 # Editorial Refiner Configuration
 EDITORIAL_REFINER = AgentConfig(
-    role=EditorialRole.EDITORIAL_REFINER,  # Base role
+    role=EditorialRole.EDITORIAL_REFINER,
     system_instruction="""You are an expert content refiner specializing in improving content quality.
 Your role is to enhance content based on feedback while maintaining original intent.
 
@@ -71,21 +54,6 @@ Guidelines:
 - Ensure changes improve overall quality""",
     temperature=0.6,
     max_tokens=2048,
-    workflows=[
-        WorkflowMetadata(
-            name="content_refinement",
-            pattern=WorkflowPattern.SEQUENTIAL,
-            scope=WorkflowScope.EDITORIAL,
-            description="Refine content based on feedback",
-        ),
-        WorkflowMetadata(
-            name="iterative_refinement",
-            pattern=WorkflowPattern.LOOP,
-            scope=WorkflowScope.EDITORIAL,
-            description="Iteratively refine until quality met",
-            max_iterations=3,
-        ),
-    ],
 )
 
 # Agent Pools
