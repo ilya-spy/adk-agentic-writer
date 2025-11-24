@@ -7,8 +7,9 @@ They correspond to the EditorialProtocol.
 import logging
 from typing import Any, Callable, Dict, List, Optional
 
-from ..models.agent_models import WorkflowPattern, WorkflowScope
+from ..models.agent_models import AgentConfig, WorkflowPattern, WorkflowScope
 from .base_workflow import Workflow
+from ..tasks import editorial_tasks
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ class SequentialEditorialWorkflow(Workflow):
 
         Args:
             name: Workflow name
-            stages: List of editorial stages (generate, validate, refine)
+            stages: List of editorial stages (review, refine, finalize)
         """
         super().__init__(
             name=name,
@@ -37,6 +38,11 @@ class SequentialEditorialWorkflow(Workflow):
             scope=WorkflowScope.EDITORIAL,
             description="Review → Refine → Validate in sequence",
             agents=stages,
+            tasks=[
+                editorial_tasks.REVIEW_DRAFT,
+                editorial_tasks.REFINE_BASED_ON_REVIEW,
+                editorial_tasks.FINALIZE_CONTENT,
+            ],
         )
         logger.info(
             f"Sequential editorial workflow '{name}' configured with {len(stages)} stages"
@@ -71,6 +77,11 @@ class ParallelEditorialWorkflow(Workflow):
             description="Multiple reviewers provide feedback concurrently",
             agents=generators,
             merge_strategy=selection_strategy,
+            tasks=[
+                editorial_tasks.GENERATE_CONTENT_VARIANTS,
+                editorial_tasks.GENERATE_CONTENT_VARIANTS,
+                editorial_tasks.GENERATE_CONTENT_VARIANTS,
+            ],
         )
         self.selection_strategy = selection_strategy
         logger.info(
@@ -91,8 +102,9 @@ class IterativeEditorialWorkflow(Workflow):
     def __init__(
         self,
         name: str,
-        generator: Any,
-        evaluator: Any,
+        generator: AgentConfig,
+        evaluator: AgentConfig,
+        refiner: AgentConfig,
         max_iterations: int = 5,
     ):
         """
@@ -102,6 +114,7 @@ class IterativeEditorialWorkflow(Workflow):
             name: Workflow name
             generator: Content generator (implements generate_content)
             evaluator: Content evaluator (implements validate_content)
+            refiner: Content refiner (implements refine_content)
             max_iterations: Maximum number of iterations
         """
         condition_fn = lambda data, iteration: iteration < max_iterations
@@ -111,9 +124,13 @@ class IterativeEditorialWorkflow(Workflow):
             pattern=WorkflowPattern.LOOP,
             scope=WorkflowScope.EDITORIAL,
             description="Review and refine content iteratively until quality met",
-            agents=[generator],
+            agents=[generator, evaluator, refiner],
             condition=condition_fn,
             max_iterations=max_iterations,
+            tasks=[
+                editorial_tasks.EVALUATE_CONTENT_QUALITY,
+                editorial_tasks.REFINE_ITERATIVELY,
+            ],
         )
         self.evaluator = evaluator
         logger.info(
@@ -132,7 +149,8 @@ class AdaptiveEditorialWorkflow(Workflow):
     def __init__(
         self,
         name: str,
-        type_analyzer: Any,
+        type_analyzer: AgentConfig,
+        generator: AgentConfig,
         strategies: Dict[str, Any],
         default_strategy: Any = None,
     ):
@@ -141,20 +159,30 @@ class AdaptiveEditorialWorkflow(Workflow):
 
         Args:
             name: Workflow name
-            type_analyzer: Function that determines content type/strategy
+            type_analyzer: Agent that determines content type/strategy
+            generator: Agent that applies editing
             strategies: Dict mapping content types to editing strategies
             default_strategy: Default strategy if type is unknown
         """
+
         super().__init__(
             name=name,
             pattern=WorkflowPattern.CONDITIONAL,
             scope=WorkflowScope.EDITORIAL,
             description="Route to different review strategies based on content type",
-            agents=[type_analyzer],
+            agents=[type_analyzer, generator],
+            tasks=[
+                editorial_tasks.ANALYZE_CONTENT_TYPE,
+                editorial_tasks.SELECT_EDITING_STRATEGY,
+                editorial_tasks.APPLY_ADAPTIVE_EDITING,
+            ],
         )
-        self.type_analyzer = type_analyzer
+
         self.strategies = strategies
         self.default_strategy = default_strategy
+
+        # self.condition = type_analyzer
+
         logger.info(
             f"Adaptive editorial workflow '{name}' configured with {len(strategies)} strategies"
         )

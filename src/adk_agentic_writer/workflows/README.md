@@ -1,144 +1,111 @@
 # Workflows
 
-Workflow patterns for orchestrating agents, editorial operations, and content generation.
+Task-driven orchestration for content generation and editorial refinement.
 
 ## Overview
 
-Workflows use metadata-driven orchestration patterns. All workflows inherit from the base `Workflow` class
-and specify their pattern (sequential, parallel, loop, conditional) through `WorkflowMetadata`.
+Workflows orchestrate **AgentTask** execution using patterns. Data flows through unified state variables:
 
-They correspond to the three protocol types:
+- **`content_block`**: Current content unit (all generation outputs here)
+- **`content_stream`**: Accumulated history (enables continuity and streaming)
 
-1. **Agent Workflows** - Orchestrate multiple agents
-2. **Editorial Workflows** - Orchestrate content editing/refinement (EditorialProtocol)
-3. **Content Workflows** - Orchestrate UX interaction patterns (ContentProtocol)
+**Formula**: `Workflow = Pattern + Scope + Tasks + Agents`
 
-## Workflow Types
+- **Pattern**: Execution strategy (SEQUENTIAL, PARALLEL, LOOP, CONDITIONAL)
+- **Scope**: Domain (CONTENT, EDITORIAL, AGENT)
+- **Tasks**: AgentTask instances defining work units
+- **Agents**: Agent configurations that execute tasks
 
-### Base Workflow (`base_workflow.py`)
+### Patterns
 
-The single `Workflow` class provides metadata-driven orchestration:
+| Pattern | Description | Example |
+|---------|-------------|---------|
+| SEQUENTIAL | Execute in order | Review → Refine → Finalize |
+| PARALLEL | Execute concurrently | Generate variants → Select |
+| LOOP | Repeat until condition | Generate → Stream → Repeat |
+| CONDITIONAL | Route by condition | Analyze → Apply strategy |
 
-- **Pattern**: Specified in metadata (SEQUENTIAL, PARALLEL, LOOP, CONDITIONAL)
-- **Scope**: Specified in metadata (AGENT, CONTENT, EDITORIAL)
-- **Execution**: Automatically routes to the appropriate execution method based on pattern
+---
 
-### Agent Workflows (`agent_workflows.py`)
+## Content Workflows
 
-Orchestrate multiple agents working together:
+Generate structured content with different interaction patterns.
 
-- `SequentialAgentWorkflow` - Agents execute in sequence
-- `ParallelAgentWorkflow` - Agents execute concurrently
-- `LoopAgentWorkflow` - Agent executes in loop
-- `ConditionalAgentWorkflow` - Route to different agents based on conditions
+### AdaptiveContentWorkflow (LOOP)
+Adapts generation based on user behavior patterns.
 
-### Editorial Workflows (`editorial_workflows.py`)
+**Tasks**: `ANALYZE_USER_BEHAVIOR` → `ADAPT_CONTENT_STRATEGY` → `GENERATE_ADAPTIVE_BLOCK`
 
-Orchestrate content editing and refinement (corresponds to **EditorialProtocol**):
+**Use Cases**: Adaptive learning, personalized stories, difficulty scaling
 
-- `SequentialEditorialWorkflow` - Edit in stages: Draft → Refine → Review → Finalize
-- `ParallelEditorialWorkflow` - Generate variants concurrently, select best
-- `IterativeEditorialWorkflow` - Refine through iterations: Generate → Validate → Refine
-- `AdaptiveEditorialWorkflow` - Adapt editing strategy based on content type
+### StreamingContentWorkflow (LOOP)
+Generates and streams content progressively.
 
-### Content Workflows (`content_workflows.py`)
+**Tasks**: `GENERATE_STREAMING_BLOCK` → `STREAM_CONTENT_BLOCK`
 
-Orchestrate UX interaction patterns (corresponds to **ContentProtocol**):
+**Use Cases**: Real-time generation, progressive tutorials, live content
 
-- `SequentialContentWorkflow` - Generate blocks in sequence (scenes, cards, chapters)
-- `LoopedContentWorkflow` - Generate and refine blocks iteratively
-- `ConditionalContentWorkflow` - Generate blocks based on conditions (branching narratives)
-- `InteractiveContentWorkflow` - Generate with user interaction points
-- `AdaptiveContentWorkflow` - Adapt generation based on user behavior
-- `StreamingContentWorkflow` - Generate and stream blocks in real-time
+---
+
+## Editorial Workflows
+
+Refine and improve content through review, validation, and editing.
+
+### SequentialEditorialWorkflow (SEQUENTIAL)
+Linear refinement through stages.
+
+**Tasks**: `REVIEW_DRAFT` → `REFINE_BASED_ON_REVIEW` → `FINALIZE_CONTENT`
+
+**Use Cases**: Standard editorial process, quality assurance
+
+### ParallelEditorialWorkflow (PARALLEL)
+Generates variants concurrently, selects best.
+
+**Tasks**: `GENERATE_CONTENT_VARIANTS` (×3 parallel)
+
+**Use Cases**: A/B testing, creative exploration
+
+### IterativeEditorialWorkflow (LOOP)
+Iterative improvement through repeated evaluation.
+
+**Tasks**: `EVALUATE_CONTENT_QUALITY` → `REFINE_ITERATIVELY` (loop)
+
+**Use Cases**: High-quality content, quality thresholds
+
+### AdaptiveEditorialWorkflow (CONDITIONAL)
+Adapts editing strategy based on content type.
+
+**Tasks**: `ANALYZE_CONTENT_TYPE` → `SELECT_EDITING_STRATEGY` → `APPLY_ADAPTIVE_EDITING`
+
+**Use Cases**: Multi-format content, specialized editing
+
+---
 
 ## Usage
 
-### Import Workflows
-
 ```python
-from adk_agentic_writer.workflows import (
-    # Agent workflows
-    SequentialAgentWorkflow,
-    
-    # Editorial workflows
-    IterativeEditorialWorkflow,
-    
-    # Content workflows
-    SequentialContentWorkflow,
-    ConditionalContentWorkflow,
-)
-```
+from adk_agentic_writer.workflows import AdaptiveContentWorkflow
 
-### Example: Editorial Workflow
-
-```python
-# Iterative refinement workflow
-workflow = IterativeEditorialWorkflow(
-    name="quiz_refinement",
-    generator=quiz_agent,  # Implements EditorialProtocol
-    evaluator=reviewer_agent,
-    max_iterations=3
+workflow = AdaptiveContentWorkflow(
+    name="adaptive_learning",
+    generator=writer_agent,
+    adaptator=analyzer_agent,
+    max_iterations=10
 )
 
-result = await workflow.execute({"topic": "Python", "difficulty": "medium"})
+result = await workflow.execute({
+    "topic": "Python basics",
+    "content_stream": previous_content,
+    "user_interactions": user_data
+})
 ```
 
-### Example: Content Workflow
-
-```python
-# Sequential story generation
-workflow = SequentialContentWorkflow(
-    name="story_generation",
-    block_types=["SCENE", "SCENE", "SCENE"],
-    generator=story_agent  # Implements ContentProtocol
-)
-
-result = await workflow.execute({"theme": "adventure", "genre": "fantasy"})
-```
-
-### Example: Conditional Content Workflow
-
-```python
-# Branching narrative
-def branching_logic(context):
-    if context["user_choice"] == "left":
-        return "path_a"
-    return "path_b"
-
-workflow = ConditionalContentWorkflow(
-    name="branching_story",
-    condition_fn=branching_logic,
-    generators={
-        "path_a": story_agent_a,
-        "path_b": story_agent_b,
-    }
-)
-```
-
-## Workflow Architecture
-
-```
-Workflow (base class with metadata-driven execution)
-    ↓
-├── agent_workflows.py (agent orchestration)
-├── editorial_workflows.py (EditorialProtocol operations)
-└── content_workflows.py (ContentProtocol operations)
-```
-
-## Correspondence with Protocols
-
-| Workflow Type | Protocol | Purpose |
-|--------------|----------|---------|
-| Agent Workflows | AgentProtocol | Orchestrate multiple agents |
-| Editorial Workflows | EditorialProtocol | Content editing/refinement |
-| Content Workflows | ContentProtocol | UX interaction patterns |
+---
 
 ## Key Principles
 
-1. **Metadata-Driven** - Workflow behavior specified through WorkflowMetadata
-2. **Single Base Class** - All workflows inherit from one `Workflow` class
-3. **Pattern Flexibility** - Pattern (sequential/parallel/loop/conditional) specified per instance
-4. **Composition** - Workflows compose agents and operations
-5. **Separation** - Clear separation between workflow scopes (agent/content/editorial)
-
+✅ **Task-Driven** - Workflows orchestrate AgentTask execution  
+✅ **Unified State** - `content_block` and `content_stream` enable flexible flow  
+✅ **Pattern-Based** - Execution strategy decoupled from logic  
+✅ **Composable** - Tasks reusable across workflows  
+✅ **Type-Safe** - Output keys match input variables

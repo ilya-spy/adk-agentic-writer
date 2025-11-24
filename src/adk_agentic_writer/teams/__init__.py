@@ -1,6 +1,7 @@
 """Team configurations with agent pools."""
 
 from .content_team import (
+    CONTENT_WRITER,
     GAME_WRITER,
     GAME_WRITERS_POOL,
     QUIZ_WRITER,
@@ -24,6 +25,7 @@ __all__ = [
     # Content roles
     "ContentRole",
     # Content agents
+    "CONTENT_WRITER",
     "STORY_WRITER",
     "QUIZ_WRITER",
     "GAME_WRITER",

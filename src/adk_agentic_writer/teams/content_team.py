@@ -4,10 +4,7 @@ from enum import Enum
 
 from ..models.agent_models import (
     AgentConfig,
-    AgentRole,
     TeamMetadata,
-    WorkflowMetadata,
-    WorkflowPattern,
     WorkflowScope,
 )
 
@@ -15,11 +12,43 @@ from ..models.agent_models import (
 class ContentRole(str, Enum):
     """Content team specific roles (compatible with AgentRole)."""
 
+    CONTENT_WRITER = "content_writer"
     STORY_WRITER = "story_writer"
     QUIZ_WRITER = "quiz_writer"
     GAME_WRITER = "game_writer"
     SIMULATION_WRITER = "simulation_writer"
 
+
+# Basic Content Writer Configuration
+CONTENT_WRITER = AgentConfig(
+    role=ContentRole.CONTENT_WRITER,
+    system_instruction="""You are an expert content writer specializing in creating various editorial and freestyle content blocks.
+Your role is to generate clear, engaging, and well-structured content for various purposes with authenticity and creativity.
+
+Guidelines:
+- Create clear and concise content
+- Adapt style and tone to the content type
+- Ensure accuracy and completeness
+- Treat the content as a set of cards or blocks that can be navigated and interacted with
+- Use buttons for user interaction and navigation
+- Use inputs to request user input where appropriate
+- Make sure card mechanics (like loops, branches, conditions, etc.) are working correctly
+- Output consistent JSON cards with the following structure (not all fields required for all patterns):
+  - id: string
+  - type: string
+  - content: string
+  - pattern: string (sequential, branched, looped, conditional)
+  - navigation: dict
+  - exit_condition: dict (for looped patterns)
+  - inputs: list (for input-based patterns)
+  - choices: list (for branched patterns)
+  - metadata: dict (put other relevant data here)
+- Follow best practices for the content format
+- Maintain consistency and coherence
+- Focus on intuitive user experience""",
+    temperature=0.7,
+    max_tokens=2048,
+)
 
 # Story Writer Configuration
 STORY_WRITER = AgentConfig(
@@ -37,20 +66,6 @@ Guidelines:
 - Adapt style and complexity to the target audience""",
     temperature=0.85,
     max_tokens=2048,
-    workflows=[
-        WorkflowMetadata(
-            name="sequential_generation",
-            pattern=WorkflowPattern.SEQUENTIAL,
-            scope=WorkflowScope.CONTENT,
-            description="Generate story content in sequence",
-        ),
-        WorkflowMetadata(
-            name="branched_generation",
-            pattern=WorkflowPattern.CONDITIONAL,
-            scope=WorkflowScope.CONTENT,
-            description="Generate branched narrative with choices",
-        ),
-    ],
 )
 
 # Quiz Writer Configuration
@@ -69,21 +84,6 @@ Guidelines:
 - Ensure educational value and engagement""",
     temperature=0.7,
     max_tokens=1536,
-    workflows=[
-        WorkflowMetadata(
-            name="sequential_generation",
-            pattern=WorkflowPattern.SEQUENTIAL,
-            scope=WorkflowScope.CONTENT,
-            description="Generate quiz questions in sequence",
-        ),
-        WorkflowMetadata(
-            name="looped_generation",
-            pattern=WorkflowPattern.LOOP,
-            scope=WorkflowScope.CONTENT,
-            description="Generate practice question sets",
-            max_iterations=10,
-        ),
-    ],
 )
 
 # Game Writer Configuration
@@ -102,20 +102,6 @@ Guidelines:
 - Provide clear feedback to players""",
     temperature=0.75,
     max_tokens=2048,
-    workflows=[
-        WorkflowMetadata(
-            name="sequential_generation",
-            pattern=WorkflowPattern.SEQUENTIAL,
-            scope=WorkflowScope.CONTENT,
-            description="Generate game quests in sequence",
-        ),
-        WorkflowMetadata(
-            name="branched_generation",
-            pattern=WorkflowPattern.CONDITIONAL,
-            scope=WorkflowScope.CONTENT,
-            description="Generate branched quest paths",
-        ),
-    ],
 )
 
 # Simulation Writer Configuration
@@ -134,14 +120,6 @@ Guidelines:
 - Include helpful explanations""",
     temperature=0.65,
     max_tokens=2048,
-    workflows=[
-        WorkflowMetadata(
-            name="sequential_generation",
-            pattern=WorkflowPattern.SEQUENTIAL,
-            scope=WorkflowScope.CONTENT,
-            description="Generate simulation components in sequence",
-        ),
-    ],
 )
 
 # Agent Pools

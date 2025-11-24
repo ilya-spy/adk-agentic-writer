@@ -27,6 +27,31 @@ class WorkflowScope(str, Enum):
     EDITORIAL = "editorial"  # Editorial-level workflow (coordinates review/editing)
 
 
+class AgentRole(str, Enum):
+    """
+    Base agent roles - abstract categories.
+
+    Teams extend this with specific roles in their own files.
+    Example: ContentRole(str, Enum) adds STORY_WRITER, QUIZ_WRITER, etc.
+    """
+
+    # Base abstract roles (not used directly, extended by teams)
+    WRITER = "writer"
+    EDITOR = "editor"
+    REVIEWER = "reviewer"
+    REFINER = "refiner"
+    ANALYZER = "analyzer"
+    STRATEGIST = "strategist"
+    STREAMER = "streamer"
+
+    # Legacy roles (for backward compatibility with existing agents)
+    COORDINATOR = "coordinator"
+    QUIZ_WRITER = "quiz_writer"
+    STORY_WRITER = "story_writer"
+    GAME_DESIGNER = "game_designer"
+    SIMULATION_DESIGNER = "simulation_designer"
+
+
 class WorkflowMetadata(BaseModel):
     """Metadata describing a workflow that an agent can use."""
 
@@ -42,26 +67,16 @@ class WorkflowMetadata(BaseModel):
     )
 
 
-class AgentRole(str, Enum):
-    """
-    Base agent roles - abstract categories.
+class WorkflowDecision(BaseModel):
+    """Decision about which workflow to use for a task."""
 
-    Teams extend this with specific roles in their own files.
-    Example: ContentRole(str, Enum) adds STORY_WRITER, QUIZ_WRITER, etc.
-    """
-
-    # Base abstract roles (not used directly, extended by teams)
-    WRITER = "writer"
-    EDITOR = "editor"
-    REVIEWER = "reviewer"
-    REFINER = "refiner"
-    
-    # Legacy roles (for backward compatibility with existing agents)
-    COORDINATOR = "coordinator"
-    QUIZ_WRITER = "quiz_writer"
-    STORY_WRITER = "story_writer"
-    GAME_DESIGNER = "game_designer"
-    SIMULATION_DESIGNER = "simulation_designer"
+    scope: Optional[WorkflowScope] = Field(None, description="Selected workflow scope")
+    pattern: Optional[WorkflowPattern] = Field(
+        None, description="Selected workflow pattern"
+    )
+    roles: Optional[List[AgentRole]] = Field(None, description="Selected roles")
+    reason: str = Field(..., description="Reason for this decision")
+    confidence: float = Field(..., description="Confidence score (0-1)")
 
 
 class TeamMetadata(BaseModel):
@@ -93,9 +108,8 @@ class AgentConfig(BaseModel):
     system_instruction: str = Field(..., description="System instruction for the agent")
     temperature: float = Field(0.7, description="Generation temperature")
     max_tokens: Optional[int] = Field(None, description="Maximum tokens to generate")
-
-    metadata: Dict[str, Any] = Field(
-        default_factory=dict, description="Additional metadata"
+    output_key: Optional[str] = Field(
+        None, description="Key to store output in session state"
     )
     workflows: List[WorkflowMetadata] = Field(
         default_factory=list, description="Available workflows for this agent"
@@ -200,24 +214,24 @@ class AgentTask(BaseModel):
     """
 
     task_id: str = Field(..., description="Unique task identifier")
+    status: AgentStatus = Field(AgentStatus.IDLE, description="Current task status")
     agent_role: AgentRole = Field(..., description="Agent role for this task")
     prompt: str = Field(
         ...,
         description="Task prompt with variable substitution support (e.g., 'Write about {topic}')",
     )
-    parameters: Dict[str, Any] = Field(
-        default_factory=dict, description="Task parameters and input data"
+    parameters: Optional[Dict[str, Any]] = Field(
+        None, description="Task parameters and input data"
     )
-    dependencies: List[str] = Field(
+    dependencies: Optional[List[str]] = Field(
         default_factory=list, description="IDs of prerequisite tasks"
     )
-    status: AgentStatus = Field(AgentStatus.IDLE, description="Current task status")
 
     # Workflow and team hints for orchestration
-    suggested_workflow: Optional[str] = Field(
+    suggested_workflow: Optional[WorkflowDecision] = Field(
         None, description="Suggested workflow name to use"
     )
-    suggested_team: Optional[str] = Field(
+    suggested_team: Optional[TeamMetadata] = Field(
         None, description="Suggested team name to use"
     )
 
@@ -243,12 +257,3 @@ class AgentState(BaseModel):
     metadata: Dict[str, Any] = Field(
         default_factory=dict, description="Additional metadata"
     )
-
-
-class WorkflowDecision(BaseModel):
-    """Decision about which workflow to use for a task."""
-
-    workflow_name: str = Field(..., description="Selected workflow name")
-    team_name: Optional[str] = Field(None, description="Selected team name")
-    reason: str = Field(..., description="Reason for this decision")
-    confidence: float = Field(..., description="Confidence score (0-1)")

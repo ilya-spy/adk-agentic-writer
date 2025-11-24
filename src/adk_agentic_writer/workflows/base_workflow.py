@@ -8,13 +8,13 @@ from ..models.agent_models import WorkflowMetadata, WorkflowPattern, WorkflowSco
 logger = logging.getLogger(__name__)
 
 
-class Workflow:
+class Workflow(WorkflowMetadata):
     """
-    Base workflow class with metadata-driven behavior.
+    Base workflow class with pattern-driven execution and runtime logic.
+    """
 
-    The workflow pattern (sequential, parallel, loop, conditional) is specified
-    in the metadata, not through inheritance. This keeps the code simple and flexible.
-    """
+    # Allow extra fields for runtime-only attributes
+    model_config = {"extra": "allow"}
 
     def __init__(
         self,
@@ -26,6 +26,7 @@ class Workflow:
         condition: Optional[Callable] = None,
         max_iterations: Optional[int] = None,
         merge_strategy: Optional[str] = None,
+        tasks: Optional[List[Any]] = None,
     ):
         """
         Initialize workflow with metadata.
@@ -39,16 +40,10 @@ class Workflow:
             condition: Condition function for loop/conditional workflows (internal, not in metadata)
             max_iterations: Maximum iterations for loop workflows
             merge_strategy: Strategy for parallel workflows
+            tasks: List of AgentTask instances that agents can take on
         """
-        self.name = name
-        self.agents = agents or []
-        self.condition = condition
-        self.max_iterations = max_iterations
-        self.merge_strategy = merge_strategy
-
-        # Metadata contains only descriptive information for agents to evaluate workflows
-        # External interface details (agents, condition, parameters) are excluded
-        self.metadata = WorkflowMetadata(
+        # Initialize parent WorkflowMetadata
+        super().__init__(
             name=name,
             pattern=pattern,
             scope=scope,
@@ -57,8 +52,13 @@ class Workflow:
             merge_strategy=merge_strategy,
         )
 
+        # Store runtime-only attributes (not part of metadata)
+        self.agents = agents or []
+        self.condition = condition
+        self.tasks = tasks or []
+
         logger.info(
-            f"Initialized {pattern.value} workflow '{name}' for {scope.value} scope"
+            f"Initialized {pattern.value} workflow '{name}' for {scope.value} scope with {len(self.tasks)} tasks"
         )
 
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -71,34 +71,32 @@ class Workflow:
         Returns:
             Output data from the workflow execution
         """
-        pattern = self.metadata.pattern
-
-        if pattern == WorkflowPattern.SEQUENTIAL:
-            return await self._execute_sequential(input_data)
-        elif pattern == WorkflowPattern.PARALLEL:
-            return await self._execute_parallel(input_data)
-        elif pattern == WorkflowPattern.LOOP:
-            return await self._execute_loop(input_data)
-        elif pattern == WorkflowPattern.CONDITIONAL:
-            return await self._execute_conditional(input_data)
+        if self.pattern == WorkflowPattern.SEQUENTIAL:
+            return await self.execute_sequential(input_data)
+        elif self.pattern == WorkflowPattern.PARALLEL:
+            return await self.execute_parallel(input_data)
+        elif self.pattern == WorkflowPattern.LOOP:
+            return await self.execute_loop(input_data)
+        elif self.pattern == WorkflowPattern.CONDITIONAL:
+            return await self.execute_conditional(input_data)
         else:
-            raise ValueError(f"Unknown workflow pattern: {pattern}")
+            raise ValueError(f"Unknown workflow pattern: {self.pattern}")
 
-    async def _execute_sequential(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute_sequential(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """Execute agents sequentially."""
         result = input_data
         for i, agent in enumerate(self.agents):
             task_desc = result.get("task_description", "Process task")
             params = result.get("parameters", {})
-            
+
             # After first agent, pass the result as content to next agent
             if i > 0:
                 params = {**params, "content": result}
-            
+
             result = await agent.process_task(task_desc, params)
         return result
 
-    async def _execute_parallel(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute_parallel(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """Execute agents in parallel."""
         import asyncio
 
@@ -115,7 +113,7 @@ class Workflow:
         else:
             return {"results": results}
 
-    async def _execute_loop(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute_loop(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """Execute agent in a loop until condition is met."""
         result = input_data
         iteration = 0
@@ -137,7 +135,7 @@ class Workflow:
 
         return result
 
-    async def _execute_conditional(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def execute_conditional(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """Execute appropriate agent based on condition."""
         if not self.condition:
             raise ValueError("Conditional workflow requires a condition function")
