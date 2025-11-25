@@ -13,14 +13,14 @@ logger = logging.getLogger(__name__)
 
 class BaseAgent:
     """Base class for all agents (static and gemini).
-    
+
     Provides core functionality:
     - State management
     - Status updates
     - Message handling
-    
+
     Implements AgentProtocol interface.
-    
+
     Subclasses should implement:
     - process_task() - Required by AgentProtocol
     - EditorialProtocol methods (if applicable)
@@ -50,7 +50,7 @@ class BaseAgent:
 
     async def update_status(self, status: AgentStatus) -> None:
         """Update the agent's status.
-        
+
         Implements AgentProtocol.
 
         Args:
@@ -61,7 +61,7 @@ class BaseAgent:
 
     def get_state(self) -> AgentState:
         """Get the current state of the agent.
-        
+
         Implements AgentProtocol.
 
         Returns:
@@ -88,4 +88,3 @@ class BaseAgent:
 
 
 __all__ = ["BaseAgent"]
-

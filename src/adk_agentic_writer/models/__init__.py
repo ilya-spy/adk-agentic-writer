@@ -18,8 +18,6 @@ from .agent_models import (
 )
 from .content_models import (
     BranchedNarrative,
-    ContentRequest,
-    ContentResponse,
     ContentType,
     QuestGame,
     Quiz,
@@ -57,8 +55,6 @@ __all__ = [
     "WorkflowDecision",
     # Content models
     "BranchedNarrative",
-    "ContentRequest",
-    "ContentResponse",
     "ContentType",
     "QuestGame",
     "Quiz",

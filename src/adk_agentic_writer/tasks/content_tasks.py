@@ -11,8 +11,6 @@ GENERATE_BLOCK = AgentTask(
 
 Block type: {block_type}
 Topic: {topic}""",
-    suggested_workflow="sequential_generation",
-    suggested_team="content_team",
     output_key="content_block",
 )
 
@@ -27,8 +25,6 @@ Number of blocks: {num_blocks}
 Block type: {block_type}
 Topic: {topic}
 Style: {genre}""",
-    suggested_workflow="sequential_generation",
-    suggested_team="content_team",
     output_key="content_block",
 )
 
@@ -43,8 +39,6 @@ Number of blocks: {num_blocks}
 Block type: {block_type}
 Topic: {topic}
 Maximum iterations: {num_iterations}""",
-    suggested_workflow="looped_generation",
-    suggested_team="content_team",
     output_key="content_block",
 )
 
@@ -57,8 +51,6 @@ GENERATE_BRANCHED_BLOCKS = AgentTask(
 
 Block type: {block_type}
 Topic: {topic}""",
-    suggested_workflow="branched_generation",
-    suggested_team="content_team",
     output_key="content_block",
 )
 
@@ -71,8 +63,6 @@ GENERATE_CONDITIONAL_BLOCKS = AgentTask(
 
 Block type: {block_type}
 Topic: {topic}""",
-    suggested_workflow="branched_generation",
-    suggested_team="content_team",
     output_key="content_block",
 )
 
@@ -85,8 +75,6 @@ Topic: {topic}
 Style: {style}
 Approach: {approach}
 Draft: {content_block}""",
-    suggested_workflow="parallel_generation",
-    suggested_team="content_team",
     output_key="content_block",
 )
 
@@ -104,8 +92,6 @@ ANALYZE_USER_BEHAVIOR = AgentTask(
 
 Previous content: {content_stream}
 User interactions: {user_interactions}""",
-    suggested_workflow="adaptive_content",
-    suggested_team="content_team",
     output_key="behavior_analysis",
 )
 
@@ -119,8 +105,6 @@ ADAPT_CONTENT_STRATEGY = AgentTask(
 
 Behavior analysis: {behavior_analysis}
 Topic: {topic}""",
-    suggested_workflow="adaptive_content",
-    suggested_team="content_team",
     output_key="content_strategy",
     dependencies=["analyze_user_behavior"],
 )
@@ -136,8 +120,6 @@ GENERATE_ADAPTIVE_BLOCK = AgentTask(
 Block type: {block_type}
 Topic: {topic}
 Strategy: {content_strategy}""",
-    suggested_workflow="adaptive_content",
-    suggested_team="content_team",
     output_key="content_block",
     dependencies=["adapt_content_strategy"],
 )
@@ -158,8 +140,6 @@ Block type: {block_type}
 Draft: {content_block}
 Topic: {topic}
 Previous stream: {content_stream}""",
-    suggested_workflow="streaming_content",
-    suggested_team="content_team",
     output_key="stream_block",
 )
 
@@ -175,8 +155,6 @@ Buffer size: {buffer_size}
 Stream block: {stream_block}
 Previous stream: {content_stream}
 """,
-    suggested_workflow="streaming_content",
-    suggested_team="content_team",
     output_key="content_stream",
     dependencies=["generate_streaming_block"],
 )

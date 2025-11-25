@@ -8,7 +8,6 @@
 
 Generate interactive educational content (quizzes, stories, games, simulations) using AI-powered multi-agent systems.
 
----
 
 ## Features
 
@@ -38,7 +37,6 @@ Generate interactive educational content (quizzes, stories, games, simulations) 
 - Supportive coordination pattern
 - Iterative refinement workflows
 
----
 
 ## Quick Start
 
@@ -73,7 +71,23 @@ docker-compose up --build
 
 Server runs at: `http://localhost:8000`
 
----
+
+## Project Structure
+
+```
+adk-agentic-writer/
+├── src/adk_agentic_writer/    # Main package
+│   ├── agents/                # Agent implementations (Static & Gemini)
+│   ├── backend/               # FastAPI server
+│   ├── models/                # Data models
+│   ├── protocols/             # Interface definitions
+│   └── workflows/             # Orchestration patterns
+├── frontend/public/           # Static HTML UI files
+├── tests/                     # Test suite
+├── requirements.txt           # Dependencies
+├── README.md                  # This file
+└── ARCHITECTURE.md            # Architecture docs
+```
 
 ## Usage
 
@@ -196,7 +210,6 @@ curl http://localhost:8000/teams
 curl http://localhost:8000/health
 ```
 
----
 
 ## Comparison: Static vs Gemini
 
@@ -214,7 +227,6 @@ curl http://localhost:8000/health
 **Choose Static** for: Fast prototyping, testing, no API costs
 **Choose Gemini** for: Production, high-quality, creative content
 
----
 
 ## Documentation
 
@@ -222,7 +234,18 @@ curl http://localhost:8000/health
 - [QUICKSTART.md](QUICKSTART.md) - Quick start guide
 - [CONTRIBUTING.md](CONTRIBUTING.md) - Contributing guidelines
 
----
+
+## Makefile Commands
+
+```bash
+make run-backend    # Run server
+make test           # Run tests
+make lint           # Run linters
+make format         # Format code
+make docker-up      # Docker start
+make clean          # Clean artifacts
+```
+
 
 ## Testing
 
@@ -237,7 +260,6 @@ pytest --cov=src/adk_agentic_writer
 pytest tests/unit/test_quiz_writer.py
 ```
 
----
 
 ## Development
 
@@ -255,38 +277,16 @@ ruff check src/ tests/
 mypy src/
 ```
 
----
-
-## Project Structure
-
-```
-adk-agentic-writer/
-├── src/adk_agentic_writer/    # Main package
-│   ├── agents/                # Agent implementations (Static & Gemini)
-│   ├── backend/               # FastAPI server
-│   ├── models/                # Data models
-│   ├── protocols/             # Interface definitions
-│   └── workflows/             # Orchestration patterns
-├── frontend/public/           # Static HTML UI files
-├── tests/                     # Test suite
-├── requirements.txt           # Dependencies
-├── README.md                  # This file
-└── ARCHITECTURE.md            # Architecture docs
-```
-
----
 
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
 
----
 
 ## Contributing
 
 Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
----
 
 ## Acknowledgments
 
@@ -295,6 +295,5 @@ Built with:
 - [FastAPI](https://fastapi.tiangolo.com/) - Backend framework
 - [Pydantic](https://pydantic-docs.helpmanual.io/) - Data validation
 
----
 
 Made with ❤️ by the ADK Agentic Writer team

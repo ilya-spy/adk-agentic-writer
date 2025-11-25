@@ -2,6 +2,7 @@
 
 # Base agent class
 from .base_agent import BaseAgent
+from .stateful_agent import StatefulAgent
 
 # Protocols (imported from protocols package)
 from ..protocols import AgentProtocol, EditorialProtocol, ContentProtocol
@@ -28,6 +29,7 @@ try:
         GeminiStoryWriterAgent,
         SupportedTask,
     )
+
     _GEMINI_AVAILABLE = True
 except ImportError:
     # Gemini agents not available (google.adk not installed)
@@ -43,6 +45,7 @@ except ImportError:
 __all__ = [
     # Base agent and protocols
     "BaseAgent",
+    "StatefulAgent",
     "AgentProtocol",
     "EditorialProtocol",
     "ContentProtocol",
