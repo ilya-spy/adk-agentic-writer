@@ -86,24 +86,24 @@ class Workflow(WorkflowMetadata):
         """Execute agents sequentially."""
         result = input_data
         for i, agent in enumerate(self.agents):
-            task_desc = result.get("task_description", "Process task")
+            task = result.get("task")
             params = result.get("parameters", {})
 
             # After first agent, pass the result as content to next agent
             if i > 0:
                 params = {**params, "content": result}
 
-            result = await agent.process_task(task_desc, params)
+            result = await agent.process_task(task, params)
         return result
 
     async def execute_parallel(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """Execute agents in parallel."""
         import asyncio
 
-        task_desc = input_data.get("task_description", "Process task")
+        task = input_data.get("task")
         params = input_data.get("parameters", {})
 
-        tasks = [agent.process_task(task_desc, params) for agent in self.agents]
+        tasks = [agent.process_task(task, params) for agent in self.agents]
         results = await asyncio.gather(*tasks)
 
         if self.merge_strategy == "first":
@@ -125,9 +125,9 @@ class Workflow(WorkflowMetadata):
         max_iter = self.max_iterations or 10
 
         while iteration < max_iter:
-            task_desc = result.get("task_description", "Process task")
+            task = result.get("task")
             params = result.get("parameters", {})
-            result = await agent.process_task(task_desc, params)
+            result = await agent.process_task(task, params)
 
             if self.condition and not self.condition(result, iteration):
                 break
@@ -153,6 +153,6 @@ class Workflow(WorkflowMetadata):
         if not agent:
             raise ValueError(f"No agent found for condition key: {key}")
 
-        task_desc = input_data.get("task_description", "Process task")
+        task = input_data.get("task")
         params = input_data.get("parameters", {})
-        return await agent.process_task(task_desc, params)
+        return await agent.process_task(task, params)

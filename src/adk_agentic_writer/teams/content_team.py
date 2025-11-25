@@ -7,6 +7,13 @@ from ..models.agent_models import (
     TeamMetadata,
     WorkflowScope,
 )
+from ..models.content_models import (
+    BranchedNarrative,
+    QuestGame,
+    Quiz,
+    WebSimulation,
+)
+from ..utils.schema_helpers import build_schema_instruction
 
 
 class ContentRole(str, Enum):
@@ -33,16 +40,6 @@ Guidelines:
 - Use buttons for user interaction and navigation
 - Use inputs to request user input where appropriate
 - Make sure card mechanics (like loops, branches, conditions, etc.) are working correctly
-- Output consistent JSON cards with the following structure (not all fields required for all patterns):
-  - id: string
-  - type: string
-  - content: string
-  - pattern: string (sequential, branched, looped, conditional)
-  - navigation: dict
-  - exit_condition: dict (for looped patterns)
-  - inputs: list (for input-based patterns)
-  - choices: list (for branched patterns)
-  - metadata: dict (put other relevant data here)
 - Follow best practices for the content format
 - Maintain consistency and coherence
 - Focus on intuitive user experience""",
@@ -53,7 +50,7 @@ Guidelines:
 # Story Writer Configuration
 STORY_WRITER = AgentConfig(
     role=ContentRole.STORY_WRITER,
-    system_instruction="""You are an expert storytelling specialist creating interactive narratives.
+    system_instruction=f"""You are an expert storytelling specialist creating interactive narratives.
 Your role is to craft engaging, immersive stories with meaningful choices.
 
 Guidelines:
@@ -63,7 +60,8 @@ Guidelines:
 - Ensure narrative coherence across branches
 - Balance story depth with interactivity
 - Create satisfying endings for different paths
-- Adapt style and complexity to the target audience""",
+- Adapt style and complexity to the target audience
+{build_schema_instruction(BranchedNarrative)}""",
     temperature=0.85,
     max_tokens=2048,
 )
@@ -71,17 +69,18 @@ Guidelines:
 # Quiz Writer Configuration
 QUIZ_WRITER = AgentConfig(
     role=ContentRole.QUIZ_WRITER,
-    system_instruction="""You are an expert educational content creator specializing in interactive quizzes.
+    system_instruction=f"""You are an expert educational content creator specializing in interactive quizzes.
 Your role is to create engaging, accurate, and pedagogically sound quiz questions.
 
 Guidelines:
 - Create clear, unambiguous questions
 - Provide 4 answer options with only one correct answer
-- Include detailed explanations for correct answers
+- Include detailed explanations for correct and incorrect answers
 - Adjust difficulty appropriately
-- Make questions relevant and practical
+- Make questions fresh, relevant and practical
 - Avoid trick questions or ambiguous wording
-- Ensure educational value and engagement""",
+- Ensure educational value and engagement
+{build_schema_instruction(Quiz)}""",
     temperature=0.7,
     max_tokens=1536,
 )
@@ -89,7 +88,7 @@ Guidelines:
 # Game Writer Configuration
 GAME_WRITER = AgentConfig(
     role=ContentRole.GAME_WRITER,
-    system_instruction="""You are a game design specialist creating quest-based interactive experiences.
+    system_instruction=f"""You are a game design specialist creating quest-based interactive experiences.
 Your role is to create engaging quest games with clear objectives and rewarding progression.
 
 Guidelines:
@@ -99,7 +98,8 @@ Guidelines:
 - Ensure logical quest progression
 - Design interesting items and rewards
 - Make the game engaging and fun
-- Provide clear feedback to players""",
+- Provide clear feedback to players
+{build_schema_instruction(QuestGame)}""",
     temperature=0.75,
     max_tokens=2048,
 )
@@ -107,7 +107,7 @@ Guidelines:
 # Simulation Writer Configuration
 SIMULATION_WRITER = AgentConfig(
     role=ContentRole.SIMULATION_WRITER,
-    system_instruction="""You are a simulation design specialist creating interactive web simulations.
+    system_instruction=f"""You are a simulation design specialist creating interactive web simulations.
 Your role is to create educational and engaging simulations with realistic models.
 
 Guidelines:
@@ -117,7 +117,8 @@ Guidelines:
 - Make simulations educational and engaging
 - Provide clear visualization options
 - Balance complexity with usability
-- Include helpful explanations""",
+- Include helpful explanations
+{build_schema_instruction(WebSimulation)}""",
     temperature=0.65,
     max_tokens=2048,
 )

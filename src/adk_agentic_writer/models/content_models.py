@@ -23,7 +23,9 @@ class QuizQuestion(BaseModel):
     options: List[str] = Field(..., description="List of answer options")
     correct_answer: int = Field(..., description="Index of the correct answer")
     explanation: Optional[str] = Field(None, description="Explanation of the answer")
-    difficulty: str = Field("medium", description="Question difficulty: easy, medium, hard")
+    difficulty: str = Field(
+        "medium", description="Question difficulty: easy, medium, hard"
+    )
 
 
 class Quiz(BaseModel):
@@ -46,7 +48,9 @@ class QuestNode(BaseModel):
     choices: List[Dict[str, str]] = Field(
         default_factory=list, description="Available choices: {text, next_node_id}"
     )
-    rewards: List[str] = Field(default_factory=list, description="Items or achievements gained")
+    rewards: List[str] = Field(
+        default_factory=list, description="Items or achievements gained"
+    )
     requirements: List[str] = Field(
         default_factory=list, description="Required items or conditions"
     )
@@ -71,7 +75,8 @@ class StoryNode(BaseModel):
     node_id: str = Field(..., description="Unique identifier for this node")
     content: str = Field(..., description="Story content at this node")
     branches: List[Dict[str, str]] = Field(
-        default_factory=list, description="Available branches: {text, next_node_id, condition?}"
+        default_factory=list,
+        description="Available branches: {text, next_node_id, condition?}",
     )
     tags: List[str] = Field(default_factory=list, description="Tags for categorization")
     is_ending: bool = Field(False, description="Whether this is an ending node")
@@ -106,7 +111,9 @@ class SimulationControl(BaseModel):
     label: str = Field(..., description="Control label")
     type: str = Field(..., description="Control type: slider, button, toggle")
     affects: List[str] = Field(..., description="Variables affected by this control")
-    parameters: Dict[str, Any] = Field(default_factory=dict, description="Control-specific params")
+    parameters: Dict[str, Any] = Field(
+        default_factory=dict, description="Control-specific params"
+    )
 
 
 class WebSimulation(BaseModel):
@@ -121,25 +128,3 @@ class WebSimulation(BaseModel):
         "chart", description="Type of visualization: chart, animation, 3d"
     )
     metadata: Dict[str, Any] = Field(default_factory=dict)
-
-
-class ContentRequest(BaseModel):
-    """Request to generate interactive content."""
-
-    content_type: ContentType = Field(..., description="Type of content to generate")
-    topic: str = Field(..., description="Topic or theme")
-    parameters: Dict[str, Any] = Field(
-        default_factory=dict, description="Additional generation parameters"
-    )
-    user_id: Optional[str] = Field(None, description="User making the request")
-
-
-class ContentResponse(BaseModel):
-    """Response containing generated content."""
-
-    request_id: str = Field(..., description="Unique request identifier")
-    content_type: ContentType = Field(..., description="Type of content generated")
-    content: Dict[str, Any] = Field(..., description="Generated content data")
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    status: str = Field("completed", description="Generation status")
-    agents_involved: List[str] = Field(default_factory=list, description="Agents that worked on this")

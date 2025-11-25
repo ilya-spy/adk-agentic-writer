@@ -1,8 +1,8 @@
 """Protocol defining the interface for agent operations."""
 
-from typing import Any, Dict, Optional, Protocol, runtime_checkable
+from typing import Any, Dict, Optional, Protocol, Union, runtime_checkable
 
-from ..models.agent_models import AgentState, AgentStatus
+from ..models.agent_models import AgentState, AgentStatus, AgentTask
 
 
 @runtime_checkable
@@ -14,13 +14,13 @@ class AgentProtocol(Protocol):
     """
 
     async def process_task(
-        self, task_description: str, parameters: Dict[str, Any]
+        self, task: AgentTask, parameters: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Process a task assigned to this agent.
 
         Args:
-            task_description: Description of the task to perform
-            parameters: Parameters for the task
+            task: AgentTask object defining the work to perform
+            parameters: Optional additional parameters to merge with task.parameters
 
         Returns:
             Dict containing the task results

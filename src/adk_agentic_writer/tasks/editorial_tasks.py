@@ -10,8 +10,6 @@ REVIEW_CONTENT = AgentTask(
     prompt="""Review the following content and provide detailed feedback on quality, accuracy, and improvements needed.
 
 Content: {content_draft}""",
-    suggested_workflow="content_review",
-    suggested_team="editorial_team",
     output_key="feedback",
 )
 
@@ -23,8 +21,6 @@ VALIDATE_CONTENT = AgentTask(
     prompt="""Validate that the following content meets all requirements and quality standards.
 
 Content: {content_draft}""",
-    suggested_workflow="content_validation",
-    suggested_team="editorial_team",
     output_key="validation_result",
 )
 
@@ -39,8 +35,6 @@ REFINE_CONTENT = AgentTask(
 Content: {content_draft}
 
 Feedback: {feedback}""",
-    suggested_workflow="content_refinement",
-    suggested_team="editorial_team",
     output_key="refined_content",
 )
 
@@ -57,8 +51,6 @@ REVIEW_DRAFT = AgentTask(
     prompt="""Review the following draft content for clarity, accuracy, and quality.
 
 Draft: {content_draft}""",
-    suggested_workflow="sequential_editorial",
-    suggested_team="editorial_team",
     output_key="review_feedback",
 )
 
@@ -73,8 +65,6 @@ REFINE_BASED_ON_REVIEW = AgentTask(
 Content: {content_draft}
 
 Review feedback: {review_feedback}""",
-    suggested_workflow="sequential_editorial",
-    suggested_team="editorial_team",
     output_key="refined_draft",
     dependencies=["review_draft"],
 )
@@ -88,8 +78,6 @@ FINALIZE_CONTENT = AgentTask(
     prompt="""Finalize the following refined draft for publication, ensuring all standards are met.
 
 Refined draft: {refined_draft}""",
-    suggested_workflow="sequential_editorial",
-    suggested_team="editorial_team",
     output_key="final_content",
     dependencies=["refine_based_on_review"],
 )
@@ -109,8 +97,6 @@ REVIEW_VARIANTS_QUALITY = AgentTask(
 
 Content variants: {content_variants}
 Criteria: {criteria}""",
-    suggested_workflow="parallel_editorial",
-    suggested_team="editorial_team",
     output_key="quality_scores",
 )
 
@@ -125,8 +111,6 @@ SELECT_BEST_VARIANT = AgentTask(
 Variants: {content_variants}
 Quality scores: {quality_scores}
 Selection strategy: {selection_strategy}""",
-    suggested_workflow="parallel_editorial",
-    suggested_team="editorial_team",
     output_key="selected_content",
     dependencies=["review_variant_quality"],
 )
@@ -145,8 +129,6 @@ EVALUATE_CONTENT_QUALITY = AgentTask(
     prompt="""Evaluate the following content against quality standards and provide detailed feedback.
 
 Content: {content_draft}""",
-    suggested_workflow="iterative_editorial",
-    suggested_team="editorial_team",
     output_key="evaluation_result",
 )
 
@@ -161,8 +143,6 @@ REFINE_ITERATIVELY = AgentTask(
 Content: {content_draft}
 
 Evaluation: {evaluation_result}""",
-    suggested_workflow="iterative_editorial",
-    suggested_team="editorial_team",
     output_key="refined_content",
     dependencies=["evaluate_content_quality"],
 )
@@ -180,8 +160,6 @@ ANALYZE_CONTENT_TYPE = AgentTask(
     prompt="""Analyze the following draft to determine its type, style, and appropriate editing strategy.
 
 Draft: {content_draft}""",
-    suggested_workflow="adaptive_editorial",
-    suggested_team="editorial_team",
     output_key="content_type_analysis",
 )
 
@@ -196,8 +174,6 @@ SELECT_EDITING_STRATEGY = AgentTask(
 Available strategies: {available_strategies}
 
 Content analysis: {content_type_analysis}""",
-    suggested_workflow="adaptive_editorial",
-    suggested_team="editorial_team",
     output_key="editing_strategy",
     dependencies=["analyze_content_type"],
 )
@@ -213,8 +189,6 @@ APPLY_ADAPTIVE_EDITING = AgentTask(
 Editing strategy: {editing_strategy}
 
 Draft: {content_draft}""",
-    suggested_workflow="adaptive_editorial",
-    suggested_team="editorial_team",
     output_key="edited_content",
     dependencies=["select_editing_strategy"],
 )
