@@ -505,7 +505,7 @@ class InteractiveDemo:
                 block_data = block.get("content", block)
                 print(f"\n--- Block {i}: {block.get('block_id', 'N/A')} ---")
                 print(f"Pattern: {block.get('pattern', 'N/A')}")
-                
+
                 # Show navigation
                 if block.get("navigation"):
                     nav = block["navigation"]
@@ -518,21 +518,23 @@ class InteractiveDemo:
                         nav_info.append(f"exit: {nav['exit']}")
                     if nav_info:
                         print(f"Navigation: {', '.join(nav_info)}")
-                
+
                 # Show choices (branched)
                 if block.get("choices"):
                     print("Choices:")
                     for choice in block["choices"]:
-                        print(f"  - {choice.get('text', 'N/A')} -> {choice.get('next_block', 'N/A')}")
-                
+                        print(
+                            f"  - {choice.get('text', 'N/A')} -> {choice.get('next_block', 'N/A')}"
+                        )
+
                 # Show exit condition (looped)
                 if block.get("exit_condition"):
                     print(f"Exit Condition: {block['exit_condition']}")
-                
+
                 # Show metadata (conditional)
                 if block.get("metadata"):
                     print(f"Metadata: {block['metadata']}")
-                
+
                 self._print_quiz_details(block_data)
         else:
             # Single block

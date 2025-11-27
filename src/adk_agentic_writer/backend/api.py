@@ -79,12 +79,8 @@ async def lifespan(app: FastAPI):
 
     # Initialize Static Team
     try:
+        # New coordinator auto-registers agents via runtime
         static_coordinator = StaticCoordinator(agent_id="static_coordinator")
-        static_coordinator.register_agent(StaticQuizWriterAgent())
-        static_coordinator.register_agent(StoryWriterAgent())
-        static_coordinator.register_agent(GameDesignerAgent())
-        static_coordinator.register_agent(SimulationDesignerAgent())
-        static_coordinator.register_agent(StaticReviewer())
 
         agent_systems["static"]["coordinator"] = static_coordinator
         agent_systems["static"]["initialized"] = True
@@ -221,20 +217,20 @@ async def generate_content(request: GenerateRequest):
 
     try:
         # Prepare parameters
-        params = {
-            "content_type": request.content_type,
-            "topic": request.topic,
-            **request.parameters,
-        }
+        params = request.parameters.copy() if request.parameters else {}
+        topic = request.topic
 
-        # Generate content based on team
+        # Generate content based on team and content type
         if request.team == "static":
-            # Static team uses simple task description
-            result = await coordinator.process_task(
-                f"Generate {request.content_type}", params
+            # Static team uses generate_content method
+            result = await coordinator.generate_content(
+                content_type=request.content_type, topic=topic, **params
             )
         else:
-            # Gemini team uses structured tasks
+            # Gemini team uses structured tasks (old interface for now)
+            params["content_type"] = request.content_type
+            params["topic"] = topic
+
             if GEMINI_AVAILABLE and SupportedTask:
                 task_mapping = {
                     "quiz": SupportedTask.GENERATE_QUIZ,
@@ -242,12 +238,12 @@ async def generate_content(request: GenerateRequest):
                     "quest_game": SupportedTask.GENERATE_GAME,
                     "web_simulation": SupportedTask.GENERATE_SIMULATION,
                 }
-
                 task = task_mapping.get(
                     request.content_type, SupportedTask.GENERATE_QUIZ
                 )
                 params["task"] = task
 
+            # Note: Gemini coordinator still uses old interface
             result = await coordinator.process_task(
                 f"Generate {request.content_type}", params
             )
@@ -260,8 +256,323 @@ async def generate_content(request: GenerateRequest):
             status="completed",
         )
 
+    except ValueError as e:
+        # Handle invalid content types gracefully
+        logger.warning(f"Invalid content type or parameters: {e}")
+        return GenerateResponse(
+            request_id=request_id,
+            team=request.team,
+            content_type=request.content_type,
+            content={"error": str(e), "status": "failed"},
+            status="error",
+        )
     except Exception as e:
         logger.error(f"Error generating content: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/generate/with-review", response_model=GenerateResponse)
+async def generate_with_review(request: GenerateRequest):
+    """Generate content with review and refinement cycles."""
+    request_id = str(uuid.uuid4())
+
+    if request.team != "static":
+        raise HTTPException(
+            status_code=400, detail="Review workflow only available for static team"
+        )
+
+    if not agent_systems["static"].get("initialized"):
+        raise HTTPException(status_code=503, detail="Static team not available")
+
+    coordinator = agent_systems["static"]["coordinator"]
+
+    try:
+        params = request.parameters.copy() if request.parameters else {}
+        max_iterations = params.pop("max_iterations", 2)
+
+        # Generate content using coordinator
+        result = await coordinator.generate_content(
+            content_type=request.content_type, topic=request.topic, **params
+        )
+
+        # Implement review cycles here
+        reviewer = coordinator._get_reviewer()
+        review_history = []
+
+        for iteration in range(max_iterations):
+            review = await reviewer.process_task(
+                None,
+                {
+                    "content": result["content"],
+                    "content_type": request.content_type,
+                    "criteria": ["clarity", "engagement", "structure", "completeness"],
+                },
+            )
+            review_history.append(review)
+
+            if review["status"] == "approved":
+                break
+
+        # Add review metadata
+        result_with_review = {
+            **result,
+            "review_history": review_history,
+            "final_status": (
+                review_history[-1]["status"] if review_history else "unreviewed"
+            ),
+            "iterations": len(review_history),
+        }
+
+        return GenerateResponse(
+            request_id=request_id,
+            team=request.team,
+            content_type=request.content_type,
+            content=result_with_review,
+            status="completed",
+        )
+
+    except Exception as e:
+        logger.error(f"Error generating with review: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/generate/multimodal-story")
+async def generate_multimodal_story(request: GenerateRequest):
+    """Generate complex multimodal story with embedded games and quizzes."""
+    request_id = str(uuid.uuid4())
+
+    if request.team != "static":
+        raise HTTPException(
+            status_code=400,
+            detail="Multimodal stories only available for static team",
+        )
+
+    if not agent_systems["static"].get("initialized"):
+        raise HTTPException(status_code=503, detail="Static team not available")
+
+    coordinator = agent_systems["static"]["coordinator"]
+
+    try:
+        params = request.parameters.copy() if request.parameters else {}
+        num_story_nodes = params.get("num_story_nodes", 8)
+        num_mini_games = params.get("num_mini_games", 2)
+        num_mini_quizzes = params.get("num_mini_quizzes", 2)
+        genre = params.get("genre", "adventure")
+
+        # Parallel generation
+        results = await asyncio.gather(
+            coordinator.generate_content(
+                "branched_narrative",
+                request.topic,
+                num_nodes=num_story_nodes,
+                genre=genre,
+            ),
+            *[
+                coordinator.generate_content(
+                    "quest_game", f"{request.topic} Mini-Game {i+1}", num_nodes=4
+                )
+                for i in range(num_mini_games)
+            ],
+            *[
+                coordinator.generate_content(
+                    "quiz", f"{request.topic} Quiz {i+1}", num_questions=3
+                )
+                for i in range(num_mini_quizzes)
+            ],
+            return_exceptions=True,
+        )
+
+        # Extract and integrate
+        story_result = results[0] if not isinstance(results[0], Exception) else None
+        if not story_result:
+            raise ValueError("Story generation failed")
+
+        story_content = story_result["content"]
+        nodes = story_content.get("nodes", {})
+
+        # Inject games and quizzes
+        game_results = results[1 : 1 + num_mini_games]
+        quiz_results = results[1 + num_mini_games :]
+
+        for i, result in enumerate(game_results):
+            if not isinstance(result, Exception) and i + 1 < len(nodes):
+                node_id = list(nodes.keys())[i + 1]
+                nodes[node_id]["embedded_game"] = result["content"]
+
+        for i, result in enumerate(quiz_results):
+            if not isinstance(result, Exception) and num_mini_games + i + 1 < len(
+                nodes
+            ):
+                node_id = list(nodes.keys())[num_mini_games + i + 1]
+                nodes[node_id]["embedded_quiz"] = result["content"]
+
+        multimodal_result = {
+            "content_type": "multimodal_story",
+            "content": story_content,
+            "embedded_games": sum(
+                1 for r in game_results if not isinstance(r, Exception)
+            ),
+            "embedded_quizzes": sum(
+                1 for r in quiz_results if not isinstance(r, Exception)
+            ),
+            "total_nodes": len(nodes),
+            "generation_method": "parallel_mixed_team",
+        }
+
+        return GenerateResponse(
+            request_id=request_id,
+            team=request.team,
+            content_type="multimodal_story",
+            content=multimodal_result,
+            status="completed",
+        )
+
+    except Exception as e:
+        logger.error(f"Error generating multimodal story: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/generate/adaptive")
+async def generate_adaptive(request: GenerateRequest):
+    """Generate content with adaptive workflow based on quality metrics."""
+    request_id = str(uuid.uuid4())
+
+    if request.team != "static":
+        raise HTTPException(
+            status_code=400, detail="Adaptive workflow only available for static team"
+        )
+
+    if not agent_systems["static"].get("initialized"):
+        raise HTTPException(status_code=503, detail="Static team not available")
+
+    coordinator = agent_systems["static"]["coordinator"]
+
+    try:
+        params = request.parameters.copy() if request.parameters else {}
+        quality_threshold = params.pop("quality_threshold", 7.5)
+
+        # Generate content
+        result = await coordinator.generate_content(
+            content_type=request.content_type, topic=request.topic, **params
+        )
+
+        # Quick review
+        reviewer = coordinator._get_reviewer()
+        review = await reviewer.process_task(
+            None,
+            {
+                "content": result["content"],
+                "content_type": request.content_type,
+                "criteria": ["clarity", "engagement"],
+            },
+        )
+
+        # Adaptive branching
+        workflow_path = (
+            "enhanced" if review["overall_score"] >= quality_threshold else "refined"
+        )
+
+        if workflow_path == "enhanced" and request.content_type in [
+            "branched_narrative",
+            "story",
+        ]:
+            result["content"]["metadata"] = result["content"].get("metadata", {})
+            result["content"]["metadata"]["enhanced"] = True
+
+        adaptive_result = {
+            **result,
+            "review": review,
+            "workflow_path": workflow_path,
+            "adaptive": True,
+        }
+
+        return GenerateResponse(
+            request_id=request_id,
+            team=request.team,
+            content_type=request.content_type,
+            content=adaptive_result,
+            status="completed",
+        )
+
+    except Exception as e:
+        logger.error(f"Error generating adaptive content: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/generate/parallel-variants")
+async def generate_parallel_variants(request: GenerateRequest):
+    """Generate multiple variants in parallel and select the best."""
+    request_id = str(uuid.uuid4())
+
+    if request.team != "static":
+        raise HTTPException(
+            status_code=400,
+            detail="Parallel variants only available for static team",
+        )
+
+    if not agent_systems["static"].get("initialized"):
+        raise HTTPException(status_code=503, detail="Static team not available")
+
+    coordinator = agent_systems["static"]["coordinator"]
+
+    try:
+        params = request.parameters.copy() if request.parameters else {}
+        num_variants = params.pop("num_variants", 3)
+        params.pop("merge_best", True)  # Remove unused parameter
+
+        # Generate variants in parallel
+        variants = await asyncio.gather(
+            *[
+                coordinator.generate_content(
+                    request.content_type, request.topic, **params
+                )
+                for _ in range(num_variants)
+            ],
+            return_exceptions=True,
+        )
+
+        valid_variants = [v for v in variants if not isinstance(v, Exception)]
+        if not valid_variants:
+            raise ValueError("No valid variants generated")
+
+        # Review all variants
+        reviewer = coordinator._get_reviewer()
+        reviews = await asyncio.gather(
+            *[
+                reviewer.process_task(
+                    None,
+                    {
+                        "content": v["content"],
+                        "content_type": request.content_type,
+                        "criteria": ["clarity", "engagement", "completeness"],
+                    },
+                )
+                for v in valid_variants
+            ]
+        )
+
+        # Select best variant
+        best_idx = max(enumerate(reviews), key=lambda x: x[1]["overall_score"])[0]
+
+        variant_result = {
+            **valid_variants[best_idx],
+            "variant_scores": [r["overall_score"] for r in reviews],
+            "selected_variant": best_idx,
+            "num_variants": len(valid_variants),
+            "num_variants_generated": len(valid_variants),
+            "generation_method": "parallel_selection",
+        }
+
+        return GenerateResponse(
+            request_id=request_id,
+            team=request.team,
+            content_type=request.content_type,
+            content=variant_result,
+            status="completed",
+        )
+
+    except Exception as e:
+        logger.error(f"Error generating parallel variants: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
