@@ -1,267 +1,354 @@
-"""Simulation designer agent for creating interactive web simulations."""
+"""Simulation designer agent implementing ContentProtocol with StatefulAgent framework.
+
+This agent generates web simulations using:
+- StatefulAgent: For variable/parameter management
+- Tasks: Predefined content generation tasks
+- ContentProtocol: Standard content generation methods
+"""
 
 import logging
-from typing import Any, Dict
+import random
+from typing import Any, Dict, List, Optional
 
-from ...models.agent_models import AgentRole, AgentStatus
-from ...models.content_models import SimulationControl, SimulationVariable, WebSimulation
-from ..base_agent import BaseAgent
+from ...agents.stateful_agent import StatefulAgent
+from ...models.agent_models import AgentTask, AgentStatus
+from ...models.content_models import WebSimulation, SimulationVariable
+from ...protocols.content_protocol import ContentBlock, ContentBlockType, ContentPattern
+from ...teams.content_team import SIMULATION_WRITER
 
 logger = logging.getLogger(__name__)
 
+# Simulation templates
+SIMULATION_INTROS = [
+    "Interactive simulation exploring {topic}",
+    "Hands-on model demonstrating {topic}",
+    "Dynamic simulation of {topic} concepts",
+]
 
-class SimulationDesignerAgent(BaseAgent):
-    """Agent specialized in creating interactive web simulations."""
+VARIABLE_TYPES = {
+    "physics": ["mass", "velocity", "acceleration", "force", "energy"],
+    "chemistry": ["temperature", "pressure", "volume", "concentration", "pH"],
+    "biology": ["population", "growth_rate", "resources", "predators", "prey"],
+    "economics": ["price", "demand", "supply", "cost", "revenue"],
+}
 
-    def __init__(self, agent_id: str = "simulation_designer_1", config: Dict[str, Any] | None = None):
-        """Initialize the simulation designer agent."""
-        super().__init__(agent_id, AgentRole.SIMULATION_DESIGNER, config)
+INTERACTION_TYPES = ["slider", "button", "input", "toggle", "dropdown"]
 
-    async def process_task(self, task_description: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Generate a web simulation based on the given topic and parameters.
 
-        Args:
-            task_description: Description of the simulation to create
-            parameters: Parameters including topic, simulation_type
+class SimulationDesignerAgent(StatefulAgent):
+    """Simulation designer agent using StatefulAgent framework.
 
-        Returns:
-            Dict containing the generated simulation
-        """
-        await self.update_status(AgentStatus.WORKING)
-        
-        topic = parameters.get("topic", "physics")
-        simulation_type = parameters.get("simulation_type", "chart")
-        
-        logger.info(f"Generating web simulation about {topic}")
-        
-        # Generate simulation components
-        variables = await self._generate_variables(topic)
-        controls = await self._generate_controls(topic, variables)
-        rules = await self._generate_rules(topic)
-        
-        # Create simulation object
-        simulation = WebSimulation(
-            title=f"Interactive {topic.title()} Simulation",
-            description=f"Explore the dynamics of {topic} through interactive controls",
-            variables=variables,
-            controls=controls,
-            rules=rules,
-            visualization_type=simulation_type,
+    Implements:
+    - AgentProtocol: process_task, update_status
+    - ContentProtocol: generate_block, generate_sequential_blocks, etc.
+    """
+
+    def __init__(self, agent_id: str = "simulation_designer"):
+        """Initialize simulation designer agent."""
+        super().__init__(
+            agent_id=agent_id,
+            config=SIMULATION_WRITER,
         )
-        
-        await self.update_status(AgentStatus.COMPLETED)
-        
-        return simulation.model_dump()
+        logger.info(f"Initialized SimulationDesignerAgent {agent_id}")
 
-    async def _generate_variables(self, topic: str) -> list[SimulationVariable]:
-        """Generate simulation variables based on the topic."""
-        # Template-based variable generation
-        variables = []
-        
-        if "physics" in topic.lower():
-            variables = [
-                SimulationVariable(
-                    name="velocity",
-                    initial_value=0.0,
-                    min_value=-100.0,
-                    max_value=100.0,
-                    unit="m/s",
-                ),
-                SimulationVariable(
-                    name="acceleration",
-                    initial_value=9.8,
-                    min_value=-50.0,
-                    max_value=50.0,
-                    unit="m/s²",
-                ),
-                SimulationVariable(
-                    name="position",
-                    initial_value=0.0,
-                    min_value=-1000.0,
-                    max_value=1000.0,
-                    unit="m",
-                ),
-            ]
-        elif "econ" in topic.lower():
-            variables = [
-                SimulationVariable(
-                    name="supply",
-                    initial_value=100.0,
-                    min_value=0.0,
-                    max_value=1000.0,
-                    unit="units",
-                ),
-                SimulationVariable(
-                    name="demand",
-                    initial_value=100.0,
-                    min_value=0.0,
-                    max_value=1000.0,
-                    unit="units",
-                ),
-                SimulationVariable(
-                    name="price",
-                    initial_value=10.0,
-                    min_value=0.0,
-                    max_value=100.0,
-                    unit="$",
-                ),
-            ]
+    async def _execute_task(
+        self, task: AgentTask, resolved_prompt: str
+    ) -> Dict[str, Any]:
+        """Execute task based on task_id."""
+        # Extract context
+        context = self.prepare_task_context(task)
+
+        if task.task_id == "generate_block":
+            block = await self.generate_block(ContentBlockType.CUSTOM, context)
+            return block.content
+        elif task.task_id == "generate_sequential_blocks":
+            num_blocks = context.get("num_blocks", 3)
+            blocks = await self.generate_sequential_blocks(
+                num_blocks, ContentBlockType.CUSTOM, context
+            )
+            return {"blocks": [b.content for b in blocks]}
         else:
-            # Generic variables
-            variables = [
-                SimulationVariable(
-                    name="input_factor",
-                    initial_value=50.0,
-                    min_value=0.0,
-                    max_value=100.0,
-                    unit="units",
-                ),
-                SimulationVariable(
-                    name="output_result",
-                    initial_value=50.0,
-                    min_value=0.0,
-                    max_value=100.0,
-                    unit="units",
-                ),
-                SimulationVariable(
-                    name="efficiency",
-                    initial_value=1.0,
-                    min_value=0.0,
-                    max_value=2.0,
-                    unit="ratio",
-                ),
-            ]
-        
-        return variables
+            # Default: generate simulation
+            return await self._generate_simulation_content(resolved_prompt, context)
 
-    async def _generate_controls(
-        self, topic: str, variables: list[SimulationVariable]
-    ) -> list[SimulationControl]:
-        """Generate interactive controls for the simulation."""
+    # ========================================================================
+    # ContentProtocol Implementation
+    # ========================================================================
+
+    async def generate_block(
+        self,
+        block_type: ContentBlockType,
+        context: Dict[str, Any],
+        previous_blocks: Optional[List[ContentBlock]] = None,
+    ) -> ContentBlock:
+        """Generate a single simulation content block."""
+        topic = context.get("topic", "physics")
+        num_variables = context.get("num_variables", 5)
+
+        simulation_data = await self._generate_simulation_data(
+            topic, num_variables, "medium"
+        )
+
+        return ContentBlock(
+            block_id=f"simulation_{topic.replace(' ', '_')}",
+            block_type=block_type,
+            content=simulation_data,
+            pattern=ContentPattern.SEQUENTIAL,
+        )
+
+    async def generate_sequential_blocks(
+        self,
+        num_blocks: int,
+        block_type: ContentBlockType,
+        context: Dict[str, Any],
+    ) -> List[ContentBlock]:
+        """Generate sequential simulation modules."""
+        blocks = []
+        topic = context.get("topic", "physics")
+
+        for i in range(num_blocks):
+            module_topic = f"{topic} - Module {i+1}"
+            simulation_data = await self._generate_simulation_data(
+                module_topic, 3, "medium"
+            )
+
+            block = ContentBlock(
+                block_id=f"module_{i+1}",
+                block_type=block_type,
+                content=simulation_data,
+                pattern=ContentPattern.SEQUENTIAL,
+                navigation={
+                    "next": f"module_{i+2}" if i < num_blocks - 1 else None,
+                    "prev": f"module_{i}" if i > 0 else None,
+                },
+            )
+            blocks.append(block)
+
+        return blocks
+
+    async def generate_looped_blocks(
+        self,
+        num_blocks: int,
+        block_type: ContentBlockType,
+        context: Dict[str, Any],
+        exit_condition: Dict[str, Any],
+        allow_back: bool = True,
+    ) -> List[ContentBlock]:
+        """Generate looped simulation blocks (e.g., experiments)."""
+        blocks = []
+        topic = context.get("topic", "physics")
+
+        for i in range(num_blocks):
+            simulation_data = await self._generate_simulation_data(topic, 3, "medium")
+
+            block = ContentBlock(
+                block_id=f"experiment_{i+1}",
+                block_type=block_type,
+                content=simulation_data,
+                pattern=ContentPattern.LOOPED,
+                navigation={
+                    "next": f"experiment_{(i+1) % num_blocks + 1}",
+                    "prev": f"experiment_{i}" if allow_back and i > 0 else None,
+                    "exit": "check_exit_condition",
+                },
+                exit_condition=exit_condition,
+            )
+            blocks.append(block)
+
+        return blocks
+
+    async def generate_branched_blocks(
+        self,
+        branch_points: List[Dict[str, Any]],
+        context: Dict[str, Any],
+    ) -> List[ContentBlock]:
+        """Generate branched simulation blocks (e.g., scenario variations)."""
+        blocks = []
+        topic = context.get("topic", "physics")
+
+        # Main simulation
+        main_sim = await self._generate_simulation_data(topic, 4, "medium")
+        main_block = ContentBlock(
+            block_id="main_simulation",
+            block_type=ContentBlockType.CUSTOM,
+            content=main_sim,
+            pattern=ContentPattern.BRANCHED,
+            choices=[
+                {"text": "Basic scenario", "next_block": "basic"},
+                {"text": "Advanced scenario", "next_block": "advanced"},
+            ],
+        )
+        blocks.append(main_block)
+
+        # Variations
+        for scenario in ["basic", "advanced"]:
+            sim_data = await self._generate_simulation_data(
+                f"{topic} ({scenario})", 3, scenario
+            )
+            block = ContentBlock(
+                block_id=scenario,
+                block_type=ContentBlockType.CUSTOM,
+                content=sim_data,
+                pattern=ContentPattern.BRANCHED,
+            )
+            blocks.append(block)
+
+        return blocks
+
+    async def generate_conditional_blocks(
+        self,
+        blocks_config: List[Dict[str, Any]],
+        context: Dict[str, Any],
+    ) -> List[ContentBlock]:
+        """Generate conditional simulation blocks."""
+        blocks = []
+        topic = context.get("topic", "physics")
+
+        for config in blocks_config:
+            condition = config.get("condition", {})
+            simulation_data = await self._generate_simulation_data(topic, 3, "medium")
+
+            block = ContentBlock(
+                block_id=config.get("block_id", f"conditional_{len(blocks)}"),
+                block_type=ContentBlockType.CUSTOM,
+                content=simulation_data,
+                pattern=ContentPattern.CONDITIONAL,
+                metadata={"display_condition": condition},
+            )
+            blocks.append(block)
+
+        return blocks
+
+    # ========================================================================
+    # Helper Methods
+    # ========================================================================
+
+    async def _generate_simulation_content(
+        self, resolved_prompt: str, context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Generate simulation content from resolved prompt."""
+        topic = context.get("topic", "physics")
+        num_variables = context.get("num_variables", 5)
+        complexity = context.get("complexity", "medium")
+
+        return await self._generate_simulation_data(topic, num_variables, complexity)
+
+    async def _generate_simulation_data(
+        self, topic: str, num_variables: int, complexity: str
+    ) -> Dict[str, Any]:
+        """Generate web simulation data."""
+        logger.info(
+            f"Generating simulation: {topic}, variables: {num_variables}, complexity: {complexity}"
+        )
+
+        # Determine domain
+        domain = "physics"
+        topic_lower = topic.lower()
+        for key in VARIABLE_TYPES.keys():
+            if key in topic_lower:
+                domain = key
+                break
+
+        # Generate variables
+        variables = []
+        available_vars = VARIABLE_TYPES.get(domain, VARIABLE_TYPES["physics"])
+        selected_vars = random.sample(
+            available_vars, min(num_variables, len(available_vars))
+        )
+
+        for i, var_name in enumerate(selected_vars):
+            var = SimulationVariable(
+                name=var_name,
+                initial_value=50.0 + i * 10,
+                min_value=0.0,
+                max_value=100.0,
+                unit=self._get_unit(var_name),
+            )
+            variables.append(var.model_dump())
+
+        # Generate controls
         controls = []
-        
-        # Create a control for each variable
+        for i, var_name in enumerate(selected_vars[:3]):  # Max 3 controls
+            controls.append(
+                {
+                    "id": f"control_{var_name}",
+                    "type": random.choice(INTERACTION_TYPES),
+                    "label": f"Adjust {var_name}",
+                    "variable": var_name,
+                }
+            )
+
+        # Create simulation
+        from ...models.content_models import SimulationControl
+
+        description = random.choice(SIMULATION_INTROS).format(topic=topic)
+
+        # Create controls for variables
+        controls = []
         for var in variables:
-            # Calculate safe step value
-            value_range = var.max_value - var.min_value
-            step = value_range / 100 if value_range > 0 else 1.0
-            
             control = SimulationControl(
-                control_id=f"{var.name}_slider",
-                label=f"Adjust {var.name.replace('_', ' ').title()}",
+                control_id=f"ctrl_{var['name']}",
+                label=var["name"].replace("_", " ").title(),
                 type="slider",
-                affects=[var.name],
+                affects=[var["name"]],
                 parameters={
-                    "min": var.min_value,
-                    "max": var.max_value,
-                    "step": step,
-                    "initial": var.initial_value,
+                    "min": var.get("min_value", 0),
+                    "max": var.get("max_value", 100),
+                    "step": var.get("step", 1.0),
                 },
             )
             controls.append(control)
-        
-        # Add control buttons
-        controls.append(
-            SimulationControl(
-                control_id="reset_button",
-                label="Reset Simulation",
-                type="button",
-                affects=[var.name for var in variables],
-                parameters={"action": "reset"},
-            )
+
+        # Create simulation rules
+        rules = [
+            f"{var['name']} affects outcome based on its value" for var in variables[:3]
+        ]
+
+        simulation = WebSimulation(
+            title=f"{topic.title()} Simulation",
+            description=description,
+            variables=variables,
+            controls=controls,
+            rules=rules,
+            visualization_type="chart",
+            metadata={
+                "complexity": complexity,
+                "initial_state": {
+                    var["name"]: var.get(
+                        "initial_value", var.get("default_value", 50.0)
+                    )
+                    for var in variables
+                },
+                "axes": {
+                    "x": selected_vars[0] if len(selected_vars) > 0 else "time",
+                    "y": selected_vars[1] if len(selected_vars) > 1 else "value",
+                },
+            },
         )
-        
-        controls.append(
-            SimulationControl(
-                control_id="play_pause",
-                label="Play/Pause",
-                type="toggle",
-                affects=["simulation_state"],
-                parameters={"states": ["playing", "paused"]},
-            )
-        )
-        
-        return controls
 
-    async def _generate_rules(self, topic: str) -> list[str]:
-        """Generate simulation rules/equations."""
-        rules = []
-        
-        if "physics" in topic.lower():
-            rules = [
-                "velocity = velocity + acceleration * dt",
-                "position = position + velocity * dt",
-                "if position < 0: velocity = -velocity * 0.8  # Bounce with damping",
-            ]
-        elif "econ" in topic.lower():
-            rules = [
-                "equilibrium = (supply + demand) / 2",
-                "price = equilibrium * 0.1",
-                "if supply > demand: price = price * 0.95",
-                "if demand > supply: price = price * 1.05",
-            ]
-        else:
-            rules = [
-                "output_result = input_factor * efficiency",
-                "if output_result > 100: output_result = 100",
-                "if output_result < 0: output_result = 0",
-            ]
-        
-        return rules
+        return simulation.model_dump()
 
-    async def generate_content(self, prompt: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Generate simulation content based on prompt and parameters.
+    def _get_unit(self, variable_name: str) -> str:
+        """Get unit for a variable."""
+        units = {
+            "mass": "kg",
+            "velocity": "m/s",
+            "acceleration": "m/s²",
+            "force": "N",
+            "energy": "J",
+            "temperature": "°C",
+            "pressure": "Pa",
+            "volume": "L",
+            "concentration": "mol/L",
+            "pH": "",
+            "population": "individuals",
+            "growth_rate": "%",
+            "resources": "units",
+            "price": "$",
+            "demand": "units",
+            "supply": "units",
+        }
+        return units.get(variable_name, "units")
 
-        Args:
-            prompt: Content generation prompt
-            parameters: Generation parameters
 
-        Returns:
-            Dict containing generated simulation
-        """
-        return await self.process_task(prompt, parameters)
-
-    async def validate_content(self, content: Dict[str, Any]) -> bool:
-        """
-        Validate generated simulation content.
-
-        Args:
-            content: Simulation content to validate
-
-        Returns:
-            True if content is valid, False otherwise
-        """
-        try:
-            # Validate simulation structure
-            simulation = WebSimulation(**content)
-            
-            # Check that we have variables and controls
-            if not simulation.variables or not simulation.controls:
-                return False
-            
-            # Check that we have rules
-            if not simulation.rules:
-                return False
-            
-            return True
-        except Exception as e:
-            logger.error(f"Content validation failed: {e}")
-            return False
-
-    async def refine_content(self, content: Dict[str, Any], feedback: str) -> Dict[str, Any]:
-        """
-        Refine simulation content based on feedback.
-
-        Args:
-            content: Simulation content to refine
-            feedback: Feedback for refinement
-
-        Returns:
-            Dict containing refined simulation
-        """
-        # For base implementation, just return the content
-        # Subclasses can implement more sophisticated refinement
-        logger.info(f"Refining simulation content based on feedback: {feedback}")
-        return content
+__all__ = ["SimulationDesignerAgent"]

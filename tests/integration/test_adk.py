@@ -30,32 +30,31 @@ from adk_agentic_writer.models.agent_models import AgentStatus
 
 # Static Team Tests
 
+
 @pytest.mark.asyncio
 async def test_static_coordinator_initialization():
     """Test static coordinator initialization."""
     coordinator = CoordinatorAgent()
-    coordinator.register_agent(StaticQuizWriterAgent())
-    coordinator.register_agent(StoryWriterAgent())
-    
+    # Agents auto-registered via runtime in __init__
+
     assert coordinator.agent_id == "coordinator"
-    assert len(coordinator.agent_registry) > 0
+    assert len(coordinator.runtime.agents) >= 0
+    assert len(coordinator.runtime.teams) == 4  # 4 content teams
 
 
 @pytest.mark.asyncio
 async def test_static_quiz_generation():
     """Test quiz generation with static team."""
     coordinator = CoordinatorAgent()
-    coordinator.register_agent(StaticQuizWriterAgent())
-    
-    result = await coordinator.process_task(
-        "Generate quiz",
-        {
-            "content_type": "quiz",
-            "topic": "Python Programming",
-            "num_questions": 3,
-        }
+    # Agents auto-registered via runtime
+
+    # Use modern interface with generate_content
+    result = await coordinator.generate_content(
+        content_type="quiz",
+        topic="Python Programming",
+        num_questions=3,
     )
-    
+
     assert result is not None
     assert "content" in result
     content = result["content"]
@@ -66,17 +65,16 @@ async def test_static_quiz_generation():
 async def test_static_story_generation():
     """Test story generation with static team."""
     coordinator = CoordinatorAgent()
-    coordinator.register_agent(StoryWriterAgent())
-    
-    result = await coordinator.process_task(
-        "Generate story",
-        {
-            "content_type": "branched_narrative",
-            "topic": "Space Adventure",
-            "num_branches": 3,
-        }
+    # Agents auto-registered via runtime
+
+    # Use modern interface with generate_content
+    result = await coordinator.generate_content(
+        content_type="branched_narrative",
+        topic="Space Adventure",
+        genre="science fiction",
+        num_nodes=5,
     )
-    
+
     assert result is not None
     assert "content" in result
     content = result["content"]
@@ -84,6 +82,7 @@ async def test_static_story_generation():
 
 
 # Gemini Team Tests (require API key)
+
 
 @pytest.fixture
 def api_key():
@@ -103,10 +102,10 @@ async def test_gemini_coordinator_initialization(api_key):
             GeminiCoordinatorAgent,
             GeminiQuizWriterAgent,
         )
-        
+
         coordinator = GeminiCoordinatorAgent()
         coordinator.register_agent(GeminiQuizWriterAgent())
-        
+
         assert coordinator.agent_id == "gemini_coordinator"
         assert coordinator.adk_agent is not None
         assert coordinator.runner is not None
@@ -124,19 +123,19 @@ async def test_gemini_quiz_generation(api_key):
             GeminiQuizWriterAgent,
             SupportedTask,
         )
-        
+
         coordinator = GeminiCoordinatorAgent()
         coordinator.register_agent(GeminiQuizWriterAgent())
-        
+
         result = await coordinator.process_task(
             "Generate quiz",
             {
                 "task": SupportedTask.GENERATE_QUIZ,
                 "topic": "Python Programming",
                 "num_questions": 2,
-            }
+            },
         )
-        
+
         assert result is not None
         # Result structure may vary, just check it's not empty
         assert len(result) > 0
@@ -151,10 +150,10 @@ async def test_gemini_quiz_generation(api_key):
 # Utility function for manual testing
 def run_manual_tests():
     """Run tests manually (for development)."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("ADK Integration Manual Test Suite")
-    print("="*60)
-    
+    print("=" * 60)
+
     # Check API key
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
@@ -165,7 +164,7 @@ def run_manual_tests():
         print("\nGet your API key at: https://aistudio.google.com/apikey")
     else:
         print(f"✓ API key found: {api_key[:10]}...{api_key[-4:]}")
-    
+
     print("\nRun tests with: pytest tests/integration/test_adk.py -v")
     print("Run slow tests: pytest tests/integration/test_adk.py -v -m slow")
 

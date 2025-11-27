@@ -22,13 +22,8 @@ def client():
 
 @pytest.fixture
 async def coordinator():
-    """Create a coordinator with all agents registered."""
-    coord = CoordinatorAgent()
-    coord.register_agent(StaticQuizWriterAgent())
-    coord.register_agent(StoryWriterAgent())
-    coord.register_agent(GameDesignerAgent())
-    coord.register_agent(SimulationDesignerAgent())
-    return coord
+    """Create a coordinator (agents auto-registered via runtime)."""
+    return CoordinatorAgent()
 
 
 class TestStaticQuizGeneration:
@@ -37,15 +32,12 @@ class TestStaticQuizGeneration:
     @pytest.mark.asyncio
     async def test_quiz_direct(self, coordinator):
         """Test quiz generation directly."""
-        result = await coordinator.process_task(
-            "Generate quiz",
-            {"content_type": "quiz", "topic": "Python", "num_questions": 3}
+        result = await coordinator.generate_content(
+            "quiz", topic="Python", num_questions=3
         )
-        
+
         content = result["content"]
-        if isinstance(content, dict) and "original_content" in content:
-            content = content["original_content"]
-        
+
         assert "title" in content
         assert "questions" in content
         assert len(content["questions"]) == 3
@@ -60,17 +52,17 @@ class TestStaticQuizGeneration:
                 "team": "static",
                 "content_type": "quiz",
                 "topic": "JavaScript",
-                "parameters": {"num_questions": 5}
-            }
+                "parameters": {"num_questions": 5},
+            },
         )
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["team"] == "static"
         assert data["content_type"] == "quiz"
-        
+
         # Extract content
-        content = data["content"]["content"]["original_content"]
+        content = data["content"]["content"]
         assert "questions" in content
         assert len(content["questions"]) == 5
 
@@ -81,15 +73,12 @@ class TestStaticStoryGeneration:
     @pytest.mark.asyncio
     async def test_story_direct(self, coordinator):
         """Test story generation directly."""
-        result = await coordinator.process_task(
-            "Generate story",
-            {"content_type": "branched_narrative", "topic": "Adventure", "num_branches": 3}
+        result = await coordinator.generate_content(
+            "branched_narrative", topic="Adventure", num_nodes=5
         )
-        
+
         content = result["content"]
-        if isinstance(content, dict) and "original_content" in content:
-            content = content["original_content"]
-        
+
         assert "title" in content
         assert "nodes" in content
         assert "start_node" in content
@@ -103,13 +92,13 @@ class TestStaticStoryGeneration:
                 "team": "static",
                 "content_type": "branched_narrative",
                 "topic": "Mystery",
-                "parameters": {"num_branches": 4}
-            }
+                "parameters": {"num_nodes": 5},
+            },
         )
-        
+
         assert response.status_code == 200
         data = response.json()
-        content = data["content"]["content"]["original_content"]
+        content = data["content"]["content"]
         assert "nodes" in content
         assert "start_node" in content
 
@@ -120,15 +109,12 @@ class TestStaticGameGeneration:
     @pytest.mark.asyncio
     async def test_game_direct(self, coordinator):
         """Test game generation directly."""
-        result = await coordinator.process_task(
-            "Generate game",
-            {"content_type": "quest_game", "topic": "Fantasy Quest"}
+        result = await coordinator.generate_content(
+            "quest_game", topic="Fantasy Quest", num_nodes=5
         )
-        
+
         content = result["content"]
-        if isinstance(content, dict) and "original_content" in content:
-            content = content["original_content"]
-        
+
         assert "title" in content
         assert "nodes" in content
         assert "victory_conditions" in content
@@ -141,15 +127,16 @@ class TestStaticGameGeneration:
                 "team": "static",
                 "content_type": "quest_game",
                 "topic": "Space Quest",
-                "parameters": {}
-            }
+                "parameters": {},
+            },
         )
-        
+
         assert response.status_code == 200
         data = response.json()
-        content = data["content"]["content"]["original_content"]
+        content = data["content"]["content"]
         assert "nodes" in content
         assert "title" in content
+        assert "victory_conditions" in content
 
 
 class TestStaticSimulationGeneration:
@@ -158,15 +145,12 @@ class TestStaticSimulationGeneration:
     @pytest.mark.asyncio
     async def test_simulation_direct(self, coordinator):
         """Test simulation generation directly."""
-        result = await coordinator.process_task(
-            "Generate simulation",
-            {"content_type": "web_simulation", "topic": "Physics"}
+        result = await coordinator.generate_content(
+            "web_simulation", topic="Physics", num_variables=4
         )
-        
+
         content = result["content"]
-        if isinstance(content, dict) and "original_content" in content:
-            content = content["original_content"]
-        
+
         assert "title" in content
         assert "variables" in content
         assert len(content["variables"]) > 0
@@ -179,13 +163,13 @@ class TestStaticSimulationGeneration:
                 "team": "static",
                 "content_type": "web_simulation",
                 "topic": "Chemistry",
-                "parameters": {}
-            }
+                "parameters": {},
+            },
         )
-        
+
         assert response.status_code == 200
         data = response.json()
-        content = data["content"]["content"]["original_content"]
+        content = data["content"]["content"]
         assert "variables" in content
         assert "title" in content
 
@@ -194,23 +178,41 @@ class TestContentQuality:
     """Test content quality across all types."""
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("content_type,topic,check_field", [
-        ("quiz", "Math", "questions"),
-        ("branched_narrative", "Sci-Fi", "nodes"),
-        ("quest_game", "RPG", "nodes"),
-        ("web_simulation", "Biology", "variables"),
-    ])
-    async def test_content_not_empty(self, coordinator, content_type, topic, check_field):
+    @pytest.mark.parametrize(
+        "content_type,topic,check_field",
+        [
+            ("quiz", "Math", "questions"),
+            ("branched_narrative", "Sci-Fi", "nodes"),
+            ("quest_game", "RPG", "nodes"),
+            ("web_simulation", "Biology", "variables"),
+        ],
+    )
+    async def test_content_not_empty(
+        self, coordinator, content_type, topic, check_field
+    ):
         """Test that generated content is not empty."""
-        result = await coordinator.process_task(
-            f"Generate {content_type}",
-            {"content_type": content_type, "topic": topic}
-        )
-        
+        # Use generate_content for all types
+        if content_type == "quiz":
+            result = await coordinator.generate_content(
+                "quiz", topic=topic, num_questions=3
+            )
+        elif content_type == "branched_narrative":
+            result = await coordinator.generate_content(
+                "branched_narrative", topic=topic, num_nodes=5
+            )
+        elif content_type == "quest_game":
+            result = await coordinator.generate_content(
+                "quest_game", topic=topic, num_nodes=5
+            )
+        elif content_type == "web_simulation":
+            result = await coordinator.generate_content(
+                "web_simulation", topic=topic, num_variables=3
+            )
+        else:
+            raise ValueError(f"Unknown content type: {content_type}")
+
         content = result["content"]
-        if isinstance(content, dict) and "original_content" in content:
-            content = content["original_content"]
-        
+
         assert check_field in content
         assert len(content[check_field]) > 0
 
@@ -226,10 +228,10 @@ class TestErrorHandling:
                 "team": "static",
                 "content_type": "invalid_type",
                 "topic": "Test",
-                "parameters": {}
-            }
+                "parameters": {},
+            },
         )
-        
+
         # System handles gracefully - coordinator returns error in content
         assert response.status_code == 200
         data = response.json()
@@ -242,11 +244,10 @@ class TestErrorHandling:
             "/generate",
             json={
                 "team": "static",
-                "content_type": "quiz"
+                "content_type": "quiz",
                 # Missing topic
-            }
+            },
         )
-        
+
         # Should return validation error
         assert response.status_code == 422
-

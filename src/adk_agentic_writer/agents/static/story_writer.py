@@ -1,330 +1,341 @@
-"""Story writer agent for generating branched narratives."""
+"""Story writer agent implementing ContentProtocol with StatefulAgent framework.
+
+This agent generates branched narratives using:
+- StatefulAgent: For variable/parameter management
+- Tasks: Predefined content generation tasks
+- ContentProtocol: Standard content generation methods
+"""
 
 import logging
 import random
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
-from ...models.agent_models import AgentRole, AgentStatus
+from ...agents.stateful_agent import StatefulAgent
+from ...models.agent_models import AgentTask, AgentStatus
 from ...models.content_models import BranchedNarrative, StoryNode
-from ..base_agent import BaseAgent
+from ...protocols.content_protocol import ContentBlock, ContentBlockType, ContentPattern
+from ...teams.content_team import STORY_WRITER
 
 logger = logging.getLogger(__name__)
 
-# Story opening scenarios pool
+# Story templates
 STORY_OPENINGS = [
-    "You find yourself at the beginning of an extraordinary journey into {topic}. The world of {genre} stretches before you, full of possibilities.",
-    "As dawn breaks, you stand at the threshold of {topic}. The {genre} realm ahead promises adventure and discovery.",
-    "A mysterious force draws you toward {topic}. In this {genre} world, every choice shapes your destiny.",
-    "The ancient texts spoke of {topic}, but nothing prepared you for this moment. The {genre} adventure begins now.",
-    "You've trained for this moment - to explore {topic}. The {genre} landscape unfolds before your eyes.",
+    "You find yourself at the beginning of an extraordinary journey into {topic}.",
+    "As dawn breaks, you stand at the threshold of {topic}.",
+    "A mysterious force draws you toward {topic}.",
+    "The ancient texts spoke of {topic}, but nothing prepared you for this moment.",
 ]
 
-# Path descriptions pool
 PATH_DESCRIPTIONS = {
-    "bold": [
-        "Your bold approach to {topic} leads you to unexpected discoveries.",
-        "Courage drives you forward into {topic}, revealing hidden opportunities.",
-        "Your daring decision regarding {topic} opens new pathways.",
-        "Fearlessly, you dive deeper into {topic}, uncovering secrets.",
-    ],
-    "cautious": [
-        "Your careful consideration of {topic} reveals hidden details others might miss.",
-        "Patience and observation guide your exploration of {topic}.",
-        "Your methodical approach to {topic} uncovers subtle clues.",
-        "Wisdom leads you to examine {topic} from every angle.",
-    ],
-    "challenge": [
-        "The challenge tests your understanding of {topic}.",
-        "Obstacles related to {topic} push you to your limits.",
-        "A formidable trial involving {topic} stands before you.",
-        "Your mastery of {topic} is put to the ultimate test.",
-    ],
-    "allies": [
-        "You find companions who share your interest in {topic}.",
-        "Like-minded individuals join your quest regarding {topic}.",
-        "A fellowship forms around the pursuit of {topic}.",
-        "Others who understand {topic} rally to your cause.",
-    ],
+    "bold": "Your bold approach to {topic} leads you to unexpected discoveries.",
+    "cautious": "Your careful consideration of {topic} reveals hidden details.",
+    "challenge": "The challenge tests your understanding of {topic}.",
+    "allies": "You find companions who share your interest in {topic}.",
 }
 
-# Branch choice templates
-BRANCH_CHOICES = {
-    "bold_cautious": [
-        ("Venture forth boldly", "Proceed with caution"),
-        ("Take immediate action", "Plan carefully first"),
-        ("Trust your instincts", "Analyze the situation"),
-        ("Charge ahead", "Move strategically"),
-    ],
-    "challenge_allies": [
-        ("Face the challenge alone", "Seek allies"),
-        ("Test your skills", "Build a team"),
-        ("Prove your worth", "Find companions"),
-        ("Take on the trial", "Gather support"),
-    ],
-    "investigation_resources": [
-        ("Investigate further", "Gather resources"),
-        ("Seek knowledge", "Collect tools"),
-        ("Research deeply", "Prepare supplies"),
-        ("Study the mystery", "Stockpile assets"),
-    ],
-}
-
-# Ending variations
 ENDINGS = {
-    "victory": [
-        "Through courage and determination, you've mastered {topic}. Your victory inspires others.",
-        "Your triumph over {topic} becomes legendary. Songs will be sung of your deeds.",
-        "Success! Your understanding of {topic} has reached its peak, and the world takes notice.",
-        "Victory is yours. The challenges of {topic} have been conquered completely.",
-    ],
-    "alliance": [
-        "Your alliance has transformed the understanding of {topic}. Together, you've achieved greatness.",
-        "The bonds forged through {topic} create a legacy that will endure for generations.",
-        "United in purpose around {topic}, your team accomplishes the impossible.",
-        "The fellowship you built around {topic} becomes a beacon of cooperation.",
-    ],
-    "wisdom": [
-        "The wisdom you've gained about {topic} becomes a beacon for others.",
-        "Your insights into {topic} revolutionize the field and enlighten many.",
-        "The knowledge of {topic} you've acquired changes the course of history.",
-        "Your understanding of {topic} transcends mere facts, becoming true wisdom.",
-    ],
-    "prosperity": [
-        "Your careful preparation regarding {topic} leads to lasting prosperity.",
-        "The resources you built around {topic} create opportunities for all.",
-        "Your strategic approach to {topic} yields abundant rewards.",
-        "Prosperity flows from your mastery of {topic}, benefiting many.",
-    ],
+    "victory": "Through courage and determination, you've mastered {topic}.",
+    "alliance": "Your alliance has transformed the understanding of {topic}.",
+    "wisdom": "The wisdom you've gained about {topic} becomes a beacon for others.",
 }
 
 
-class StoryWriterAgent(BaseAgent):
-    """Agent specialized in creating branched narrative stories."""
+class StoryWriterAgent(StatefulAgent):
+    """Story writer agent using StatefulAgent framework.
+    
+    Implements:
+    - AgentProtocol: process_task, update_status
+    - ContentProtocol: generate_block, generate_sequential_blocks, etc.
+    """
 
-    def __init__(self, agent_id: str = "story_writer_1", config: Dict[str, Any] | None = None):
-        """Initialize the story writer agent."""
-        super().__init__(agent_id, AgentRole.STORY_WRITER, config)
+    def __init__(self, agent_id: str = "story_writer"):
+        """Initialize story writer agent."""
+        super().__init__(
+            agent_id=agent_id,
+            config=STORY_WRITER,
+        )
+        logger.info(f"Initialized StoryWriterAgent {agent_id}")
 
-    async def process_task(self, task_description: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Generate a branched narrative based on the given topic and parameters.
-
-        Args:
-            task_description: Description of the story to create
-            parameters: Parameters including topic, genre, num_branches
-
-        Returns:
-            Dict containing the generated branched narrative
-        """
-        await self.update_status(AgentStatus.WORKING)
+    async def _execute_task(
+        self, task: AgentTask, resolved_prompt: str
+    ) -> Dict[str, Any]:
+        """Execute task based on task_id."""
+        # Extract context
+        context = self.prepare_task_context(task)
         
-        topic = parameters.get("topic", "adventure")
-        genre = parameters.get("genre", "fantasy")
-        num_nodes = parameters.get("num_nodes", 7)
+        if task.task_id == "generate_block":
+            block = await self.generate_block(ContentBlockType.NODE, context)
+            return block.content
+        elif task.task_id == "generate_sequential_blocks":
+            num_blocks = context.get("num_blocks", 3)
+            blocks = await self.generate_sequential_blocks(
+                num_blocks, ContentBlockType.NODE, context
+            )
+            return {"blocks": [b.content for b in blocks]}
+        elif task.task_id == "generate_branched_blocks":
+            branch_points = context.get("branch_points", [])
+            blocks = await self.generate_branched_blocks(branch_points, context)
+            return {"blocks": [b.content for b in blocks]}
+        else:
+            # Default: generate story
+            return await self._generate_story_content(resolved_prompt, context)
+
+    # ========================================================================
+    # ContentProtocol Implementation
+    # ========================================================================
+
+    async def generate_block(
+        self,
+        block_type: ContentBlockType,
+        context: Dict[str, Any],
+        previous_blocks: Optional[List[ContentBlock]] = None,
+    ) -> ContentBlock:
+        """Generate a single story content block."""
+        topic = context.get("topic", "adventure")
+        genre = context.get("genre", "fantasy")
         
-        logger.info(f"Generating branched narrative about {topic} in {genre} genre")
+        story_data = await self._generate_story_data(topic, genre, num_nodes=5)
+        
+        return ContentBlock(
+            block_id=f"story_{topic.replace(' ', '_')}",
+            block_type=block_type,
+            content=story_data,
+            pattern=ContentPattern.BRANCHED,
+        )
+
+    async def generate_sequential_blocks(
+        self,
+        num_blocks: int,
+        block_type: ContentBlockType,
+        context: Dict[str, Any],
+    ) -> List[ContentBlock]:
+        """Generate sequential story chapters."""
+        blocks = []
+        topic = context.get("topic", "adventure")
+        
+        for i in range(num_blocks):
+            chapter_topic = f"{topic} - Chapter {i+1}"
+            story_data = await self._generate_story_data(chapter_topic, context.get("genre", "fantasy"), 3)
+            
+            block = ContentBlock(
+                block_id=f"chapter_{i+1}",
+                block_type=block_type,
+                content=story_data,
+                pattern=ContentPattern.SEQUENTIAL,
+                navigation={
+                    "next": f"chapter_{i+2}" if i < num_blocks - 1 else None,
+                    "prev": f"chapter_{i}" if i > 0 else None,
+                },
+            )
+            blocks.append(block)
+        
+        return blocks
+
+    async def generate_looped_blocks(
+        self,
+        num_blocks: int,
+        block_type: ContentBlockType,
+        context: Dict[str, Any],
+        exit_condition: Dict[str, Any],
+        allow_back: bool = True,
+    ) -> List[ContentBlock]:
+        """Generate looped story blocks (e.g., story practice/replay)."""
+        blocks = []
+        topic = context.get("topic", "adventure")
+        
+        for i in range(num_blocks):
+            story_data = await self._generate_story_data(topic, context.get("genre", "fantasy"), 3)
+            
+            block = ContentBlock(
+                block_id=f"replay_{i+1}",
+                block_type=block_type,
+                content=story_data,
+                pattern=ContentPattern.LOOPED,
+                navigation={
+                    "next": f"replay_{(i+1) % num_blocks + 1}",
+                    "prev": f"replay_{i}" if allow_back and i > 0 else None,
+                    "exit": "check_exit_condition",
+                },
+                exit_condition=exit_condition,
+            )
+            blocks.append(block)
+        
+        return blocks
+
+    async def generate_branched_blocks(
+        self,
+        branch_points: List[Dict[str, Any]],
+        context: Dict[str, Any],
+    ) -> List[ContentBlock]:
+        """Generate branched narrative blocks."""
+        blocks = []
+        topic = context.get("topic", "adventure")
+        genre = context.get("genre", "fantasy")
+        
+        # Generate full branched narrative
+        story_data = await self._generate_story_data(topic, genre, num_nodes=7)
+        nodes = story_data["nodes"]
+        
+        # Convert nodes to content blocks
+        for node_id, node in nodes.items():
+            choices = [
+                {"text": branch["text"], "next_block": branch["next_node_id"]}
+                for branch in node.get("branches", [])
+            ]
+            
+            block = ContentBlock(
+                block_id=node_id,
+                block_type=ContentBlockType.NODE,
+                content={"text": node["content"], "node": node},
+                pattern=ContentPattern.BRANCHED,
+                choices=choices,
+            )
+            blocks.append(block)
+        
+        return blocks
+
+    async def generate_conditional_blocks(
+        self,
+        blocks_config: List[Dict[str, Any]],
+        context: Dict[str, Any],
+    ) -> List[ContentBlock]:
+        """Generate conditional story blocks."""
+        blocks = []
+        topic = context.get("topic", "adventure")
+        
+        for config in blocks_config:
+            condition = config.get("condition", {})
+            story_data = await self._generate_story_data(topic, context.get("genre", "fantasy"), 3)
+            
+            block = ContentBlock(
+                block_id=config.get("block_id", f"conditional_{len(blocks)}"),
+                block_type=ContentBlockType.NODE,
+                content=story_data,
+                pattern=ContentPattern.CONDITIONAL,
+                metadata={"display_condition": condition},
+            )
+            blocks.append(block)
+        
+        return blocks
+
+    # ========================================================================
+    # Helper Methods
+    # ========================================================================
+
+    async def _generate_story_content(
+        self, resolved_prompt: str, context: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Generate story content from resolved prompt."""
+        topic = context.get("topic", "adventure")
+        genre = context.get("genre", "fantasy")
+        num_nodes = context.get("num_nodes", 7)
+        
+        return await self._generate_story_data(topic, genre, num_nodes)
+
+    async def _generate_story_data(
+        self, topic: str, genre: str, num_nodes: int
+    ) -> Dict[str, Any]:
+        """Generate branched narrative story data."""
+        logger.info(f"Generating story: {topic}, genre: {genre}, nodes: {num_nodes}")
         
         # Generate story nodes
-        nodes = await self._generate_story_nodes(topic, genre, num_nodes)
+        nodes = {}
         
-        # Create narrative object
+        # Opening node
+        opening = random.choice(STORY_OPENINGS).format(topic=topic)
+        nodes["start"] = StoryNode(
+            node_id="start",
+            content=opening,
+            branches=[
+                {"text": "Take the bold path", "next_node_id": "bold_path"},
+                {"text": "Proceed with caution", "next_node_id": "cautious_path"},
+            ],
+            tags=["opening", genre],
+            is_ending=False,
+        ).model_dump()
+        
+        # Path nodes
+        if num_nodes >= 3:
+            nodes["bold_path"] = StoryNode(
+                node_id="bold_path",
+                content=PATH_DESCRIPTIONS["bold"].format(topic=topic),
+                branches=[
+                    {"text": "Face the challenge", "next_node_id": "challenge"},
+                    {"text": "Find allies", "next_node_id": "allies"},
+                ],
+                tags=["bold"],
+                is_ending=False,
+            ).model_dump()
+            
+            nodes["cautious_path"] = StoryNode(
+                node_id="cautious_path",
+                content=PATH_DESCRIPTIONS["cautious"].format(topic=topic),
+                branches=[
+                    {"text": "Continue alone", "next_node_id": "challenge"},
+                    {"text": "Seek wisdom", "next_node_id": "wisdom_ending"},
+                ],
+                tags=["cautious"],
+                is_ending=False,
+            ).model_dump()
+        
+        # Intermediate nodes
+        if num_nodes >= 5:
+            nodes["challenge"] = StoryNode(
+                node_id="challenge",
+                content=PATH_DESCRIPTIONS["challenge"].format(topic=topic),
+                branches=[
+                    {"text": "Claim victory", "next_node_id": "victory_ending"},
+                ],
+                tags=["challenge"],
+                is_ending=False,
+            ).model_dump()
+            
+            nodes["allies"] = StoryNode(
+                node_id="allies",
+                content=PATH_DESCRIPTIONS["allies"].format(topic=topic),
+                branches=[
+                    {"text": "Continue together", "next_node_id": "alliance_ending"},
+                ],
+                tags=["allies"],
+                is_ending=False,
+            ).model_dump()
+        
+        # Ending nodes
+        nodes["victory_ending"] = StoryNode(
+            node_id="victory_ending",
+            content=ENDINGS["victory"].format(topic=topic),
+            branches=[],
+            tags=["ending", "victory"],
+            is_ending=True,
+        ).model_dump()
+        
+        nodes["alliance_ending"] = StoryNode(
+            node_id="alliance_ending",
+            content=ENDINGS["alliance"].format(topic=topic),
+            branches=[],
+            tags=["ending", "alliance"],
+            is_ending=True,
+        ).model_dump()
+        
+        nodes["wisdom_ending"] = StoryNode(
+            node_id="wisdom_ending",
+            content=ENDINGS["wisdom"].format(topic=topic),
+            branches=[],
+            tags=["ending", "wisdom"],
+            is_ending=True,
+        ).model_dump()
+        
+        # Create narrative
         narrative = BranchedNarrative(
             title=f"The {topic.title()} Chronicles",
             synopsis=f"An interactive {genre} story about {topic}",
             genre=genre,
             start_node="start",
             nodes=nodes,
-            characters=parameters.get("characters", ["Protagonist", "Guide", "Antagonist"]),
+            characters=["Protagonist", "Guide", "Antagonist"],
         )
-        
-        await self.update_status(AgentStatus.COMPLETED)
         
         return narrative.model_dump()
 
-    async def _generate_story_nodes(
-        self, topic: str, genre: str, num_nodes: int
-    ) -> Dict[str, StoryNode]:
-        """Generate story nodes for the branched narrative with randomized content."""
-        nodes = {}
-        
-        # Randomly select story elements
-        opening = random.choice(STORY_OPENINGS).format(topic=topic, genre=genre)
-        bold_desc = random.choice(PATH_DESCRIPTIONS["bold"]).format(topic=topic)
-        cautious_desc = random.choice(PATH_DESCRIPTIONS["cautious"]).format(topic=topic)
-        challenge_desc = random.choice(PATH_DESCRIPTIONS["challenge"]).format(topic=topic)
-        allies_desc = random.choice(PATH_DESCRIPTIONS["allies"]).format(topic=topic)
-        
-        # Select branch choices
-        initial_choices = random.choice(BRANCH_CHOICES["bold_cautious"])
-        bold_choices = random.choice(BRANCH_CHOICES["challenge_allies"])
-        cautious_choices = random.choice(BRANCH_CHOICES["investigation_resources"])
-        
-        # Select endings
-        victory_ending = random.choice(ENDINGS["victory"]).format(topic=topic)
-        alliance_ending = random.choice(ENDINGS["alliance"]).format(topic=topic)
-        wisdom_ending = random.choice(ENDINGS["wisdom"]).format(topic=topic)
-        prosperity_ending = random.choice(ENDINGS["prosperity"]).format(topic=topic)
-        
-        # Create start node
-        nodes["start"] = StoryNode(
-            node_id="start",
-            content=opening,
-            branches=[
-                {"text": initial_choices[0], "next_node_id": "bold_path"},
-                {"text": initial_choices[1], "next_node_id": "cautious_path"},
-            ],
-            tags=["beginning", topic, genre],
-        )
-        
-        # Create bold path
-        nodes["bold_path"] = StoryNode(
-            node_id="bold_path",
-            content=f"{bold_desc} The path ahead splits into two distinct routes.",
-            branches=[
-                {"text": bold_choices[0], "next_node_id": "challenge"},
-                {"text": bold_choices[1], "next_node_id": "allies"},
-            ],
-            tags=["bold", topic],
-        )
-        
-        # Create cautious path
-        nodes["cautious_path"] = StoryNode(
-            node_id="cautious_path",
-            content=f"{cautious_desc} You notice two opportunities.",
-            branches=[
-                {"text": cautious_choices[0], "next_node_id": "investigation"},
-                {"text": cautious_choices[1], "next_node_id": "resources"},
-            ],
-            tags=["cautious", topic],
-        )
-        
-        # Create challenge node
-        nodes["challenge"] = StoryNode(
-            node_id="challenge",
-            content=f"{challenge_desc} Through determination, you overcome the obstacles.",
-            branches=[
-                {"text": "Claim your victory", "next_node_id": "victory_ending"},
-            ],
-            tags=["challenge", topic],
-        )
-        
-        # Create allies node
-        nodes["allies"] = StoryNode(
-            node_id="allies",
-            content=f"{allies_desc} Together, you're stronger.",
-            branches=[
-                {"text": "Continue together", "next_node_id": "alliance_ending"},
-            ],
-            tags=["allies", topic],
-        )
-        
-        # Create investigation node
-        nodes["investigation"] = StoryNode(
-            node_id="investigation",
-            content=f"Your investigation into {topic} uncovers profound truths. Knowledge becomes your greatest asset.",
-            branches=[
-                {"text": "Share your discoveries", "next_node_id": "wisdom_ending"},
-            ],
-            tags=["investigation", topic],
-        )
-        
-        # Create resources node
-        nodes["resources"] = StoryNode(
-            node_id="resources",
-            content=f"The resources you've gathered about {topic} prove invaluable. You're well-prepared for what comes next.",
-            branches=[
-                {"text": "Put resources to use", "next_node_id": "prosperity_ending"},
-            ],
-            tags=["resources", topic],
-        )
-        
-        # Create multiple endings with randomized content
-        nodes["victory_ending"] = StoryNode(
-            node_id="victory_ending",
-            content=victory_ending,
-            branches=[],
-            tags=["ending", "victory", topic],
-            is_ending=True,
-        )
-        
-        nodes["alliance_ending"] = StoryNode(
-            node_id="alliance_ending",
-            content=alliance_ending,
-            branches=[],
-            tags=["ending", "alliance", topic],
-            is_ending=True,
-        )
-        
-        nodes["wisdom_ending"] = StoryNode(
-            node_id="wisdom_ending",
-            content=wisdom_ending,
-            branches=[],
-            tags=["ending", "wisdom", topic],
-            is_ending=True,
-        )
-        
-        nodes["prosperity_ending"] = StoryNode(
-            node_id="prosperity_ending",
-            content=prosperity_ending,
-            branches=[],
-            tags=["ending", "prosperity", topic],
-            is_ending=True,
-        )
-        
-        return nodes
 
-    async def generate_content(self, prompt: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Generate story content based on prompt and parameters.
-
-        Args:
-            prompt: Content generation prompt
-            parameters: Generation parameters
-
-        Returns:
-            Dict containing generated story
-        """
-        return await self.process_task(prompt, parameters)
-
-    async def validate_content(self, content: Dict[str, Any]) -> bool:
-        """
-        Validate generated story content.
-
-        Args:
-            content: Story content to validate
-
-        Returns:
-            True if content is valid, False otherwise
-        """
-        try:
-            # Validate story structure
-            narrative = BranchedNarrative(**content)
-            
-            # Check that we have nodes
-            if not narrative.nodes:
-                return False
-            
-            # Check that start node exists
-            if narrative.start_node not in narrative.nodes:
-                return False
-            
-            return True
-        except Exception as e:
-            logger.error(f"Content validation failed: {e}")
-            return False
-
-    async def refine_content(self, content: Dict[str, Any], feedback: str) -> Dict[str, Any]:
-        """
-        Refine story content based on feedback.
-
-        Args:
-            content: Story content to refine
-            feedback: Feedback for refinement
-
-        Returns:
-            Dict containing refined story
-        """
-        # For base implementation, just return the content
-        # Subclasses can implement more sophisticated refinement
-        logger.info(f"Refining story content based on feedback: {feedback}")
-        return content
+__all__ = ["StoryWriterAgent"]

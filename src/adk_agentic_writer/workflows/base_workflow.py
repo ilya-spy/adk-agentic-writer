@@ -84,14 +84,17 @@ class Workflow(WorkflowMetadata):
 
     async def execute_sequential(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """Execute agents sequentially."""
-        result = input_data
-        for i, agent in enumerate(self.agents):
-            task = result.get("task")
-            params = result.get("parameters", {})
+        # Preserve original task and parameters throughout the workflow
+        task = input_data.get("task")
+        base_params = input_data.get("parameters", {})
+        result = None
 
-            # After first agent, pass the result as content to next agent
-            if i > 0:
-                params = {**params, "content": result}
+        for i, agent in enumerate(self.agents):
+            params = {**base_params}
+
+            # After first agent, pass previous result as content
+            if i > 0 and result is not None:
+                params["content"] = result
 
             result = await agent.process_task(task, params)
         return result

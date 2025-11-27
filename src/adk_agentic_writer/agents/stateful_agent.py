@@ -171,12 +171,13 @@ class StatefulAgent(BaseAgent):
             task: Task to prepare context for
 
         Returns:
-            Merged context dictionary
+            Merged context dictionary with precedence: parameters < variables < task.parameters
         """
-        # Merge variables and parameters (variables take precedence)
-        context = {**self.parameters, **self.variables}
-
-        # Add task parameters if present
+        # Start with parameters (configuration)
+        context = {**self.parameters}
+        # Add variables (runtime state takes precedence over config parameters)
+        context.update(self.variables)
+        # Task parameters override everything
         if task.parameters:
             context.update(task.parameters)
 

@@ -217,3 +217,84 @@ class ContentProtocol(Protocol):
             List of conditional content blocks with display rules
         """
         ...
+
+
+class AdaptiveContentProtocol(Protocol):
+    """Protocol for adaptive content generation interface."""
+
+    async def analyze_user_behavior(
+        self, user_interactions: Dict[str, Any], **kwargs
+    ) -> Dict[str, Any]:
+        """Analyze user behavior and generate analysis.
+
+        Args:
+            user_interactions: User interactions data
+            **kwargs: Additional parameters
+
+        Returns:
+            Dict with Analysis of user behavior
+        """
+        ...
+
+    async def adapt_content_strategy(
+        self, behavior_analysis: Dict[str, Any], topic: str, **kwargs
+    ) -> Dict[str, Any]:
+        """Adapt content generation strategy based on analysis.
+
+        Args:
+            behavior_analysis: Analysis of user behavior or content quality
+            topic: Content topic
+            **kwargs: Additional parameters
+
+        Returns:
+            Updated strategy dict
+        """
+        ...
+
+    async def generate_adaptive_blocks(
+        self, block_type: str, topic: str, num_blocks: int = 3, **kwargs
+    ) -> Dict[str, Any]:
+        """Generate blocks using adaptive strategy.
+
+        Args:
+            block_type: Type of content block
+            topic: Content topic
+            num_blocks: Number of blocks to generate
+            **kwargs: Additional parameters
+
+        Returns:
+            Generated adaptive blocks
+        """
+        ...
+
+    async def generate_variant_blocks(
+        self, content_type: str, topic: str, num_variants: int = 3, **kwargs
+    ) -> Dict[str, Any]:
+        """Generate content variants in parallel and merge.
+
+        Args:
+            content_type: Type of content to generate
+            topic: Content topic
+            num_variants: Number of variants to generate
+            **kwargs: Additional parameters
+
+        Returns:
+            Merged variant results
+        """
+        ...
+
+    def get_strategy(self) -> Dict[str, Any]:
+        """Get current strategy state.
+
+        Returns:
+            Current strategy dict
+        """
+        ...
+
+    def update_strategy(self, updates: Dict[str, Any]) -> None:
+        """Update strategy state.
+
+        Args:
+            updates: Strategy updates to apply
+        """
+        ...
