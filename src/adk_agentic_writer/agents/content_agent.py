@@ -1,35 +1,42 @@
-"""Unified content writer base class.
+"""Base class for content-generating agents.
 
-ContentWriterAgent provides shared functionality for all content writers
-(quiz, story, game, simulation) across both Static and Gemini teams.
+ContentWriterAgent is the base class for all agents that generate content
+(quiz, story, game, simulation). It provides:
 
-Key features:
-- Inherits from StatefulAgent for state management
-- Uses TextProvider for pluggable text generation
-- Unified process_task signature
-- Shared content building logic
+1. TextProvider integration for text generation
+2. Unified task execution flow: generate() → process_task() → _build_content()
+3. Inherits state management from StatefulAgent
+
+Inheritance hierarchy:
+    BaseAgent → StatefulAgent → ContentWriterAgent → WriterAgent/DesignerAgent
+
+Call flow:
+    agent.generate(**kwargs)
+        → process_task(task)          [from StatefulAgent]
+            → _execute_task(task)     [overridden here]
+                → _build_content(ctx) [implemented by subclass]
 """
 
 import logging
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional
 
-from ..models.agent_models import AgentConfig, AgentStatus, AgentTask
+from ..models.agent_models import AgentConfig, AgentTask
+from ..utils.text_provider import TextProvider, TemplateTextProvider
 from .stateful_agent import StatefulAgent
-from .text_provider import TextProvider, TemplateTextProvider
 
 logger = logging.getLogger(__name__)
 
 
 class ContentWriterAgent(StatefulAgent):
-    """Base class for all content writer agents.
+    """Base class for content-generating agents.
 
     Provides:
     - TextProvider integration for text generation
-    - Unified process_task handling
-    - Common content building utilities
+    - Unified generate() convenience method
+    - _execute_task() that calls _build_content()
 
-    Subclasses implement:
-    - _build_content(): Content-specific generation logic
+    Subclasses must implement:
+    - _build_content(context) → Dict: Build content from context
     """
 
     def __init__(
@@ -38,7 +45,7 @@ class ContentWriterAgent(StatefulAgent):
         config: AgentConfig,
         text_provider: Optional[TextProvider] = None,
     ):
-        """Initialize content writer agent.
+        """Initialize content agent.
 
         Args:
             agent_id: Unique agent identifier
@@ -63,11 +70,9 @@ class ContentWriterAgent(StatefulAgent):
         Returns:
             Generated text string
         """
-        # Merge parameters with provided context
         full_context = {**self.parameters}
         if context:
             full_context.update(context)
-
         return await self.text_provider.generate_text(prompt_key, full_context)
 
     async def _execute_task(
@@ -75,6 +80,7 @@ class ContentWriterAgent(StatefulAgent):
     ) -> Dict[str, Any]:
         """Execute task by building content.
 
+        This is called by StatefulAgent.process_task().
         Routes to _build_content() which subclasses implement.
 
         Args:
@@ -93,7 +99,7 @@ class ContentWriterAgent(StatefulAgent):
         Subclasses must implement this method.
 
         Args:
-            context: Merged parameters and variables
+            context: Merged parameters and task variables
 
         Returns:
             Content dictionary (Quiz, Story, Game, or Simulation)
@@ -103,6 +109,8 @@ class ContentWriterAgent(StatefulAgent):
     async def generate(self, **kwargs) -> Dict[str, Any]:
         """Convenience method for direct content generation.
 
+        This is the main public API for generating content.
+
         Args:
             **kwargs: Parameters for content generation (topic, num_questions, etc.)
 
@@ -111,11 +119,10 @@ class ContentWriterAgent(StatefulAgent):
         """
         self.update_parameters(kwargs)
 
-        # Create a simple task for generation
         task = AgentTask(
             task_id="generate",
             agent_role=self.agent_config.role,
-            prompt=f"Generate content about {{topic}}",
+            prompt="Generate content about {topic}",
             parameters=kwargs,
             output_key="content",
         )

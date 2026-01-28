@@ -14,7 +14,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "examples"))
 
 from interactive_demo import InteractiveDemo
-from adk_agentic_writer.agents.static.quiz_writer import StaticQuizWriterAgent
+from adk_agentic_writer.agents.static.writer import StaticQuizWriterAgent
 from adk_agentic_writer.teams.content_team import QUIZ_WRITER, QUIZ_WRITERS_POOL
 
 

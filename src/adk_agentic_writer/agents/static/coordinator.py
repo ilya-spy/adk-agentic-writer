@@ -1,84 +1,73 @@
 """Static coordinator agent for orchestrating content generation.
 
-Coordinates specialized agents for content generation.
-Inherits from StatefulAgent for unified structure.
+Coordinates unified WriterAgent and DesignerAgent for content generation.
+Uses ContentRegistry for extensible content type support.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from ...models.agent_models import AgentConfig, AgentRole, AgentTask
 from ...teams.content_team import CONTENT_WRITER, ContentRole
 from ..stateful_agent import StatefulAgent
-from .game_designer import GameDesignerAgent
-from .quiz_writer import StaticQuizWriterAgent
-from .reviewer import ReviewerAgent
-from .simulation_designer import SimulationDesignerAgent
-from .story_writer import StoryWriterAgent
+from ...utils.content_registry import CONTENT_REGISTRY
+from .writer import WriterAgent
+from .designer import DesignerAgent
 
 logger = logging.getLogger(__name__)
-
-# Content type to agent mapping
-CONTENT_TYPE_MAP = {
-    "quiz": StaticQuizWriterAgent,
-    "story": StoryWriterAgent,
-    "branched_narrative": StoryWriterAgent,
-    "game": GameDesignerAgent,
-    "quest_game": GameDesignerAgent,
-    "simulation": SimulationDesignerAgent,
-    "web_simulation": SimulationDesignerAgent,
-}
 
 
 class CoordinatorAgent(StatefulAgent):
     """Static coordinator for content generation.
 
-    Provides:
-    - Task routing to specialized agents
-    - Content generation coordination
-    - Simple workflow support
+    Uses unified WriterAgent and DesignerAgent with ContentRegistry
+    for extensible content type support.
     """
 
     def __init__(self, agent_id: str = "static_coordinator"):
-        """Initialize coordinator with specialized agents.
-
-        Args:
-            agent_id: Unique agent identifier
-        """
+        """Initialize coordinator with unified agents."""
         super().__init__(agent_id=agent_id, config=CONTENT_WRITER)
 
-        # Initialize specialized agents
-        self.quiz_agent = StaticQuizWriterAgent("quiz_writer")
-        self.story_agent = StoryWriterAgent("story_writer")
-        self.game_agent = GameDesignerAgent("game_designer")
-        self.simulation_agent = SimulationDesignerAgent("simulation_designer")
-        self.reviewer_agent = ReviewerAgent("reviewer")
+        # Unified agents - one per category
+        self._writer = WriterAgent("writer")
+        self._designer = DesignerAgent("designer")
 
-        # Build agent registry
-        self.agent_registry = {
+        # Cache for content-type-specific agent instances
+        self._agents: Dict[str, Any] = {}
+
+        logger.info(f"Initialized CoordinatorAgent {agent_id}")
+
+    # Agent properties
+    @property
+    def quiz_agent(self):
+        return self._get_agent_for_type("quiz")
+
+    @property
+    def story_agent(self):
+        return self._get_agent_for_type("story")
+
+    @property
+    def game_agent(self):
+        return self._get_agent_for_type("game")
+
+    @property
+    def simulation_agent(self):
+        return self._get_agent_for_type("simulation")
+
+    @property
+    def agent_registry(self) -> Dict[str, Any]:
+        """Get agent registry."""
+        return {
             ContentRole.QUIZ_WRITER.value: self.quiz_agent,
             ContentRole.STORY_WRITER.value: self.story_agent,
             ContentRole.GAME_WRITER.value: self.game_agent,
             ContentRole.SIMULATION_WRITER.value: self.simulation_agent,
-            "reviewer": self.reviewer_agent,
         }
-
-        logger.info(f"Initialized CoordinatorAgent {agent_id} with specialized agents")
 
     async def _execute_task(
         self, task: AgentTask, resolved_prompt: str
     ) -> Dict[str, Any]:
-        """Execute coordinator task.
-
-        Routes to appropriate agent based on content type.
-
-        Args:
-            task: Task to execute
-            resolved_prompt: Resolved prompt string
-
-        Returns:
-            Task result dictionary
-        """
+        """Execute coordinator task."""
         context = self.prepare_task_context(task)
         content_type = context.get("content_type", "quiz")
 
@@ -89,20 +78,11 @@ class CoordinatorAgent(StatefulAgent):
     async def _generate_content(
         self, content_type: str, context: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Generate content using appropriate agent.
-
-        Args:
-            content_type: Type of content to generate
-            context: Generation parameters
-
-        Returns:
-            Generated content dictionary
-        """
+        """Generate content using appropriate agent."""
         agent = self._get_agent_for_type(content_type)
         if not agent:
             return {"error": f"Unknown content type: {content_type}"}
 
-        # Create task for the agent (use AgentRole.WRITER for all content tasks)
         gen_task = AgentTask(
             task_id="generate",
             agent_role=AgentRole.WRITER,
@@ -123,102 +103,38 @@ class CoordinatorAgent(StatefulAgent):
     async def generate_content(
         self, content_type: str, topic: str, **parameters
     ) -> Dict[str, Any]:
-        """Public API for content generation.
-
-        Args:
-            content_type: Type of content
-            topic: Content topic
-            **parameters: Additional parameters
-
-        Returns:
-            Generated content dictionary
-        """
+        """Public API for content generation."""
         context = {"topic": topic, "content_type": content_type, **parameters}
         return await self._generate_content(content_type, context)
 
-    async def generate_and_review(
-        self, content_type: str, topic: str, **parameters
-    ) -> Dict[str, Any]:
-        """Generate content and review it.
-
-        Args:
-            content_type: Type of content
-            topic: Content topic
-            **parameters: Additional parameters
-
-        Returns:
-            Result with content and review
-        """
-        # Generate
-        gen_result = await self.generate_content(content_type, topic, **parameters)
-
-        if "error" in gen_result:
-            return gen_result
-
-        content = gen_result.get("content", {})
-
-        # Review
-        review_task = AgentTask(
-            task_id="review_content",
-            agent_role=AgentRole.REVIEWER,
-            prompt="Review content",
-            parameters={"content": content, "content_type": content_type},
-            output_key="review",
-        )
-
-        review_result = await self.reviewer_agent.process_task(review_task)
-
-        return {
-            "content_type": content_type,
-            "content": content,
-            "review": review_result,
-            "agents_involved": [
-                gen_result.get("agent_used"),
-                self.reviewer_agent.agent_id,
-            ],
-            "status": "completed",
-        }
-
-    def _get_agent_for_type(self, content_type: str) -> Optional[StatefulAgent]:
-        """Get agent for content type.
-
-        Args:
-            content_type: Type of content
-
-        Returns:
-            Agent instance or None
-        """
-        # Normalize content type
+    def _get_agent_for_type(self, content_type: str) -> Optional[Any]:
+        """Get or create agent for content type using registry."""
         content_type = content_type.lower().replace(" ", "_")
 
-        # Direct mapping
-        type_to_agent = {
-            "quiz": self.quiz_agent,
-            "story": self.story_agent,
-            "branched_narrative": self.story_agent,
-            "game": self.game_agent,
-            "quest_game": self.game_agent,
-            "simulation": self.simulation_agent,
-            "web_simulation": self.simulation_agent,
-        }
+        if content_type in self._agents:
+            return self._agents[content_type]
 
-        return type_to_agent.get(content_type)
+        config = CONTENT_REGISTRY.get(content_type)
+        if not config:
+            return None
 
-    def get_registered_agents(self) -> Dict[str, str]:
-        """Get summary of registered agents.
+        if config.category == "writer":
+            agent = WriterAgent(
+                agent_id=f"{content_type}_writer",
+                content_type=content_type,
+            )
+        else:
+            agent = DesignerAgent(
+                agent_id=f"{content_type}_designer",
+                content_type=content_type,
+            )
 
-        Returns:
-            Dict of role -> agent_id
-        """
-        return {role: agent.agent_id for role, agent in self.agent_registry.items()}
+        self._agents[content_type] = agent
+        return agent
 
-    def _get_reviewer(self) -> ReviewerAgent:
-        """Get the reviewer agent instance.
-
-        Returns:
-            ReviewerAgent instance
-        """
-        return self.reviewer_agent
+    def get_supported_content_types(self) -> list:
+        """Get list of supported content types from registry."""
+        return CONTENT_REGISTRY.list_types()
 
 
 __all__ = ["CoordinatorAgent"]
