@@ -35,18 +35,20 @@ from adk_agentic_writer.models.agent_models import AgentStatus
 async def test_static_coordinator_initialization():
     """Test static coordinator initialization."""
     coordinator = CoordinatorAgent()
-    # Agents auto-registered via runtime in __init__
 
-    assert coordinator.agent_id == "coordinator"
-    assert len(coordinator.runtime.agents) >= 0
-    assert len(coordinator.runtime.teams) == 4  # 4 content teams
+    # Default agent_id is now "static_coordinator"
+    assert coordinator.agent_id == "static_coordinator"
+    # Coordinator has specialized agents registered
+    assert coordinator.quiz_agent is not None
+    assert coordinator.story_agent is not None
+    assert coordinator.game_agent is not None
+    assert coordinator.simulation_agent is not None
 
 
 @pytest.mark.asyncio
 async def test_static_quiz_generation():
     """Test quiz generation with static team."""
     coordinator = CoordinatorAgent()
-    # Agents auto-registered via runtime
 
     # Use modern interface with generate_content
     result = await coordinator.generate_content(
@@ -58,30 +60,32 @@ async def test_static_quiz_generation():
     assert result is not None
     assert "content" in result
     content = result["content"]
-    assert "title" in content or "questions" in content
+    assert "title" in content
+    assert "questions" in content
+    assert len(content["questions"]) == 3
 
 
 @pytest.mark.asyncio
 async def test_static_story_generation():
     """Test story generation with static team."""
     coordinator = CoordinatorAgent()
-    # Agents auto-registered via runtime
 
-    # Use modern interface with generate_content
     result = await coordinator.generate_content(
-        content_type="branched_narrative",
+        content_type="story",
         topic="Space Adventure",
-        genre="science fiction",
-        num_nodes=5,
+        genre="sci-fi",
     )
 
     assert result is not None
     assert "content" in result
     content = result["content"]
-    assert "title" in content or "nodes" in content
+    assert "title" in content
+    assert "nodes" in content
+    # Should have start node at minimum
+    assert "start" in content["nodes"]
 
 
-# Gemini Team Tests (require API key)
+# Gemini Team Tests
 
 
 @pytest.fixture
@@ -95,7 +99,7 @@ def api_key():
 
 @pytest.mark.asyncio
 @pytest.mark.slow
-async def test_gemini_coordinator_initialization(api_key):
+async def test_gemini_coordinator_initialization():
     """Test Gemini coordinator initialization."""
     try:
         from adk_agentic_writer.agents.gemini import (
@@ -107,8 +111,8 @@ async def test_gemini_coordinator_initialization(api_key):
         coordinator.register_agent(GeminiQuizWriterAgent())
 
         assert coordinator.agent_id == "gemini_coordinator"
-        assert coordinator.adk_agent is not None
-        assert coordinator.runner is not None
+        # Check agent is registered
+        assert len(coordinator.agent_registry) > 0
     except ImportError as e:
         pytest.skip(f"Google ADK not installed: {e}")
 

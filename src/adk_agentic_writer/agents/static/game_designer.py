@@ -1,351 +1,164 @@
-"""Game designer agent implementing ContentProtocol with StatefulAgent framework.
+"""Static game designer agent.
 
-This agent generates quest-based games using:
-- StatefulAgent: For variable/parameter management
-- Tasks: Predefined content generation tasks
-- ContentProtocol: Standard content generation methods
+Generates quest games using template-based text generation.
+Inherits from ContentWriterAgent for unified structure.
 """
 
 import logging
-import random
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-from ...agents.stateful_agent import StatefulAgent
-from ...models.agent_models import AgentTask, AgentStatus
 from ...models.content_models import QuestGame, QuestNode
-from ...protocols.content_protocol import ContentBlock, ContentBlockType, ContentPattern
 from ...teams.content_team import GAME_WRITER
+from ..content_writer import ContentWriterAgent
+from ..text_provider import TemplateTextProvider
 
 logger = logging.getLogger(__name__)
 
-# Game templates
-GAME_INTROS = [
-    "Welcome to the world of {topic}! Your quest begins here.",
-    "The realm of {topic} awaits your arrival. Are you ready?",
-    "A new adventure in {topic} starts now. Prepare yourself!",
-]
 
-QUEST_DESCRIPTIONS = {
-    "explore": "You explore the mysteries of {topic}, discovering new paths forward.",
-    "combat": "You face challenges related to {topic}, testing your skills.",
-    "puzzle": "A puzzle about {topic} blocks your way. Can you solve it?",
-    "treasure": "You've found valuable knowledge about {topic}!",
-}
+class GameDesignerAgent(ContentWriterAgent):
+    """Static game designer using template-based generation.
 
-VICTORY_MESSAGES = [
-    "Congratulations! You've mastered {topic} and completed the quest!",
-    "Victory! Your journey through {topic} has reached a triumphant end!",
-    "Quest complete! You are now an expert in {topic}!",
-]
-
-
-class GameDesignerAgent(StatefulAgent):
-    """Game designer agent using StatefulAgent framework.
-
-    Implements:
-    - AgentProtocol: process_task, update_status
-    - ContentProtocol: generate_block, generate_sequential_blocks, etc.
+    Generates quest-based games with:
+    - Multiple quest nodes and choices
+    - Rewards and requirements
+    - Victory conditions
     """
 
     def __init__(self, agent_id: str = "game_designer"):
-        """Initialize game designer agent."""
+        """Initialize static game designer.
+
+        Args:
+            agent_id: Unique agent identifier
+        """
         super().__init__(
             agent_id=agent_id,
             config=GAME_WRITER,
+            text_provider=TemplateTextProvider(),
         )
         logger.info(f"Initialized GameDesignerAgent {agent_id}")
 
-    async def _execute_task(
-        self, task: AgentTask, resolved_prompt: str
-    ) -> Dict[str, Any]:
-        """Execute task based on task_id."""
-        # Extract context
-        context = self.prepare_task_context(task)
+    async def _build_content(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Build quest game content.
 
-        if task.task_id == "generate_block":
-            block = await self.generate_block(ContentBlockType.NODE, context)
-            return block.content
-        elif task.task_id == "generate_sequential_blocks":
-            num_blocks = context.get("num_blocks", 3)
-            blocks = await self.generate_sequential_blocks(
-                num_blocks, ContentBlockType.NODE, context
-            )
-            return {"blocks": [b.content for b in blocks]}
-        elif task.task_id == "generate_branched_blocks":
-            branch_points = context.get("branch_points", [])
-            blocks = await self.generate_branched_blocks(branch_points, context)
-            return {"blocks": [b.content for b in blocks]}
-        else:
-            # Default: generate game
-            return await self._generate_game_content(resolved_prompt, context)
+        Args:
+            context: Parameters including topic, complexity, theme
 
-    # ========================================================================
-    # ContentProtocol Implementation
-    # ========================================================================
-
-    async def generate_block(
-        self,
-        block_type: ContentBlockType,
-        context: Dict[str, Any],
-        previous_blocks: Optional[List[ContentBlock]] = None,
-    ) -> ContentBlock:
-        """Generate a single game content block."""
+        Returns:
+            QuestGame dictionary
+        """
         topic = context.get("topic", "adventure")
-        difficulty = context.get("difficulty", "medium")
+        complexity = context.get("complexity", "medium")
+        theme = context.get("theme", "fantasy")
+        num_nodes = context.get("num_nodes", 5)
 
-        game_data = await self._generate_game_data(
-            topic, num_nodes=5, difficulty=difficulty
-        )
+        logger.info(f"Generating game: {topic}, complexity: {complexity}")
 
-        return ContentBlock(
-            block_id=f"game_{topic.replace(' ', '_')}",
-            block_type=block_type,
-            content=game_data,
-            pattern=ContentPattern.BRANCHED,
-        )
+        nodes = await self._generate_nodes(topic, theme, num_nodes, complexity)
 
-    async def generate_sequential_blocks(
-        self,
-        num_blocks: int,
-        block_type: ContentBlockType,
-        context: Dict[str, Any],
-    ) -> List[ContentBlock]:
-        """Generate sequential game levels."""
-        blocks = []
-        topic = context.get("topic", "adventure")
-
-        for i in range(num_blocks):
-            level_topic = f"{topic} - Level {i+1}"
-            game_data = await self._generate_game_data(
-                level_topic, num_nodes=3, difficulty="medium"
-            )
-
-            block = ContentBlock(
-                block_id=f"level_{i+1}",
-                block_type=block_type,
-                content=game_data,
-                pattern=ContentPattern.SEQUENTIAL,
-                navigation={
-                    "next": f"level_{i+2}" if i < num_blocks - 1 else None,
-                    "prev": f"level_{i}" if i > 0 else None,
-                },
-            )
-            blocks.append(block)
-
-        return blocks
-
-    async def generate_looped_blocks(
-        self,
-        num_blocks: int,
-        block_type: ContentBlockType,
-        context: Dict[str, Any],
-        exit_condition: Dict[str, Any],
-        allow_back: bool = True,
-    ) -> List[ContentBlock]:
-        """Generate looped game blocks (e.g., endless mode)."""
-        blocks = []
-        topic = context.get("topic", "adventure")
-
-        for i in range(num_blocks):
-            game_data = await self._generate_game_data(
-                topic, num_nodes=3, difficulty="medium"
-            )
-
-            block = ContentBlock(
-                block_id=f"round_{i+1}",
-                block_type=block_type,
-                content=game_data,
-                pattern=ContentPattern.LOOPED,
-                navigation={
-                    "next": f"round_{(i+1) % num_blocks + 1}",
-                    "prev": f"round_{i}" if allow_back and i > 0 else None,
-                    "exit": "check_exit_condition",
-                },
-                exit_condition=exit_condition,
-            )
-            blocks.append(block)
-
-        return blocks
-
-    async def generate_branched_blocks(
-        self,
-        branch_points: List[Dict[str, Any]],
-        context: Dict[str, Any],
-    ) -> List[ContentBlock]:
-        """Generate branched game quest blocks."""
-        blocks = []
-        topic = context.get("topic", "adventure")
-
-        # Generate full game with branches
-        game_data = await self._generate_game_data(
-            topic, num_nodes=7, difficulty="medium"
-        )
-        nodes = game_data["nodes"]
-
-        # Convert nodes to content blocks
-        for node_id, node in nodes.items():
-            choices = [
-                {"text": choice["text"], "next_block": choice["next_node_id"]}
-                for choice in node.get("choices", [])
-            ]
-
-            block = ContentBlock(
-                block_id=node_id,
-                block_type=ContentBlockType.NODE,
-                content={"description": node["description"], "node": node},
-                pattern=ContentPattern.BRANCHED,
-                choices=choices,
-            )
-            blocks.append(block)
-
-        return blocks
-
-    async def generate_conditional_blocks(
-        self,
-        blocks_config: List[Dict[str, Any]],
-        context: Dict[str, Any],
-    ) -> List[ContentBlock]:
-        """Generate conditional game blocks (e.g., bonus levels)."""
-        blocks = []
-        topic = context.get("topic", "adventure")
-
-        for config in blocks_config:
-            condition = config.get("condition", {})
-            game_data = await self._generate_game_data(
-                topic, num_nodes=3, difficulty="hard"
-            )
-
-            block = ContentBlock(
-                block_id=config.get("block_id", f"bonus_{len(blocks)}"),
-                block_type=ContentBlockType.NODE,
-                content=game_data,
-                pattern=ContentPattern.CONDITIONAL,
-                metadata={"display_condition": condition},
-            )
-            blocks.append(block)
-
-        return blocks
-
-    # ========================================================================
-    # Helper Methods
-    # ========================================================================
-
-    async def _generate_game_content(
-        self, resolved_prompt: str, context: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Generate game content from resolved prompt."""
-        topic = context.get("topic", "adventure")
-        num_nodes = context.get("num_nodes", 7)
-        difficulty = context.get("difficulty", "medium")
-
-        return await self._generate_game_data(topic, num_nodes, difficulty)
-
-    async def _generate_game_data(
-        self, topic: str, num_nodes: int, difficulty: str
-    ) -> Dict[str, Any]:
-        """Generate quest game data."""
-        logger.info(
-            f"Generating game: {topic}, nodes: {num_nodes}, difficulty: {difficulty}"
-        )
-
-        # Generate quest nodes
-        nodes = {}
-
-        # Starting node
-        intro = random.choice(GAME_INTROS).format(topic=topic)
-        nodes["start"] = QuestNode(
-            node_id="start",
-            title="Quest Begins",
-            description=intro,
-            choices=[
-                {"text": "Begin exploration", "next_node_id": "explore_1"},
-                {"text": "Seek information", "next_node_id": "explore_2"},
-            ],
-            rewards=[],
-            requirements=[],
-        ).model_dump()
-
-        # Exploration nodes
-        if num_nodes >= 3:
-            nodes["explore_1"] = QuestNode(
-                node_id="explore_1",
-                title="Exploration Path",
-                description=QUEST_DESCRIPTIONS["explore"].format(topic=topic),
-                choices=[
-                    {"text": "Face the challenge", "next_node_id": "combat"},
-                    {"text": "Solve the puzzle", "next_node_id": "puzzle"},
-                ],
-                rewards=["experience_10", "knowledge_5"],
-                requirements=[],
-            ).model_dump()
-
-            nodes["explore_2"] = QuestNode(
-                node_id="explore_2",
-                title="Alternative Route",
-                description=QUEST_DESCRIPTIONS["explore"].format(topic=topic),
-                choices=[
-                    {"text": "Continue quest", "next_node_id": "treasure"},
-                ],
-                rewards=["experience_10"],
-                requirements=[],
-            ).model_dump()
-
-        # Challenge nodes
-        if num_nodes >= 5:
-            nodes["combat"] = QuestNode(
-                node_id="combat",
-                title="Combat Challenge",
-                description=QUEST_DESCRIPTIONS["combat"].format(topic=topic),
-                choices=[
-                    {"text": "Claim victory", "next_node_id": "victory"},
-                ],
-                rewards=["experience_25", "skill_10"],
-                requirements=["experience_10"],
-            ).model_dump()
-
-            nodes["puzzle"] = QuestNode(
-                node_id="puzzle",
-                title="Puzzle Challenge",
-                description=QUEST_DESCRIPTIONS["puzzle"].format(topic=topic),
-                choices=[
-                    {"text": "Find treasure", "next_node_id": "treasure"},
-                ],
-                rewards=["knowledge_20"],
-                requirements=[],
-            ).model_dump()
-
-            nodes["treasure"] = QuestNode(
-                node_id="treasure",
-                title="Treasure Found",
-                description=QUEST_DESCRIPTIONS["treasure"].format(topic=topic),
-                choices=[
-                    {"text": "Complete quest", "next_node_id": "victory"},
-                ],
-                rewards=["treasure_100", "experience_15"],
-                requirements=[],
-            ).model_dump()
-
-        # Victory node
-        nodes["victory"] = QuestNode(
-            node_id="victory",
-            title="Victory!",
-            description=random.choice(VICTORY_MESSAGES).format(topic=topic),
-            choices=[],
-            rewards=["mastery_100"],
-            requirements=[],
-        ).model_dump()
-
-        # Create game
         game = QuestGame(
-            title=f"Quest for {topic.title()}",
+            title=f"{topic.title()} Quest",
             description=f"An interactive quest game about {topic}",
             start_node="start",
             nodes=nodes,
-            victory_conditions=["reach_victory_node"],
-            metadata={"difficulty": difficulty},
+            victory_conditions=[f"Complete all quests to master {topic}"],
         )
 
         return game.model_dump()
+
+    async def _generate_nodes(
+        self, topic: str, theme: str, num_nodes: int, complexity: str
+    ) -> Dict[str, QuestNode]:
+        """Generate game quest nodes.
+
+        Args:
+            topic: Game topic
+            theme: Game theme
+            num_nodes: Number of nodes
+            complexity: Quest complexity
+
+        Returns:
+            Dictionary of node_id -> QuestNode
+        """
+        nodes = {}
+        ctx = {"topic": topic, "theme": theme}
+
+        # Start node
+        quest_title = await self._generate_text("game_quest", ctx)
+        nodes["start"] = QuestNode(
+            node_id="start",
+            title=quest_title,
+            description=f"Begin your journey into {topic}. Choose your path wisely.",
+            choices=[
+                {"text": "Explore the basics", "next_node_id": "basics"},
+                {"text": "Take on a challenge", "next_node_id": "challenge"},
+            ],
+            rewards=[],
+            requirements=[],
+        )
+
+        # Basics node
+        if num_nodes >= 3:
+            obj_text = await self._generate_text(
+                "game_objective", {**ctx, "aspect": "fundamentals"}
+            )
+            nodes["basics"] = QuestNode(
+                node_id="basics",
+                title="Learning the Basics",
+                description=obj_text,
+                choices=[
+                    {
+                        "text": "Continue to intermediate",
+                        "next_node_id": "intermediate",
+                    },
+                    {"text": "Try the challenge", "next_node_id": "challenge"},
+                ],
+                rewards=["Basic Knowledge", "50 XP"],
+                requirements=[],
+            )
+
+        # Challenge node
+        if num_nodes >= 4:
+            obj_text = await self._generate_text(
+                "game_objective", {**ctx, "aspect": "challenges"}
+            )
+            nodes["challenge"] = QuestNode(
+                node_id="challenge",
+                title="The Challenge",
+                description=obj_text,
+                choices=[
+                    {"text": "Proceed to mastery", "next_node_id": "mastery"},
+                ],
+                rewards=["Challenge Badge", "100 XP"],
+                requirements=["Basic Knowledge"] if complexity != "simple" else [],
+            )
+
+        # Intermediate node (for medium/complex)
+        if num_nodes >= 5 and complexity in ["medium", "complex"]:
+            obj_text = await self._generate_text(
+                "game_objective", {**ctx, "aspect": "intermediate concepts"}
+            )
+            nodes["intermediate"] = QuestNode(
+                node_id="intermediate",
+                title="Intermediate Level",
+                description=obj_text,
+                choices=[
+                    {"text": "Advance to mastery", "next_node_id": "mastery"},
+                ],
+                rewards=["Intermediate Badge", "150 XP"],
+                requirements=["Basic Knowledge"],
+            )
+
+        # Mastery node (ending)
+        nodes["mastery"] = QuestNode(
+            node_id="mastery",
+            title=f"Mastery of {topic.title()}",
+            description=f"Congratulations! You have achieved mastery in {topic}.",
+            choices=[],
+            rewards=[f"{topic.title()} Master Badge", "500 XP"],
+            requirements=["Challenge Badge"] if complexity != "simple" else [],
+        )
+
+        return nodes
 
 
 __all__ = ["GameDesignerAgent"]
