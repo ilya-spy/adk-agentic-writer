@@ -7,7 +7,6 @@ TextProvider abstracts text generation:
 
 import logging
 import random
-from abc import ABC, abstractmethod
 from typing import Any, Dict, Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
@@ -142,8 +141,6 @@ class TemplateTextProvider:
         Returns:
             Generated text
         """
-        topic = context.get("topic", "the subject")
-
         generators = {
             "quiz_question": self._generate_quiz_question,
             "quiz_option": self._generate_quiz_option,
@@ -251,7 +248,6 @@ class GeminiTextProvider:
             Generated text
         """
         # TODO: Implement ADK LLM call
-        # For now, use fallback templates
         if self._adk_agent is None:
             logger.debug(f"Using template fallback for {prompt_key}")
             return await self._fallback.generate_text(prompt_key, context)
@@ -264,15 +260,7 @@ class GeminiTextProvider:
         return await self._fallback.generate_text(prompt_key, context)
 
     def _build_prompt(self, prompt_key: str, context: Dict[str, Any]) -> str:
-        """Build LLM prompt for text generation.
-
-        Args:
-            prompt_key: Type of content to generate
-            context: Context variables
-
-        Returns:
-            Formatted prompt string
-        """
+        """Build LLM prompt for text generation."""
         topic = context.get("topic", "the subject")
 
         prompts = {

@@ -3,70 +3,71 @@
 # Base agent classes
 from .base_agent import BaseAgent
 from .stateful_agent import StatefulAgent
-from .content_writer import ContentWriterAgent
-from .text_provider import TextProvider, TemplateTextProvider, GeminiTextProvider
+from .content_agent import ContentWriterAgent
 
-# Protocols (imported from protocols package)
-from ..protocols import AgentProtocol, EditorialProtocol
-
-# Static agents (template-based)
-from .static import (
-    CoordinatorAgent,
-    GameDesignerAgent,
-    StaticQuizWriterAgent,
-    ReviewerAgent,
-    SimulationDesignerAgent,
-    StoryWriterAgent,
+# Utilities (from utils)
+from ..utils.text_provider import TextProvider, TemplateTextProvider, GeminiTextProvider
+from ..utils.content_registry import (
+    CONTENT_REGISTRY,
+    ContentTypeConfig,
+    ContentRegistry,
 )
 
-# Gemini-powered agents (AI-based using Google ADK)
-# These are optional and require google.adk package
-try:
-    from .gemini import (
-        GeminiCoordinatorAgent,
-        GeminiGameDesignerAgent,
-        GeminiQuizWriterAgent,
-        GeminiReviewerAgent,
-        GeminiSimulationDesignerAgent,
-        GeminiStoryWriterAgent,
-        SupportedTask,
-    )
+# Protocols
+from ..protocols import AgentProtocol
 
-    _GEMINI_AVAILABLE = True
-except ImportError:
-    # Gemini agents not available (google.adk not installed)
-    _GEMINI_AVAILABLE = False
-    GeminiCoordinatorAgent = None
-    GeminiGameDesignerAgent = None
-    GeminiQuizWriterAgent = None
-    GeminiReviewerAgent = None
-    GeminiSimulationDesignerAgent = None
-    GeminiStoryWriterAgent = None
-    SupportedTask = None
+# Static agents (primary implementation)
+from .static import (
+    CoordinatorAgent,
+    WriterAgent,
+    DesignerAgent,
+    StaticQuizWriterAgent,
+    StoryWriterAgent,
+    GameDesignerAgent,
+    SimulationDesignerAgent,
+)
+
+# Gemini agents (stubs - ADK integration pending)
+from .gemini import (
+    GeminiCoordinatorAgent,
+    GeminiWriterAgent,
+    GeminiDesignerAgent,
+    GeminiQuizWriterAgent,
+    GeminiStoryWriterAgent,
+    GeminiGameDesignerAgent,
+    GeminiSimulationDesignerAgent,
+    SupportedTask,
+)
 
 __all__ = [
-    # Base agent classes and protocols
+    # Base classes
     "BaseAgent",
     "StatefulAgent",
     "ContentWriterAgent",
+    # Utilities
     "TextProvider",
     "TemplateTextProvider",
     "GeminiTextProvider",
+    "CONTENT_REGISTRY",
+    "ContentTypeConfig",
+    "ContentRegistry",
+    # Protocols
     "AgentProtocol",
-    "EditorialProtocol",
-    # Static agents (template-based)
+    # Static agents
+    "CoordinatorAgent",
+    "WriterAgent",
+    "DesignerAgent",
     "StaticQuizWriterAgent",
     "StoryWriterAgent",
     "GameDesignerAgent",
     "SimulationDesignerAgent",
-    "ReviewerAgent",
-    "CoordinatorAgent",
-    # Gemini agents (AI-powered using Google ADK)
+    # Gemini agents (stubs)
     "GeminiCoordinatorAgent",
-    "SupportedTask",
+    "GeminiWriterAgent",
+    "GeminiDesignerAgent",
     "GeminiQuizWriterAgent",
     "GeminiStoryWriterAgent",
     "GeminiGameDesignerAgent",
     "GeminiSimulationDesignerAgent",
-    "GeminiReviewerAgent",
+    "SupportedTask",
 ]

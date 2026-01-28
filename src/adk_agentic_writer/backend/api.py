@@ -19,7 +19,6 @@ from ..agents.static import (
     StoryWriterAgent,
     GameDesignerAgent,
     SimulationDesignerAgent,
-    ReviewerAgent as StaticReviewer,
 )
 from ..models import ContentType
 
@@ -30,22 +29,15 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Gemini agents are optional
-try:
-    from ..agents.gemini import (
-        GeminiCoordinatorAgent,
-        GeminiQuizWriterAgent,
-        GeminiStoryWriterAgent,
-        GeminiGameDesignerAgent,
-        GeminiSimulationDesignerAgent,
-        GeminiReviewerAgent,
-        SupportedTask,
-    )
-
-    GEMINI_AVAILABLE = True
-except ImportError:
-    GEMINI_AVAILABLE = False
-    logger.warning("Gemini agents not available (google.adk not installed)")
+# Gemini agents (stubs for now)
+from ..agents.gemini import (
+    GeminiCoordinatorAgent,
+    GeminiQuizWriterAgent,
+    GeminiStoryWriterAgent,
+    GeminiGameDesignerAgent,
+    GeminiSimulationDesignerAgent,
+    SupportedTask,
+)
 
 # Global agent systems - initialize with empty dicts
 agent_systems: Dict[str, Any] = {
@@ -90,32 +82,11 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to initialize static team: {e}")
         agent_systems["static"]["initialized"] = False
 
-    # Initialize Gemini Team (if available)
-    if GEMINI_AVAILABLE:
-        api_key = os.getenv("GOOGLE_API_KEY")
-        if api_key:
-            try:
-                gemini_coordinator = GeminiCoordinatorAgent(
-                    agent_id="gemini_coordinator"
-                )
-                gemini_coordinator.register_agent(GeminiQuizWriterAgent())
-                gemini_coordinator.register_agent(GeminiStoryWriterAgent())
-                gemini_coordinator.register_agent(GeminiGameDesignerAgent())
-                gemini_coordinator.register_agent(GeminiSimulationDesignerAgent())
-                gemini_coordinator.register_agent(GeminiReviewerAgent())
-
-                agent_systems["gemini"]["coordinator"] = gemini_coordinator
-                agent_systems["gemini"]["initialized"] = True
-                logger.info("Gemini team initialized successfully")
-            except Exception as e:
-                logger.error(f"Failed to initialize gemini team: {e}")
-                agent_systems["gemini"]["initialized"] = False
-        else:
-            logger.warning("No GOOGLE_API_KEY found - Gemini team unavailable")
-            agent_systems["gemini"]["initialized"] = False
-    else:
-        logger.warning("Gemini agents not available (google.adk package not installed)")
-        agent_systems["gemini"]["initialized"] = False
+    # Initialize Gemini Team (disabled for now - ADK integration pending)
+    # Gemini team uses stubs that inherit from static team
+    # Will be enabled when ADK integration is complete
+    logger.info("Gemini team disabled (ADK integration pending)")
+    agent_systems["gemini"]["initialized"] = False
 
     yield
 

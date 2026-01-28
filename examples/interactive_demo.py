@@ -15,7 +15,7 @@ from typing import Dict, List, Optional
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from adk_agentic_writer.agents.static.quiz_writer import StaticQuizWriterAgent
+from adk_agentic_writer.agents.static.writer import StaticQuizWriterAgent
 from adk_agentic_writer.runtime import AgentRuntime
 from adk_agentic_writer.teams.content_team import QUIZ_WRITER, QUIZ_WRITERS_POOL
 
