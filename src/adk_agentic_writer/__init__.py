@@ -3,7 +3,7 @@
 from .agents import CoordinatorAgent
 from .backend import app
 from .models import ContentType
-from .protocols import AgentProtocol, ContentProtocol, EditorialProtocol
+from .protocols import AgentProtocol, EditorialProtocol
 
 __version__ = "0.1.0"
 
@@ -12,6 +12,5 @@ __all__ = [
     "ContentType",
     "app",
     "AgentProtocol",
-    "ContentProtocol",
     "EditorialProtocol",
 ]

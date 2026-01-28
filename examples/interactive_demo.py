@@ -2,13 +2,12 @@
 
 Features:
 - Menu-driven interface
-- Step-by-step wizards for creating agents, teams, tasks, workflows
+- Step-by-step wizards for creating agents, teams
 - Status bar showing system state
-- Interactive quiz generation with multiple patterns
+- Interactive quiz generation
 """
 
 import asyncio
-import json
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -17,13 +16,7 @@ from typing import Dict, List, Optional
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from adk_agentic_writer.agents.static.quiz_writer import StaticQuizWriterAgent
-from adk_agentic_writer.models.agent_models import AgentTask, AgentRole, WorkflowPattern
-from adk_agentic_writer.protocols.content_protocol import (
-    ContentBlockType,
-    ContentPattern,
-)
 from adk_agentic_writer.runtime import AgentRuntime
-from adk_agentic_writer.tasks import content_tasks
 from adk_agentic_writer.teams.content_team import QUIZ_WRITER, QUIZ_WRITERS_POOL
 
 
@@ -48,7 +41,6 @@ class InteractiveDemo:
         print(
             f"Agents: {len(self.agents)} | "
             f"Teams: {len(self.runtime.teams)} | "
-            f"Workflows: {len(self.runtime.workflows)} | "
             f"Generated: {len(self.generated_content)}"
         )
         print("=" * 80)
@@ -157,9 +149,8 @@ class InteractiveDemo:
         print("=" * 80)
 
         team_name = self.get_input("Team name", f"team_{len(self.runtime.teams) + 1}")
-        num_agents = self.get_int("Number of agents in team", 2, 1, 5)
 
-        print(f"\n[INFO] Creating team '{team_name}' with {num_agents} agents...")
+        print(f"\n[INFO] Creating team '{team_name}'...")
 
         team_agents = self.runtime.create_team(
             team_metadata=QUIZ_WRITERS_POOL, agent_configs={"quiz_writer": QUIZ_WRITER}
@@ -172,65 +163,6 @@ class InteractiveDemo:
         print(f"\n[SUCCESS] Team '{team_name}' created with {len(team_agents)} agents!")
         for agent in team_agents:
             print(f"  - {agent.agent_id}")
-
-        input("\nPress Enter to continue...")
-
-    async def wizard_manage_team(self):
-        """Minimal team management: add/remove agents."""
-        self.clear_screen()
-        self.print_status_bar()
-        print("\n[MANAGE] Team")
-        print("=" * 80)
-
-        if not self.runtime.teams:
-            print("\nNo teams available.")
-            input("\nPress Enter to continue...")
-            return
-
-        # Select team
-        team_list = list(self.runtime.teams.items())
-        for i, (name, team) in enumerate(team_list, 1):
-            print(f"  {i}. {name} ({len(team.agent_ids)} agents)")
-
-        choice = self.get_choice(len(team_list))
-        if choice == 0:
-            return
-
-        team_name, team = team_list[choice - 1]
-
-        # Show members
-        print(f"\nMembers: {', '.join(team.agent_ids) or 'None'}")
-
-        # Options
-        print("\n1. Add agent  2. Remove agent")
-        action = self.get_choice(2)
-
-        if action == 1:
-            # Add
-            available = [
-                (aid, a) for aid, a in self.agents.items() if aid not in team.agent_ids
-            ]
-            if not available:
-                print("\nNo available agents.")
-            else:
-                for i, (aid, _) in enumerate(available, 1):
-                    print(f"  {i}. {aid}")
-                agent_choice = self.get_choice(len(available))
-                if agent_choice > 0:
-                    team.agent_ids.append(available[agent_choice - 1][0])
-                    print(f"\nAdded {available[agent_choice - 1][0]}")
-
-        elif action == 2:
-            # Remove
-            if not team.agent_ids:
-                print("\nTeam is empty.")
-            else:
-                for i, aid in enumerate(team.agent_ids, 1):
-                    print(f"  {i}. {aid}")
-                agent_choice = self.get_choice(len(team.agent_ids))
-                if agent_choice > 0:
-                    removed = team.agent_ids.pop(agent_choice - 1)
-                    print(f"\nRemoved {removed}")
 
         input("\nPress Enter to continue...")
 
@@ -259,119 +191,24 @@ class InteractiveDemo:
 
         agent_id, agent = agent_list[agent_choice - 1]
 
-        # Select pattern
-        print("\nContent Pattern:")
-        patterns = [
-            ("Single Block", "single"),
-            ("Sequential Blocks (Linear)", "sequential"),
-            ("Looped Blocks (Practice Mode)", "looped"),
-            ("Branched Blocks (Adaptive)", "branched"),
-            ("Conditional Blocks (Bonus)", "conditional"),
-        ]
-
-        for i, (name, _) in enumerate(patterns, 1):
-            print(f"  {i}. {name}")
-
-        pattern_choice = self.get_choice(len(patterns))
-        if pattern_choice == 0:
-            return
-
-        pattern_name, pattern_type = patterns[pattern_choice - 1]
-
-        # Get pattern-specific parameters
-        num_blocks = 1
-        if pattern_type in ["sequential", "looped", "branched"]:
-            num_blocks = self.get_int("Number of blocks", 3, 1, 10)
-
-        # Generate content
-        print(f"\n[GENERATE] Generating {pattern_name}...")
+        # Generate content using the new generate() method
+        print(f"\n[GENERATE] Generating quiz...")
         print(f"  Agent: {agent_id}")
-        print(f"  Pattern: {pattern_name}")
-        print(f"  Blocks: {num_blocks}")
+        print(f"  Topic: {agent.parameters.get('topic', 'N/A')}")
+        print(f"  Questions: {agent.parameters.get('num_questions', 'N/A')}")
 
         try:
-            if pattern_type == "single":
-                result = await agent.generate_block(
-                    ContentBlockType.QUESTION, agent.parameters
-                )
-                content = {
-                    "block_id": result.block_id,
-                    "pattern": result.pattern.value,
-                    "navigation": result.navigation,
-                    "content": result.content,
-                }
-            elif pattern_type == "sequential":
-                blocks = await agent.generate_sequential_blocks(
-                    num_blocks, ContentBlockType.QUESTION, agent.parameters
-                )
-                content = {
-                    "blocks": [
-                        {
-                            "block_id": b.block_id,
-                            "pattern": b.pattern.value,
-                            "navigation": b.navigation,
-                            "content": b.content,
-                        }
-                        for b in blocks
-                    ]
-                }
-            elif pattern_type == "looped":
-                blocks = await agent.generate_looped_blocks(
-                    num_blocks,
-                    ContentBlockType.QUESTION,
-                    agent.parameters,
-                    {"score": ">=80", "attempts": ">=3"},
-                )
-                content = {
-                    "blocks": [
-                        {
-                            "block_id": b.block_id,
-                            "pattern": b.pattern.value,
-                            "navigation": b.navigation,
-                            "exit_condition": b.exit_condition,
-                            "content": b.content,
-                        }
-                        for b in blocks
-                    ]
-                }
-            elif pattern_type == "branched":
-                blocks = await agent.generate_branched_blocks([], agent.parameters)
-                content = {
-                    "blocks": [
-                        {
-                            "block_id": b.block_id,
-                            "pattern": b.pattern.value,
-                            "navigation": b.navigation,
-                            "choices": b.choices,
-                            "content": b.content,
-                        }
-                        for b in blocks
-                    ]
-                }
-            elif pattern_type == "conditional":
-                blocks = await agent.generate_conditional_blocks(
-                    [{"condition": {"score": ">80"}, "num_questions": 3}],
-                    agent.parameters,
-                )
-                content = {
-                    "blocks": [
-                        {
-                            "block_id": b.block_id,
-                            "pattern": b.pattern.value,
-                            "metadata": b.metadata,
-                            "content": b.content,
-                        }
-                        for b in blocks
-                    ]
-                }
-
-            # Store generated content
-            self.generated_content.append(
-                {"agent": agent_id, "pattern": pattern_name, "content": content}
+            result = await agent.generate(
+                topic=agent.parameters.get("topic", "General"),
+                num_questions=agent.parameters.get("num_questions", 5),
+                difficulty=agent.parameters.get("difficulty", "medium"),
             )
 
+            # Store generated content
+            self.generated_content.append({"agent": agent_id, "content": result})
+
             print(f"\n[SUCCESS] Content generated successfully!")
-            self._display_content_summary(content)
+            self._display_content_summary(result)
 
         except Exception as e:
             print(f"\n[ERROR] Failed to generate content: {e}")
@@ -380,20 +217,10 @@ class InteractiveDemo:
 
     def _display_content_summary(self, content: Dict):
         """Display summary of generated content."""
-        if "blocks" in content:
-            print(f"\n  Generated {len(content['blocks'])} blocks")
-            for i, block in enumerate(content["blocks"], 1):
-                block_data = block.get("content", block)
-                title = block_data.get("title", "N/A")
-                num_q = len(block_data.get("questions", []))
-                pattern = block.get("pattern", "N/A")
-                print(f"    Block {i}: {title} ({num_q} questions, {pattern})")
-        else:
-            block_data = content.get("content", content)
-            title = block_data.get("title", "N/A")
-            num_q = len(block_data.get("questions", []))
-            print(f"\n  Title: {title}")
-            print(f"  Questions: {num_q}")
+        title = content.get("title", "N/A")
+        num_q = len(content.get("questions", []))
+        print(f"\n  Title: {title}")
+        print(f"  Questions: {num_q}")
 
     async def view_agents(self):
         """View all agents."""
@@ -414,8 +241,6 @@ class InteractiveDemo:
                 print(f"  Parameters:")
                 for key, value in params.items():
                     print(f"    - {key}: {value}")
-                print(f"  Completed Tasks: {len(state.completed_tasks)}")
-                print(f"  Variables: {list(state.variables.keys())}")
 
         input("\nPress Enter to continue...")
 
@@ -439,30 +264,6 @@ class InteractiveDemo:
 
         input("\nPress Enter to continue...")
 
-    async def view_tasks(self):
-        """View available tasks."""
-        self.clear_screen()
-        self.print_status_bar()
-        print("\n[VIEW] Available Tasks")
-        print("=" * 80)
-
-        tasks = [
-            ("GENERATE_BLOCK", content_tasks.GENERATE_BLOCK),
-            ("GENERATE_SEQUENTIAL_BLOCKS", content_tasks.GENERATE_SEQUENTIAL_BLOCKS),
-            ("GENERATE_LOOPED_BLOCKS", content_tasks.GENERATE_LOOPED_BLOCKS),
-            ("GENERATE_BRANCHED_BLOCKS", content_tasks.GENERATE_BRANCHED_BLOCKS),
-            ("GENERATE_CONDITIONAL_BLOCKS", content_tasks.GENERATE_CONDITIONAL_BLOCKS),
-        ]
-
-        for name, task in tasks:
-            print(f"\nTask: {name}")
-            print(f"  ID: {task.task_id}")
-            print(f"  Role: {task.agent_role}")
-            print(f"  Output: {task.output_key}")
-            print(f"  Prompt: {task.prompt[:60]}...")
-
-        input("\nPress Enter to continue...")
-
     async def view_generated_content(self):
         """View generated content."""
         self.clear_screen()
@@ -474,7 +275,7 @@ class InteractiveDemo:
             print("\nNo content generated yet.")
         else:
             for i, item in enumerate(self.generated_content, 1):
-                print(f"\n{i}. Agent: {item['agent']} | Pattern: {item['pattern']}")
+                print(f"\n{i}. Agent: {item['agent']}")
                 self._display_content_summary(item["content"])
 
         if self.generated_content:
@@ -497,60 +298,10 @@ class InteractiveDemo:
         item = self.generated_content[index]
         content = item["content"]
 
-        print(f"\n[DETAILS] {item['pattern']} by {item['agent']}")
+        print(f"\n[DETAILS] Quiz by {item['agent']}")
         print("=" * 80)
 
-        if "blocks" in content:
-            for i, block in enumerate(content["blocks"], 1):
-                block_data = block.get("content", block)
-                print(f"\n--- Block {i}: {block.get('block_id', 'N/A')} ---")
-                print(f"Pattern: {block.get('pattern', 'N/A')}")
-
-                # Show navigation
-                if block.get("navigation"):
-                    nav = block["navigation"]
-                    nav_info = []
-                    if nav.get("next"):
-                        nav_info.append(f"next: {nav['next']}")
-                    if nav.get("prev"):
-                        nav_info.append(f"prev: {nav['prev']}")
-                    if nav.get("exit"):
-                        nav_info.append(f"exit: {nav['exit']}")
-                    if nav_info:
-                        print(f"Navigation: {', '.join(nav_info)}")
-
-                # Show choices (branched)
-                if block.get("choices"):
-                    print("Choices:")
-                    for choice in block["choices"]:
-                        print(
-                            f"  - {choice.get('text', 'N/A')} -> {choice.get('next_block', 'N/A')}"
-                        )
-
-                # Show exit condition (looped)
-                if block.get("exit_condition"):
-                    print(f"Exit Condition: {block['exit_condition']}")
-
-                # Show metadata (conditional)
-                if block.get("metadata"):
-                    print(f"Metadata: {block['metadata']}")
-
-                self._print_quiz_details(block_data)
-        else:
-            # Single block
-            block_data = content.get("content", content)
-            print(f"\nBlock ID: {content.get('block_id', 'N/A')}")
-            print(f"Pattern: {content.get('pattern', 'N/A')}")
-            if content.get("navigation"):
-                nav = content["navigation"]
-                nav_info = []
-                if nav.get("next"):
-                    nav_info.append(f"next: {nav['next']}")
-                if nav.get("prev"):
-                    nav_info.append(f"prev: {nav['prev']}")
-                if nav_info:
-                    print(f"Navigation: {', '.join(nav_info)}")
-            self._print_quiz_details(block_data)
+        self._print_quiz_details(content)
 
         input("\nPress Enter to continue...")
 
@@ -580,16 +331,14 @@ class InteractiveDemo:
                 [
                     "Create Agent",
                     "Create Team",
-                    "Manage Team",
                     "Generate Content",
                     "View Agents",
                     "View Teams",
-                    "View Tasks",
                     "View Generated Content",
                 ],
             )
 
-            choice = self.get_choice(8)
+            choice = self.get_choice(6)
 
             if choice == 0:
                 self.running = False
@@ -599,16 +348,12 @@ class InteractiveDemo:
             elif choice == 2:
                 await self.wizard_create_team()
             elif choice == 3:
-                await self.wizard_manage_team()
-            elif choice == 4:
                 await self.wizard_generate_content()
-            elif choice == 5:
+            elif choice == 4:
                 await self.view_agents()
-            elif choice == 6:
+            elif choice == 5:
                 await self.view_teams()
-            elif choice == 7:
-                await self.view_tasks()
-            elif choice == 8:
+            elif choice == 6:
                 await self.view_generated_content()
 
 

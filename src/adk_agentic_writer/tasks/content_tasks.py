@@ -1,4 +1,4 @@
-"""Task definitions for ContentProtocol methods."""
+"""Task definitions for content generation workflows."""
 
 from ..models.agent_models import AgentRole, AgentTask
 

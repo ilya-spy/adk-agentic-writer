@@ -11,14 +11,12 @@ from .content_protocol import (
     ContentBlock,
     ContentBlockType,
     ContentPattern,
-    ContentProtocol,
     AdaptiveContentProtocol,
 )
 from .editorial_protocol import EditorialProtocol
 
 __all__ = [
     "AgentProtocol",
-    "ContentProtocol",
     "ContentBlock",
     "ContentBlockType",
     "ContentPattern",

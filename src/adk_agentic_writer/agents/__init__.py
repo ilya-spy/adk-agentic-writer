@@ -1,11 +1,13 @@
 """Agent modules for the ADK Agentic Writer system."""
 
-# Base agent class
+# Base agent classes
 from .base_agent import BaseAgent
 from .stateful_agent import StatefulAgent
+from .content_writer import ContentWriterAgent
+from .text_provider import TextProvider, TemplateTextProvider, GeminiTextProvider
 
 # Protocols (imported from protocols package)
-from ..protocols import AgentProtocol, EditorialProtocol, ContentProtocol
+from ..protocols import AgentProtocol, EditorialProtocol
 
 # Static agents (template-based)
 from .static import (
@@ -43,12 +45,15 @@ except ImportError:
     SupportedTask = None
 
 __all__ = [
-    # Base agent and protocols
+    # Base agent classes and protocols
     "BaseAgent",
     "StatefulAgent",
+    "ContentWriterAgent",
+    "TextProvider",
+    "TemplateTextProvider",
+    "GeminiTextProvider",
     "AgentProtocol",
     "EditorialProtocol",
-    "ContentProtocol",
     # Static agents (template-based)
     "StaticQuizWriterAgent",
     "StoryWriterAgent",
