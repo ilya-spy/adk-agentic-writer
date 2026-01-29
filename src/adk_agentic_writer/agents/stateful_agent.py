@@ -9,10 +9,12 @@ from typing import Any, Dict, List, Optional
 
 from ..models.agent_models import (
     AgentConfig,
+    AgentModel,
     AgentRole,
     AgentState,
     AgentStatus,
     AgentTask,
+    TeamMetadata,
     WorkflowMetadata,
 )
 from ..utils.variable_substitution import substitute_variables, validate_variables
@@ -40,37 +42,30 @@ class StatefulAgent(BaseAgent):
         self,
         agent_id: str,
         config: AgentConfig,
-        workflows: Optional[List[WorkflowMetadata]] = None,
+        model: AgentModel,
     ):
         """Initialize stateful agent.
 
         Args:
             agent_id: Unique identifier for this agent
             config: Agent configuration with role, instructions, etc.
-            workflows: Available workflows this agent can execute
+            model: Agent model, tools and workflows to use
         """
         # Initialize base agent
         super().__init__(
             agent_id=agent_id,
-            role=(
-                config.role if isinstance(config.role, AgentRole) else AgentRole.WRITER
-            ),
-            config=config.model_dump(),
+            config=config,
+            model=model,
         )
 
-        # Store configuration
-        self.agent_config = config
-        self.workflows = (
-            workflows.append(config.workflows) if workflows else config.workflows or []
+        self.state = AgentState(
+            agent_id=agent_id,
+            status=AgentStatus.IDLE,
         )
-
-        # Initialize stateful storage
-        self.state.variables = {}  # Runtime variables (content_block, feedback, etc.)
-        self.state.metadata["parameters"] = {}  # Configuration parameters
 
         logger.info(
             f"Initialized StatefulAgent {agent_id} with role {config.role} "
-            f"and {len(self.workflows)} workflows"
+            f"and {len(model.workflows)} workflows"
         )
 
     @property
@@ -82,16 +77,6 @@ class StatefulAgent(BaseAgent):
     def variables(self, value: Dict[str, Any]) -> None:
         """Set runtime variables dict."""
         self.state.variables = value
-
-    @property
-    def parameters(self) -> Dict[str, Any]:
-        """Get configuration parameters dict."""
-        return self.state.metadata.get("parameters", {})
-
-    @parameters.setter
-    def parameters(self, value: Dict[str, Any]) -> None:
-        """Set configuration parameters dict."""
-        self.state.metadata["parameters"] = value
 
     def set_variable(self, key: str, value: Any) -> None:
         """Set a runtime variable.
@@ -115,30 +100,6 @@ class StatefulAgent(BaseAgent):
         """
         return self.state.variables.get(key, default)
 
-    def set_parameter(self, key: str, value: Any) -> None:
-        """Set a configuration parameter.
-
-        Args:
-            key: Parameter name
-            value: Parameter value
-        """
-        params = self.state.metadata.get("parameters", {})
-        params[key] = value
-        self.state.metadata["parameters"] = params
-        logger.debug(f"Agent {self.agent_id} set parameter '{key}'")
-
-    def get_parameter(self, key: str, default: Any = None) -> Any:
-        """Get a configuration parameter.
-
-        Args:
-            key: Parameter name
-            default: Default value if not found
-
-        Returns:
-            Parameter value or default
-        """
-        return self.parameters.get(key, default)
-
     def update_variables(self, updates: Dict[str, Any]) -> None:
         """Update multiple variables at once.
 
@@ -148,21 +109,15 @@ class StatefulAgent(BaseAgent):
         self.state.variables.update(updates)
         logger.debug(f"Agent {self.agent_id} updated {len(updates)} variables")
 
-    def update_parameters(self, updates: Dict[str, Any]) -> None:
-        """Update multiple parameters at once.
-
-        Args:
-            updates: Dictionary of parameter updates
-        """
-        params = self.state.metadata.get("parameters", {})
-        params.update(updates)
-        self.state.metadata["parameters"] = params
-        logger.debug(f"Agent {self.agent_id} updated {len(updates)} parameters")
-
     def clear_variables(self) -> None:
         """Clear all runtime variables."""
         self.state.variables.clear()
         logger.debug(f"Agent {self.agent_id} cleared all variables")
+
+    async def update_status(self, status: AgentStatus) -> None:
+        """Update agent status."""
+        self.state.status = status
+        logger.debug(f"Agent {self.agent_id} status: {status}")
 
     def prepare_task_context(self, task: AgentTask) -> Dict[str, Any]:
         """Prepare context for task execution by merging variables and parameters.
@@ -279,28 +234,6 @@ class StatefulAgent(BaseAgent):
             "prompt": resolved_prompt,
             "status": "completed",
         }
-
-    def get_workflow(self, name: str) -> Optional[WorkflowMetadata]:
-        """Get workflow by name.
-
-        Args:
-            name: Workflow name
-
-        Returns:
-            Workflow metadata or None
-        """
-        for workflow in self.workflows:
-            if workflow.name == name:
-                return workflow
-        return None
-
-    def list_workflows(self) -> List[str]:
-        """List available workflow names.
-
-        Returns:
-            List of workflow names
-        """
-        return [w.name for w in self.workflows]
 
 
 __all__ = ["StatefulAgent"]

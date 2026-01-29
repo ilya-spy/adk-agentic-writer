@@ -1,6 +1,5 @@
 """Data models for interactive content types."""
 
-from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -14,6 +13,50 @@ class ContentType(str, Enum):
     QUEST_GAME = "quest_game"
     BRANCHED_NARRATIVE = "branched_narrative"
     WEB_SIMULATION = "web_simulation"
+
+
+class ContentBlockType(str, Enum):
+    """Types of content blocks that can be generated."""
+
+    SCENE = "scene"
+    CARD = "card"
+    CHAPTER = "chapter"
+    SECTION = "section"
+    SLIDE = "slide"
+    QUESTION = "question"
+    NODE = "node"
+    CUSTOM = "custom"
+
+
+class ContentPattern(str, Enum):
+    """User interaction patterns for content structure."""
+
+    SEQUENTIAL = "sequential"  # Linear progression: A → B → C
+    LOOPED = "looped"  # Repeatable with exit: A ⟲ (until condition) → B
+    BRANCHED = "branched"  # Choice-based: A → [B|C|D]
+    CONDITIONAL = "conditional"  # State-based: Show A if condition met
+    PARALLEL = "parallel"  # Independent sections accessible in any order
+
+
+class ContentBlock(BaseModel):
+    """A single block of content with navigation/interaction metadata."""
+
+    block_id: str = Field(..., description="Unique identifier for this block")
+    block_type: ContentBlockType = Field(..., description="Type of content block")
+    content: Dict[str, Any] = Field(..., description="The actual content data")
+    pattern: ContentPattern = Field(
+        ContentPattern.SEQUENTIAL, description="User interaction pattern"
+    )
+    navigation: Dict[str, Any] = Field(
+        default_factory=dict, description="Navigation controls"
+    )
+    exit_condition: Optional[Dict[str, Any]] = Field(
+        None, description="Exit condition for loops"
+    )
+    choices: List[Dict[str, Any]] = Field(
+        default_factory=list, description="Available choices for branched patterns"
+    )
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Block metadata")
 
 
 class QuizQuestion(BaseModel):

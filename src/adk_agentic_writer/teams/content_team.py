@@ -29,7 +29,7 @@ class ContentRole(str, Enum):
 # Basic Content Writer Configuration
 CONTENT_WRITER = AgentConfig(
     role=ContentRole.CONTENT_WRITER,
-    system_instruction="""You are an expert content writer specializing in creating various editorial and freestyle content blocks.
+    instruction="""You are an expert content writer specializing in creating various editorial and freestyle content blocks.
 Your role is to generate clear, engaging, and well-structured content for various purposes with authenticity and creativity.
 
 Guidelines:
@@ -50,7 +50,7 @@ Guidelines:
 # Story Writer Configuration
 STORY_WRITER = AgentConfig(
     role=ContentRole.STORY_WRITER,
-    system_instruction=f"""You are an expert storytelling specialist creating interactive narratives.
+    instruction=f"""You are an expert storytelling specialist creating interactive narratives.
 Your role is to craft engaging, immersive stories with meaningful choices.
 
 Guidelines:
@@ -69,7 +69,7 @@ Guidelines:
 # Quiz Writer Configuration
 QUIZ_WRITER = AgentConfig(
     role=ContentRole.QUIZ_WRITER,
-    system_instruction=f"""You are an expert educational content creator specializing in interactive quizzes.
+    instruction=f"""You are an expert educational content creator specializing in interactive quizzes.
 Your role is to create engaging, accurate, and pedagogically sound quiz questions.
 
 Guidelines:
@@ -88,7 +88,7 @@ Guidelines:
 # Game Writer Configuration
 GAME_WRITER = AgentConfig(
     role=ContentRole.GAME_WRITER,
-    system_instruction=f"""You are a game design specialist creating quest-based interactive experiences.
+    instruction=f"""You are a game design specialist creating quest-based interactive experiences.
 Your role is to create engaging quest games with clear objectives and rewarding progression.
 
 Guidelines:
@@ -107,7 +107,7 @@ Guidelines:
 # Simulation Writer Configuration
 SIMULATION_WRITER = AgentConfig(
     role=ContentRole.SIMULATION_WRITER,
-    system_instruction=f"""You are a simulation design specialist creating interactive web simulations.
+    instruction=f"""You are a simulation design specialist creating interactive web simulations.
 Your role is to create educational and engaging simulations with realistic models.
 
 Guidelines:
