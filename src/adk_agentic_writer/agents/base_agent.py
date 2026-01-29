@@ -6,84 +6,70 @@ Both static/ and gemini/ agents inherit from this base class.
 import logging
 from typing import Any, Dict, Optional
 
-from ..models.agent_models import AgentRole, AgentState, AgentStatus
+from ..models.agent_models import AgentConfig, AgentModel
 
 logger = logging.getLogger(__name__)
 
 
 class BaseAgent:
-    """Base class for all agents (static and gemini).
+    """Base class for all agents.
 
-    Provides core functionality:
-    - State management
-    - Status updates
-    - Message handling
+    Stores:
+    - id: Agent identifier
+    - config: AgentConfig (role, instruction, temperature)
+    - model: AgentModel (name, tools, parameters, workflows, teams)
 
-    Implements AgentProtocol interface.
-
-    Subclasses should implement:
-    - process_task() - Required by AgentProtocol
-    - EditorialProtocol methods (if applicable)
-    - ContentProtocol methods (if applicable)
+    Subclasses (StatefulAgent) add runtime state management.
     """
 
     def __init__(
-        self, agent_id: str, role: AgentRole, config: Optional[Dict[str, Any]] = None
-    ):
-        """
-        Initialize the base agent.
+        self,
+        agent_id: str,
+        config: AgentConfig,
+        model: AgentModel,
+    ) -> None:
+        """Initialize base agent.
 
         Args:
-            agent_id: Unique identifier for this agent
-            role: Role this agent plays
-            config: Optional configuration dictionary
+            agent_id: Unique identifier
+            config: Agent configuration (role, instruction)
+            model: Agent model (tools, workflows, teams)
         """
-        self.agent_id = agent_id
-        self.role = role
-        self.config = config or {}
-        self.state = AgentState(
-            agent_id=agent_id,
-            role=role,
-            status=AgentStatus.IDLE,
-        )
-        logger.info(f"Initialized agent {agent_id} with role {role}")
+        self.id = agent_id
+        self.config = config
+        self.model = model
 
-    async def update_status(self, status: AgentStatus) -> None:
-        """Update the agent's status.
+        logger.info(f"Initialized BaseAgent {agent_id} with role {config.role}")
 
-        Implements AgentProtocol.
+    @property
+    def agent_id(self) -> str:
+        """Backward-compatible alias for id."""
+        return self.id
 
-        Args:
-            status: New status for the agent
-        """
-        self.state.status = status
-        logger.debug(f"Agent {self.agent_id} status updated to {status}")
+    @property
+    def agent_config(self) -> AgentConfig:
+        """Backward-compatible alias for config."""
+        return self.config
 
-    def get_state(self) -> AgentState:
-        """Get the current state of the agent.
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        """Get parameters from model."""
+        return self.model.parameters
 
-        Implements AgentProtocol.
+    def get_parameter(self, key: str, default: Any = None) -> Any:
+        """Get a parameter value."""
+        return self.parameters.get(key, default)
 
-        Returns:
-            Current agent state
-        """
-        return self.state
+    def update_parameters(self, updates: Dict[str, Any]) -> None:
+        """Update parameters."""
+        self.model.parameters.update(updates)
+        logger.debug(f"Agent {self.id} updated {len(updates)} parameters")
 
     async def receive_message(
         self, message: str, sender: str, data: Optional[Dict[str, Any]] = None
     ) -> Optional[str]:
-        """
-        Receive a message from another agent.
-
-        Args:
-            message: Message content
-            sender: ID of the sending agent
-            data: Optional additional data
-
-        Returns:
-            Optional response message
-        """
-        logger.info(f"Agent {self.agent_id} received message from {sender}: {message}")
+        """Receive a message from another agent."""
+        logger.info(f"Agent {self.id} received message from {sender}: {message}")
         return None
 
 

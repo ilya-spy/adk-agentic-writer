@@ -1,160 +1,93 @@
-"""Protocol defining the interface for adaptive content generation.
+"""Protocols for content generation patterns."""
 
-This module provides:
-- ContentBlockType: Types of content blocks
-- ContentPattern: User interaction patterns
-- ContentBlock: A single content block with metadata
-- AdaptiveContentProtocol: Interface for adaptive content generation
-"""
-
-from enum import Enum
 from typing import Any, Dict, List, Optional, Protocol
 
-
-class ContentBlockType(str, Enum):
-    """Types of content blocks that can be generated."""
-
-    SCENE = "scene"
-    CARD = "card"
-    CHAPTER = "chapter"
-    SECTION = "section"
-    SLIDE = "slide"
-    QUESTION = "question"
-    NODE = "node"
-    CUSTOM = "custom"
+from ..models.content_models import ContentBlock, ContentBlockType
 
 
-class ContentPattern(str, Enum):
-    """User interaction patterns for content structure.
+class ContentProtocol(Protocol):
+    """Protocol for generating structured content blocks."""
 
-    These patterns define how users navigate and consume content.
-    """
-
-    SEQUENTIAL = "sequential"  # Linear progression: A → B → C
-    LOOPED = "looped"  # Repeatable with exit: A ⟲ (until condition) → B
-    BRANCHED = "branched"  # Choice-based: A → [B|C|D]
-    CONDITIONAL = "conditional"  # State-based: Show A if condition met
-    PARALLEL = "parallel"  # Independent sections accessible in any order
-
-
-class ContentBlock:
-    """Represents a single block of content with navigation/interaction metadata.
-
-    Content blocks define both the content and how users interact with it.
-    """
-
-    def __init__(
+    async def generate_block(
         self,
-        block_id: str,
         block_type: ContentBlockType,
-        content: Dict[str, Any],
-        pattern: ContentPattern = ContentPattern.SEQUENTIAL,
-        navigation: Optional[Dict[str, Any]] = None,
-        exit_condition: Optional[Dict[str, Any]] = None,
-        choices: Optional[List[Dict[str, Any]]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-    ):
-        """Initialize a content block.
+        context: Dict[str, Any],
+        previous_blocks: Optional[List[ContentBlock]] = None,
+    ) -> ContentBlock:
+        """Generate a single content block."""
+        ...
 
-        Args:
-            block_id: Unique identifier for this block
-            block_type: Type of content block
-            content: The actual content data
-            pattern: User interaction pattern for this block
-            navigation: Navigation controls (next_block, prev_block, etc.)
-            exit_condition: Condition to exit loop (for looped patterns)
-            choices: Available choices (for branched patterns)
-            metadata: Optional metadata about the block
-        """
-        self.block_id = block_id
-        self.block_type = block_type
-        self.content = content
-        self.pattern = pattern
-        self.navigation = navigation or {}
-        self.exit_condition = exit_condition
-        self.choices = choices or []
-        self.metadata = metadata or {}
+    async def generate_sequential_blocks(
+        self,
+        num_blocks: int,
+        block_type: ContentBlockType,
+        context: Dict[str, Any],
+    ) -> List[ContentBlock]:
+        """Generate sequential blocks (linear navigation)."""
+        ...
+
+    async def generate_looped_blocks(
+        self,
+        num_blocks: int,
+        block_type: ContentBlockType,
+        context: Dict[str, Any],
+        exit_condition: Dict[str, Any],
+        allow_back: bool = True,
+    ) -> List[ContentBlock]:
+        """Generate looped blocks (repeat until exit condition)."""
+        ...
+
+    async def generate_branched_blocks(
+        self,
+        branch_points: List[Dict[str, Any]],
+        context: Dict[str, Any],
+    ) -> List[ContentBlock]:
+        """Generate branched blocks (choice-based navigation)."""
+        ...
+
+    async def generate_conditional_blocks(
+        self,
+        blocks_config: List[Dict[str, Any]],
+        context: Dict[str, Any],
+    ) -> List[ContentBlock]:
+        """Generate conditional blocks (state-based display)."""
+        ...
 
 
 class AdaptiveContentProtocol(Protocol):
-    """Protocol for adaptive content generation interface.
-
-    Implemented by ProducerAgent for strategy-based content generation.
-    """
+    """Protocol for adaptive content generation."""
 
     async def analyze_user_behavior(
         self, user_interactions: Dict[str, Any], **kwargs
     ) -> Dict[str, Any]:
-        """Analyze user behavior and generate analysis.
-
-        Args:
-            user_interactions: User interactions data
-            **kwargs: Additional parameters
-
-        Returns:
-            Dict with Analysis of user behavior
-        """
+        """Analyze user behavior."""
         ...
 
     async def adapt_content_strategy(
         self, behavior_analysis: Dict[str, Any], topic: str, **kwargs
     ) -> Dict[str, Any]:
-        """Adapt content generation strategy based on analysis.
-
-        Args:
-            behavior_analysis: Analysis of user behavior or content quality
-            topic: Content topic
-            **kwargs: Additional parameters
-
-        Returns:
-            Updated strategy dict
-        """
+        """Adapt strategy based on analysis."""
         ...
 
     async def generate_adaptive_blocks(
         self, block_type: str, topic: str, num_blocks: int = 3, **kwargs
     ) -> Dict[str, Any]:
-        """Generate blocks using adaptive strategy.
-
-        Args:
-            block_type: Type of content block
-            topic: Content topic
-            num_blocks: Number of blocks to generate
-            **kwargs: Additional parameters
-
-        Returns:
-            Generated adaptive blocks
-        """
+        """Generate blocks using adaptive strategy."""
         ...
 
     async def generate_variant_blocks(
         self, content_type: str, topic: str, num_variants: int = 3, **kwargs
     ) -> Dict[str, Any]:
-        """Generate content variants in parallel and merge.
-
-        Args:
-            content_type: Type of content to generate
-            topic: Content topic
-            num_variants: Number of variants to generate
-            **kwargs: Additional parameters
-
-        Returns:
-            Merged variant results
-        """
+        """Generate content variants and merge."""
         ...
 
     def get_strategy(self) -> Dict[str, Any]:
-        """Get current strategy state.
-
-        Returns:
-            Current strategy dict
-        """
+        """Get current strategy state."""
         ...
 
     def update_strategy(self, updates: Dict[str, Any]) -> None:
-        """Update strategy state.
-
-        Args:
-            updates: Strategy updates to apply
-        """
+        """Update strategy state."""
         ...
+
+
+__all__ = ["ContentProtocol", "AdaptiveContentProtocol"]

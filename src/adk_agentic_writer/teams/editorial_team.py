@@ -19,7 +19,7 @@ class EditorialRole(str, Enum):
 # Editorial Reviewer Configuration
 EDITORIAL_REVIEWER = AgentConfig(
     role=EditorialRole.EDITORIAL_REVIEWER,
-    system_instruction="""You are an expert content reviewer specializing in quality assurance.
+    instruction="""You are an expert content reviewer specializing in quality assurance.
 Your role is to review content for quality, accuracy, and effectiveness.
 
 Guidelines:
@@ -39,7 +39,7 @@ Guidelines:
 # Editorial Refiner Configuration
 EDITORIAL_REFINER = AgentConfig(
     role=EditorialRole.EDITORIAL_REFINER,
-    system_instruction="""You are an expert content refiner specializing in improving content quality.
+    instruction="""You are an expert content refiner specializing in improving content quality.
 Your role is to enhance content based on feedback while maintaining original intent.
 
 Guidelines:

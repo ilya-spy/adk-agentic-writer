@@ -7,7 +7,7 @@ Uses ContentRegistry for extensible content type support.
 import logging
 from typing import Any, Dict, Optional
 
-from ...models.agent_models import AgentConfig, AgentRole, AgentTask
+from ...models.agent_models import AgentConfig, AgentModel, AgentRole, AgentTask
 from ...teams.content_team import CONTENT_WRITER, ContentRole
 from ..stateful_agent import StatefulAgent
 from ...utils.content_registry import CONTENT_REGISTRY
@@ -26,7 +26,8 @@ class CoordinatorAgent(StatefulAgent):
 
     def __init__(self, agent_id: str = "static_coordinator"):
         """Initialize coordinator with unified agents."""
-        super().__init__(agent_id=agent_id, config=CONTENT_WRITER)
+        model = AgentModel(name=agent_id)
+        super().__init__(agent_id=agent_id, config=CONTENT_WRITER, model=model)
 
         # Unified agents - one per category
         self._writer = WriterAgent("writer")

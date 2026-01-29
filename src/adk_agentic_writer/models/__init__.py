@@ -19,6 +19,9 @@ from .agent_models import (
 from .content_models import (
     BranchedNarrative,
     ContentType,
+    ContentBlock,
+    ContentBlockType,
+    ContentPattern,
     QuestGame,
     Quiz,
     WebSimulation,
@@ -56,6 +59,9 @@ __all__ = [
     # Content models
     "BranchedNarrative",
     "ContentType",
+    "ContentBlock",
+    "ContentBlockType",
+    "ContentPattern",
     "QuestGame",
     "Quiz",
     "WebSimulation",

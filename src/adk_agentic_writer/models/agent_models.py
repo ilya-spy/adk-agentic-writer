@@ -99,26 +99,6 @@ class TeamMetadata(BaseModel):
     )
 
 
-class AgentConfig(BaseModel):
-    """Configuration for an agent specialist."""
-
-    role: Union[AgentRole, str, Enum] = Field(
-        ..., description="Agent role (base or team-specific)"
-    )
-    system_instruction: str = Field(..., description="System instruction for the agent")
-    temperature: float = Field(0.7, description="Generation temperature")
-    max_tokens: Optional[int] = Field(None, description="Maximum tokens to generate")
-    output_key: Optional[str] = Field(
-        None, description="Key to store output in session state"
-    )
-    workflows: List[WorkflowMetadata] = Field(
-        default_factory=list, description="Available workflows for this agent"
-    )
-    teams: List[TeamMetadata] = Field(
-        default_factory=list, description="Teams of agents this agent can coordinate"
-    )
-
-
 # ============================================================================
 # Base Agent Models (matching Google GenAI API)
 # ============================================================================
@@ -140,15 +120,17 @@ class AgentModel(BaseModel):
 
     name: str = Field(..., description="Agent name identifier")
     model_name: str = Field("gemini-2.5-flash-lite", description="Model to use")
-    instruction: str = Field(
-        ..., description="System instruction defining agent behavior"
-    )
+
     tools: List[str] = Field(default_factory=list, description="List of tool names")
-    output_key: Optional[str] = Field(
-        None, description="Key to store output in session state"
+    parameters: Dict[str, Any] = Field(
+        default_factory=dict, description="Agent parameters"
     )
-    temperature: float = Field(0.7, description="Generation temperature")
-    max_tokens: Optional[int] = Field(None, description="Maximum tokens to generate")
+    workflows: List[WorkflowMetadata] = Field(
+        default_factory=list, description="Available workflows for this agent"
+    )
+    teams: List[TeamMetadata] = Field(
+        default_factory=list, description="Teams of peers that can execute workflows"
+    )
 
 
 class AgentToolModel(BaseModel):
@@ -189,6 +171,17 @@ class AgentStatus(str, Enum):
     WAITING = "waiting"
     COMPLETED = "completed"
     ERROR = "error"
+
+
+class AgentConfig(BaseModel):
+    """Configuration for an agent specialist."""
+
+    role: Union[AgentRole, str, Enum] = Field(
+        ..., description="Agent role (base or team-specific)"
+    )
+    instruction: str = Field(..., description="System instruction for the agent")
+    temperature: float = Field(0.7, description="Generation temperature")
+    max_tokens: Optional[int] = Field(None, description="Maximum tokens to generate")
 
 
 class AgentMessage(BaseModel):
@@ -245,15 +238,21 @@ class AgentState(BaseModel):
     """Current state of an agent."""
 
     agent_id: str = Field(..., description="Agent identifier")
-    role: AgentRole = Field(..., description="Agent role")
     status: AgentStatus = Field(AgentStatus.IDLE, description="Current status")
     current_task: Optional[str] = Field(None, description="Current task ID")
     completed_tasks: List[str] = Field(
         default_factory=list, description="Completed task IDs"
     )
     variables: Dict[str, Any] = Field(
-        default_factory=dict, description="Runtime variable storage between stages"
+        default_factory=dict,
+        description="Runtime variable storage between stages or workflows",
     )
-    metadata: Dict[str, Any] = Field(
-        default_factory=dict, description="Additional metadata"
+    output_key: Optional[str] = Field(
+        None, description="Key to store output in session state"
+    )
+    workflows: Optional[List[WorkflowMetadata]] = Field(
+        None, description="Available workflows for this agent"
+    )
+    teams: Optional[List[TeamMetadata]] = Field(
+        None, description="Teams of agents that can execute workflows"
     )
