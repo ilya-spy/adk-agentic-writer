@@ -101,13 +101,6 @@ class CoordinatorAgent(StatefulAgent):
             "status": "completed",
         }
 
-    async def generate_content(
-        self, content_type: str, topic: str, **parameters
-    ) -> Dict[str, Any]:
-        """Public API for content generation."""
-        context = {"topic": topic, "content_type": content_type, **parameters}
-        return await self._generate_content(content_type, context)
-
     def _get_agent_for_type(self, content_type: str) -> Optional[Any]:
         """Get or create agent for content type using registry."""
         content_type = content_type.lower().replace(" ", "_")
@@ -136,6 +129,13 @@ class CoordinatorAgent(StatefulAgent):
     def get_supported_content_types(self) -> list:
         """Get list of supported content types from registry."""
         return CONTENT_REGISTRY.list_types()
+
+    async def generate_content(
+        self, content_type: str, topic: str, **parameters
+    ) -> Dict[str, Any]:
+        """Public API for content generation."""
+        context = {"topic": topic, "content_type": content_type, **parameters}
+        return await self._generate_content(content_type, context)
 
 
 __all__ = ["CoordinatorAgent"]

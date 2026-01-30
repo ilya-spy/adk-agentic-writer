@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List, Optional, Protocol
 
-from ..models.content_models import ContentBlock, ContentBlockType
+from ..models.content_models import ContentBlock, ContentBlockType, ContentPattern
 
 
 class ContentProtocol(Protocol):
@@ -17,40 +17,13 @@ class ContentProtocol(Protocol):
         """Generate a single content block."""
         ...
 
-    async def generate_sequential_blocks(
+    async def generate_patterned_blocks(
         self,
-        num_blocks: int,
         block_type: ContentBlockType,
+        pattern: ContentPattern,
         context: Dict[str, Any],
     ) -> List[ContentBlock]:
-        """Generate sequential blocks (linear navigation)."""
-        ...
-
-    async def generate_looped_blocks(
-        self,
-        num_blocks: int,
-        block_type: ContentBlockType,
-        context: Dict[str, Any],
-        exit_condition: Dict[str, Any],
-        allow_back: bool = True,
-    ) -> List[ContentBlock]:
-        """Generate looped blocks (repeat until exit condition)."""
-        ...
-
-    async def generate_branched_blocks(
-        self,
-        branch_points: List[Dict[str, Any]],
-        context: Dict[str, Any],
-    ) -> List[ContentBlock]:
-        """Generate branched blocks (choice-based navigation)."""
-        ...
-
-    async def generate_conditional_blocks(
-        self,
-        blocks_config: List[Dict[str, Any]],
-        context: Dict[str, Any],
-    ) -> List[ContentBlock]:
-        """Generate conditional blocks (state-based display)."""
+        """Generate content blocks based on a pattern."""
         ...
 
 
