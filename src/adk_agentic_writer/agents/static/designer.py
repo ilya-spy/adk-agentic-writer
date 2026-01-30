@@ -1,36 +1,27 @@
-"""Unified designer agent for structural/interactive content.
-
-Handles multiple content types (Game, Simulation) using a registry pattern.
-New structural content types can be added via the content registry
-without creating new agent classes.
-"""
+"""Designer agent for structural/interactive content with universal block generators."""
 
 import logging
 from typing import Any, Dict, List, Optional
 
 from ...models.content_models import (
+    ContentBlock,
+    ContentBlockType,
+    ContentPattern,
     QuestGame,
     QuestNode,
-    WebSimulation,
-    SimulationVariable,
     SimulationControl,
+    SimulationVariable,
+    WebSimulation,
 )
-from ..content_agent import ContentWriterAgent
-from ...utils.content_registry import CONTENT_REGISTRY, ContentTypeConfig
+from ...utils.content_registry import CONTENT_REGISTRY
 from ...utils.text_provider import TextProvider, TemplateTextProvider
+from ..content_agent import ContentWriterAgent
 
 logger = logging.getLogger(__name__)
 
 
 class DesignerAgent(ContentWriterAgent):
-    """Unified designer agent for structural content generation.
-
-    Supports multiple content types via the content registry:
-    - quest_game/game: Interactive quest-based games
-    - web_simulation/simulation: Interactive simulations
-
-    New content types can be registered without modifying this class.
-    """
+    """Designer implementing ContentProtocol with universal block generators."""
 
     def __init__(
         self,
@@ -38,374 +29,358 @@ class DesignerAgent(ContentWriterAgent):
         content_type: str = "game",
         text_provider: Optional[TextProvider] = None,
     ):
-        """Initialize unified designer agent.
-
-        Args:
-            agent_id: Unique agent identifier
-            content_type: Type of content to generate (game, simulation, etc.)
-            text_provider: Optional custom text provider
-        """
         self._content_type = content_type
         config = CONTENT_REGISTRY.get(content_type)
-
         if not config:
             raise ValueError(f"Unknown content type: {content_type}")
         if config.category != "designer":
             raise ValueError(f"Content type '{content_type}' is not a designer type")
-
         self._type_config = config
-
         super().__init__(
-            agent_id=agent_id,
-            config=config.agent_config,
+            agent_id,
+            config.agent_config,
             text_provider=text_provider or TemplateTextProvider(),
         )
-        logger.info(f"Initialized DesignerAgent {agent_id} for {content_type}")
 
     @property
     def content_type(self) -> str:
-        """Get the content type this designer handles."""
         return self._content_type
 
+    # ContentProtocol
+    async def generate_block(
+        self,
+        block_type: ContentBlockType,
+        context: Dict[str, Any],
+        previous_blocks: Optional[List[ContentBlock]] = None,
+    ) -> ContentBlock:
+        """Generate a single content block."""
+        block_id = context.get("block_id", f"{block_type.value}_{id(context)}")
+
+        if block_type == ContentBlockType.NODE:
+            content = (await self.generate_node(**context)).model_dump()
+        elif block_type == ContentBlockType.CARD:
+            content = self.generate_variable(**context).model_dump()
+        elif block_type == ContentBlockType.SECTION:
+            content = self.generate_control(**context).model_dump()
+        else:
+            content = {"data": context}
+
+        return ContentBlock(
+            block_id=block_id,
+            block_type=block_type,
+            content=content,
+            pattern=context.get("pattern", ContentPattern.SEQUENTIAL),
+            metadata=context.get("metadata", {}),
+        )
+
+    async def generate_patterned_blocks(
+        self,
+        block_type: ContentBlockType,
+        pattern: ContentPattern,
+        context: Dict[str, Any],
+    ) -> List[ContentBlock]:
+        """Generate blocks with navigation based on pattern."""
+        count, blocks = context.get("count", 3), []
+        for i in range(count):
+            block = await self.generate_block(
+                block_type,
+                {**context, "block_id": f"{block_type.value}_{i}", "index": i},
+            )
+            block.pattern = pattern
+            if pattern == ContentPattern.SEQUENTIAL and i < count - 1:
+                block.navigation = {"next": f"{block_type.value}_{i + 1}"}
+            elif pattern == ContentPattern.LOOPED:
+                block.navigation = {"next": f"{block_type.value}_{(i + 1) % count}"}
+                block.exit_condition = context.get(
+                    "exit_condition", {"max_iterations": 3}
+                )
+            elif pattern == ContentPattern.BRANCHED:
+                block.choices = [
+                    {"text": f"Go to {j}", "target": f"{block_type.value}_{j}"}
+                    for j in range(count)
+                    if j != i
+                ]
+            blocks.append(block)
+        return blocks
+
+    # Universal Block Generators
+    def generate_variable(
+        self,
+        name: str,
+        initial_value: float = 50.0,
+        min_value: float = 0.0,
+        max_value: float = 100.0,
+        unit: str = "units",
+        **_,
+    ) -> SimulationVariable:
+        """Create a controllable variable."""
+        return SimulationVariable(
+            name=name,
+            initial_value=initial_value,
+            min_value=min_value,
+            max_value=max_value,
+            unit=unit,
+        )
+
+    def generate_control(
+        self,
+        control_id: str,
+        label: str,
+        control_type: str = "slider",
+        affects: Optional[List[str]] = None,
+        parameters: Optional[Dict[str, Any]] = None,
+        **_,
+    ) -> SimulationControl:
+        """Create a user control (slider, button, toggle)."""
+        return SimulationControl(
+            control_id=control_id,
+            label=label,
+            type=control_type,
+            affects=affects or [],
+            parameters=parameters or {},
+        )
+
+    def generate_rule(
+        self,
+        description: str,
+        variables: Optional[List[str]] = None,
+        condition: Optional[str] = None,
+        **_,
+    ) -> Dict[str, Any]:
+        """Create a behavior rule."""
+        return {
+            "description": description,
+            "variables": variables or [],
+            "condition": condition,
+        }
+
+    async def generate_node(
+        self,
+        node_id: str,
+        title: str,
+        description: Optional[str] = None,
+        choices: Optional[List[Dict[str, str]]] = None,
+        rewards: Optional[List[str]] = None,
+        requirements: Optional[List[str]] = None,
+        **kwargs,
+    ) -> QuestNode:
+        """Create a navigation node with choices."""
+        if description is None:
+            description = await self._generate_text(
+                "game_objective",
+                {"topic": kwargs.get("topic", "adventure"), "aspect": title},
+            )
+        return QuestNode(
+            node_id=node_id,
+            title=title,
+            description=description,
+            choices=choices or [],
+            rewards=rewards or [],
+            requirements=requirements or [],
+        )
+
+    # Batch generators
+    def generate_variables_set(
+        self, topic: str, complexity: str = "medium"
+    ) -> List[SimulationVariable]:
+        """Generate related variables based on complexity."""
+        name = f"primary_{topic.replace(' ', '_')}"
+        vars = [
+            self.generate_variable(name, 50, 0, 100, "units"),
+            self.generate_variable("rate", 1, 0.1, 10, "per second"),
+        ]
+        if complexity in ("medium", "complex"):
+            vars.append(self.generate_variable("modifier", 1, 0.5, 2, "x"))
+        if complexity == "complex":
+            vars.append(self.generate_variable("threshold", 75, 0, 100, "units"))
+        return vars
+
+    def generate_controls_for_variables(
+        self, variables: List[SimulationVariable], include_playback: bool = True
+    ) -> List[SimulationControl]:
+        """Generate controls for variables with optional playback buttons."""
+        controls = []
+        if include_playback:
+            controls.append(
+                self.generate_control(
+                    "start_stop",
+                    "Start/Stop",
+                    "button",
+                    ["simulation_running"],
+                    {"action": "toggle"},
+                )
+            )
+            controls.append(
+                self.generate_control(
+                    "reset",
+                    "Reset",
+                    "button",
+                    [v.name for v in variables],
+                    {"action": "reset"},
+                )
+            )
+        for v in variables:
+            controls.append(
+                self.generate_control(
+                    f"slider_{v.name}",
+                    f"Adjust {v.name.replace('_', ' ').title()}",
+                    "slider",
+                    [v.name],
+                    {"min": v.min_value, "max": v.max_value, "step": 1.0},
+                )
+            )
+        return controls
+
+    def generate_rules_for_variables(
+        self, topic: str, variables: List[SimulationVariable]
+    ) -> List[str]:
+        """Generate rule descriptions for variables."""
+        names = [v.name for v in variables]
+        rules = [
+            (
+                f"{names[0]} changes based on rate"
+                if len(names) > 1
+                else "Primary value changes over time"
+            ),
+            "Values reflect or stop at boundaries",
+            f"Rate controls speed of {topic} changes",
+        ]
+        if "modifier" in names:
+            rules.append("Modifier scales rate of change")
+        if "threshold" in names:
+            rules.append("Special effects when primary exceeds threshold")
+        return rules
+
+    # Content builders
     async def _build_content(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Build content based on registered type.
-
-        Args:
-            context: Parameters for content generation
-
-        Returns:
-            Content dictionary
-        """
-        # Merge default params with provided context
         params = {**self._type_config.default_params, **context}
-        topic = params.get("topic", "general")
-
-        logger.info(f"Building {self._content_type} content for: {topic}")
-
-        # Route to appropriate builder
         if self._content_type in ("quest_game", "game"):
             return await self._build_game(params)
         elif self._content_type in ("web_simulation", "simulation"):
             return await self._build_simulation(params)
-        else:
-            # Generic fallback
-            return await self._build_generic(params)
+        return await self._build_generic(params)
 
-    # =========================================================================
-    # Game Builder
-    # =========================================================================
-
-    async def _build_game(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Build quest game content.
-
-        Args:
-            params: Parameters including topic, complexity, theme, num_nodes
-
-        Returns:
-            QuestGame dictionary
-        """
-        topic = params.get("topic", "adventure")
-        complexity = params.get("complexity", "medium")
-        theme = params.get("theme", "fantasy")
-        num_nodes = params.get("num_nodes", 5)
-
-        logger.info(f"Generating game: {topic}, complexity: {complexity}")
-
-        nodes = await self._generate_game_nodes(topic, theme, num_nodes, complexity)
-
-        game = QuestGame(
-            title=self._type_config.title_template.format(topic=topic.title()),
-            description=self._type_config.description_template.format(topic=topic),
-            start_node="start",
-            nodes=nodes,
-            victory_conditions=[f"Complete all quests to master {topic}"],
+    async def _build_game(self, p: Dict[str, Any]) -> Dict[str, Any]:
+        topic, complexity, num_nodes = (
+            p.get("topic", "adventure"),
+            p.get("complexity", "medium"),
+            p.get("num_nodes", 5),
         )
-
-        return game.model_dump()
-
-    async def _generate_game_nodes(
-        self, topic: str, theme: str, num_nodes: int, complexity: str
-    ) -> Dict[str, QuestNode]:
-        """Generate game quest nodes."""
         nodes = {}
-        ctx = {"topic": topic, "theme": theme}
 
-        # Start node
-        quest_title = await self._generate_text("game_quest", ctx)
-        nodes["start"] = QuestNode(
-            node_id="start",
-            title=quest_title,
-            description=f"Begin your journey into {topic}. Choose your path wisely.",
-            choices=[
-                {"text": "Explore the basics", "next_node_id": "basics"},
-                {"text": "Take on a challenge", "next_node_id": "challenge"},
+        # Start
+        title = await self._generate_text(
+            "game_quest", {"topic": topic, "theme": p.get("theme", "fantasy")}
+        )
+        nodes["start"] = await self.generate_node(
+            "start",
+            title,
+            f"Begin your journey into {topic}.",
+            [
+                {"text": "Explore basics", "next_node_id": "basics"},
+                {"text": "Take challenge", "next_node_id": "challenge"},
             ],
-            rewards=[],
-            requirements=[],
         )
 
-        # Basics node
+        # Progressive nodes
         if num_nodes >= 3:
-            obj_text = await self._generate_text(
-                "game_objective", {**ctx, "aspect": "fundamentals"}
-            )
-            nodes["basics"] = QuestNode(
-                node_id="basics",
-                title="Learning the Basics",
-                description=obj_text,
+            nodes["basics"] = await self.generate_node(
+                "basics",
+                "Learning Basics",
+                topic=topic,
                 choices=[
-                    {
-                        "text": "Continue to intermediate",
-                        "next_node_id": "intermediate",
-                    },
-                    {"text": "Try the challenge", "next_node_id": "challenge"},
+                    {"text": "To intermediate", "next_node_id": "intermediate"},
+                    {"text": "Try challenge", "next_node_id": "challenge"},
                 ],
                 rewards=["Basic Knowledge", "50 XP"],
-                requirements=[],
             )
-
-        # Challenge node
         if num_nodes >= 4:
-            obj_text = await self._generate_text(
-                "game_objective", {**ctx, "aspect": "challenges"}
-            )
-            nodes["challenge"] = QuestNode(
-                node_id="challenge",
-                title="The Challenge",
-                description=obj_text,
-                choices=[{"text": "Proceed to mastery", "next_node_id": "mastery"}],
+            nodes["challenge"] = await self.generate_node(
+                "challenge",
+                "The Challenge",
+                topic=topic,
+                choices=[{"text": "To mastery", "next_node_id": "mastery"}],
                 rewards=["Challenge Badge", "100 XP"],
                 requirements=["Basic Knowledge"] if complexity != "simple" else [],
             )
-
-        # Intermediate node
-        if num_nodes >= 5 and complexity in ["medium", "complex"]:
-            obj_text = await self._generate_text(
-                "game_objective", {**ctx, "aspect": "intermediate concepts"}
-            )
-            nodes["intermediate"] = QuestNode(
-                node_id="intermediate",
-                title="Intermediate Level",
-                description=obj_text,
-                choices=[{"text": "Advance to mastery", "next_node_id": "mastery"}],
+        if num_nodes >= 5 and complexity != "simple":
+            nodes["intermediate"] = await self.generate_node(
+                "intermediate",
+                "Intermediate",
+                topic=topic,
+                choices=[{"text": "To mastery", "next_node_id": "mastery"}],
                 rewards=["Intermediate Badge", "150 XP"],
                 requirements=["Basic Knowledge"],
             )
 
-        # Mastery node (ending)
-        nodes["mastery"] = QuestNode(
-            node_id="mastery",
-            title=f"Mastery of {topic.title()}",
-            description=f"Congratulations! You have achieved mastery in {topic}.",
-            choices=[],
-            rewards=[f"{topic.title()} Master Badge", "500 XP"],
-            requirements=["Challenge Badge"] if complexity != "simple" else [],
+        # Mastery (ending)
+        nodes["mastery"] = await self.generate_node(
+            "mastery",
+            f"Mastery of {topic.title()}",
+            f"Congratulations! You mastered {topic}.",
+            [],
+            [f"{topic.title()} Master", "500 XP"],
+            ["Challenge Badge"] if complexity != "simple" else [],
         )
 
-        return nodes
-
-    # =========================================================================
-    # Simulation Builder
-    # =========================================================================
-
-    async def _build_simulation(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Build web simulation content.
-
-        Args:
-            params: Parameters including topic, simulation_type, complexity
-
-        Returns:
-            WebSimulation dictionary
-        """
-        topic = params.get("topic", "physics")
-        simulation_type = params.get("simulation_type", "interactive")
-        complexity = params.get("complexity", "medium")
-
-        logger.info(f"Generating simulation: {topic}, type: {simulation_type}")
-
-        description = await self._generate_text(
-            "simulation_description", {"topic": topic}
-        )
-        variables = self._generate_variables(topic, complexity)
-        controls = self._generate_controls(topic, variables)
-        rules = self._generate_rules(topic, variables)
-
-        simulation = WebSimulation(
-            title=self._type_config.title_template.format(topic=topic.title()),
-            description=description,
-            variables=variables,
-            controls=controls,
-            rules=rules,
-            visualization_type=self._get_visualization_type(topic),
-        )
-
-        return simulation.model_dump()
-
-    def _generate_variables(
-        self, topic: str, complexity: str
-    ) -> List[SimulationVariable]:
-        """Generate simulation variables."""
-        variables = [
-            SimulationVariable(
-                name=f"primary_{topic.replace(' ', '_')}",
-                initial_value=50.0,
-                min_value=0.0,
-                max_value=100.0,
-                unit="units",
-            ),
-            SimulationVariable(
-                name="rate",
-                initial_value=1.0,
-                min_value=0.1,
-                max_value=10.0,
-                unit="per second",
-            ),
-        ]
-
-        if complexity in ["medium", "complex"]:
-            variables.append(
-                SimulationVariable(
-                    name="modifier",
-                    initial_value=1.0,
-                    min_value=0.5,
-                    max_value=2.0,
-                    unit="x",
-                )
-            )
-
-        if complexity == "complex":
-            variables.append(
-                SimulationVariable(
-                    name="threshold",
-                    initial_value=75.0,
-                    min_value=0.0,
-                    max_value=100.0,
-                    unit="units",
-                )
-            )
-
-        return variables
-
-    def _generate_controls(
-        self, topic: str, variables: List[SimulationVariable]
-    ) -> List[SimulationControl]:
-        """Generate simulation controls."""
-        controls = [
-            SimulationControl(
-                control_id="start_stop",
-                label="Start/Stop",
-                type="button",
-                affects=["simulation_running"],
-                parameters={"action": "toggle"},
-            ),
-            SimulationControl(
-                control_id="reset",
-                label="Reset",
-                type="button",
-                affects=[v.name for v in variables],
-                parameters={"action": "reset"},
-            ),
-        ]
-
-        # Add sliders for numeric variables
-        for var in variables:
-            controls.append(
-                SimulationControl(
-                    control_id=f"slider_{var.name}",
-                    label=f"Adjust {var.name.replace('_', ' ').title()}",
-                    type="slider",
-                    affects=[var.name],
-                    parameters={
-                        "min": var.min_value,
-                        "max": var.max_value,
-                        "step": 1.0,
-                    },
-                )
-            )
-
-        return controls
-
-    def _generate_rules(
-        self, topic: str, variables: List[SimulationVariable]
-    ) -> List[str]:
-        """Generate simulation rules."""
-        var_names = [v.name for v in variables]
-
-        rules = [
-            (
-                f"{var_names[0]} changes based on rate"
-                if len(var_names) > 1
-                else "Primary value changes over time"
-            ),
-            "When values reach boundaries, they reflect or stop",
-            f"Rate determines the speed of changes in {topic}",
-        ]
-
-        if "modifier" in var_names:
-            rules.append("Modifier scales the rate of change")
-
-        if "threshold" in var_names:
-            rules.append("Special effects trigger when primary value exceeds threshold")
-
-        return rules
-
-    def _get_visualization_type(self, topic: str) -> str:
-        """Determine appropriate visualization type."""
-        topic_lower = topic.lower()
-
-        if any(
-            word in topic_lower for word in ["graph", "chart", "data", "statistics"]
-        ):
-            return "chart"
-        elif any(
-            word in topic_lower for word in ["physics", "motion", "particle", "wave"]
-        ):
-            return "animation"
-        elif any(word in topic_lower for word in ["3d", "space", "volume"]):
-            return "3d"
-        else:
-            return "chart"
-
-    # =========================================================================
-    # Generic Builder (for future extensibility)
-    # =========================================================================
-
-    async def _build_generic(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Generic builder for new content types."""
-        topic = params.get("topic", "general")
-        model_class = self._type_config.model_class
-
-        return model_class(
+        return QuestGame(
             title=self._type_config.title_template.format(topic=topic.title()),
             description=self._type_config.description_template.format(topic=topic),
-            **{k: v for k, v in params.items() if k not in ("topic",)},
+            start_node="start",
+            nodes={k: v.model_dump() for k, v in nodes.items()},
+            victory_conditions=[f"Complete all quests to master {topic}"],
+        ).model_dump()
+
+    async def _build_simulation(self, p: Dict[str, Any]) -> Dict[str, Any]:
+        topic, complexity = p.get("topic", "physics"), p.get("complexity", "medium")
+        variables = self.generate_variables_set(topic, complexity)
+        return WebSimulation(
+            title=self._type_config.title_template.format(topic=topic.title()),
+            description=await self._generate_text(
+                "simulation_description", {"topic": topic}
+            ),
+            variables=variables,
+            controls=self.generate_controls_for_variables(variables),
+            rules=self.generate_rules_for_variables(topic, variables),
+            visualization_type=self._get_viz_type(topic),
+        ).model_dump()
+
+    def _get_viz_type(self, topic: str) -> str:
+        t = topic.lower()
+        if any(w in t for w in ("graph", "chart", "data")):
+            return "chart"
+        if any(w in t for w in ("physics", "motion", "wave")):
+            return "animation"
+        if any(w in t for w in ("3d", "space", "volume")):
+            return "3d"
+        return "chart"
+
+    async def _build_generic(self, p: Dict[str, Any]) -> Dict[str, Any]:
+        topic = p.get("topic", "general")
+        return self._type_config.model_class(
+            title=self._type_config.title_template.format(topic=topic.title()),
+            description=self._type_config.description_template.format(topic=topic),
+            **{k: v for k, v in p.items() if k != "topic"},
         ).model_dump()
 
 
-# Convenience factory functions
-def create_game_designer(agent_id: str = "game_designer") -> DesignerAgent:
-    """Create a designer agent configured for games."""
-    return DesignerAgent(agent_id=agent_id, content_type="game")
-
-
-def create_simulation_designer(agent_id: str = "simulation_designer") -> DesignerAgent:
-    """Create a designer agent configured for simulations."""
-    return DesignerAgent(agent_id=agent_id, content_type="simulation")
-
-
-# Backward-compatible class aliases
+# Aliases
 class GameDesignerAgent(DesignerAgent):
-    """Backward-compatible alias for game designer."""
-
     def __init__(self, agent_id: str = "game_designer"):
-        super().__init__(agent_id=agent_id, content_type="game")
+        super().__init__(agent_id, "game")
 
 
 class SimulationDesignerAgent(DesignerAgent):
-    """Backward-compatible alias for simulation designer."""
-
     def __init__(self, agent_id: str = "simulation_designer"):
-        super().__init__(agent_id=agent_id, content_type="simulation")
+        super().__init__(agent_id, "simulation")
+
+
+def create_game_designer(agent_id: str = "game_designer") -> DesignerAgent:
+    return DesignerAgent(agent_id, "game")
+
+
+def create_simulation_designer(agent_id: str = "simulation_designer") -> DesignerAgent:
+    return DesignerAgent(agent_id, "simulation")
 
 
 __all__ = [

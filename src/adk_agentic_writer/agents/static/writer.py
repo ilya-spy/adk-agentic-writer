@@ -1,36 +1,27 @@
-"""Unified writer agent for text-based content.
-
-Handles multiple content types (Quiz, Story) using a registry pattern.
-New text-based content types can be added via the content registry
-without creating new agent classes.
-"""
+"""Writer agent for text-based content with universal block generators."""
 
 import logging
 import random
 from typing import Any, Dict, List, Optional
 
 from ...models.content_models import (
+    ContentBlock,
+    ContentBlockType,
+    ContentPattern,
     Quiz,
     QuizQuestion,
     BranchedNarrative,
     StoryNode,
 )
-from ..content_agent import ContentWriterAgent
-from ...utils.content_registry import CONTENT_REGISTRY, ContentTypeConfig
+from ...utils.content_registry import CONTENT_REGISTRY
 from ...utils.text_provider import TextProvider, TemplateTextProvider
+from ..content_agent import ContentWriterAgent
 
 logger = logging.getLogger(__name__)
 
 
 class WriterAgent(ContentWriterAgent):
-    """Unified writer agent for text-based content generation.
-
-    Supports multiple content types via the content registry:
-    - quiz: Multiple choice questions with explanations
-    - branched_narrative/story: Interactive stories with branches
-
-    New content types can be registered without modifying this class.
-    """
+    """Writer implementing ContentProtocol with universal block generators."""
 
     def __init__(
         self,
@@ -38,298 +29,307 @@ class WriterAgent(ContentWriterAgent):
         content_type: str = "quiz",
         text_provider: Optional[TextProvider] = None,
     ):
-        """Initialize unified writer agent.
-
-        Args:
-            agent_id: Unique agent identifier
-            content_type: Type of content to generate (quiz, story, etc.)
-            text_provider: Optional custom text provider
-        """
         self._content_type = content_type
         config = CONTENT_REGISTRY.get(content_type)
-
         if not config:
             raise ValueError(f"Unknown content type: {content_type}")
         if config.category != "writer":
             raise ValueError(f"Content type '{content_type}' is not a writer type")
-
         self._type_config = config
-
         super().__init__(
-            agent_id=agent_id,
-            config=config.agent_config,
+            agent_id,
+            config.agent_config,
             text_provider=text_provider or TemplateTextProvider(),
         )
-        logger.info(f"Initialized WriterAgent {agent_id} for {content_type}")
 
     @property
     def content_type(self) -> str:
-        """Get the content type this writer handles."""
         return self._content_type
 
-    async def _build_content(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Build content based on registered type.
+    # ContentProtocol
+    async def generate_block(
+        self,
+        block_type: ContentBlockType,
+        context: Dict[str, Any],
+        previous_blocks: Optional[List[ContentBlock]] = None,
+    ) -> ContentBlock:
+        """Generate a single content block."""
+        block_id = context.get("block_id", f"{block_type.value}_{id(context)}")
 
-        Args:
-            context: Parameters for content generation
-
-        Returns:
-            Content dictionary
-        """
-        # Merge default params with provided context
-        params = {**self._type_config.default_params, **context}
-        topic = params.get("topic", "general")
-
-        logger.info(f"Building {self._content_type} content for: {topic}")
-
-        # Route to appropriate builder
-        if self._content_type == "quiz":
-            return await self._build_quiz(params)
-        elif self._content_type in ("branched_narrative", "story"):
-            return await self._build_story(params)
+        if block_type == ContentBlockType.QUESTION:
+            content = (await self.generate_question(**context)).model_dump()
+        elif block_type == ContentBlockType.NODE:
+            content = (await self.generate_story_node(**context)).model_dump()
+        elif block_type == ContentBlockType.CHAPTER:
+            content = await self.generate_chapter(**context)
         else:
-            # Generic fallback - try to construct from model
-            return await self._build_generic(params)
+            content = {"text": context.get("text", ""), "data": context}
 
-    # =========================================================================
-    # Quiz Builder
-    # =========================================================================
-
-    async def _build_quiz(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Build quiz content.
-
-        Args:
-            params: Parameters including topic, num_questions, difficulty
-
-        Returns:
-            Quiz dictionary
-        """
-        topic = params.get("topic", "general knowledge")
-        num_questions = params.get("num_questions", 5)
-        difficulty = params.get("difficulty", "medium")
-
-        logger.info(
-            f"Generating quiz: {topic}, {num_questions} questions, {difficulty}"
+        return ContentBlock(
+            block_id=block_id,
+            block_type=block_type,
+            content=content,
+            pattern=context.get("pattern", ContentPattern.SEQUENTIAL),
+            metadata=context.get("metadata", {}),
         )
 
-        questions = await self._generate_questions(topic, num_questions, difficulty)
+    async def generate_patterned_blocks(
+        self,
+        block_type: ContentBlockType,
+        pattern: ContentPattern,
+        context: Dict[str, Any],
+    ) -> List[ContentBlock]:
+        """Generate blocks with navigation based on pattern."""
+        count, blocks = context.get("count", 3), []
+        for i in range(count):
+            block = await self.generate_block(
+                block_type,
+                {**context, "block_id": f"{block_type.value}_{i}", "index": i},
+            )
+            block.pattern = pattern
+            if pattern == ContentPattern.SEQUENTIAL and i < count - 1:
+                block.navigation = {"next": f"{block_type.value}_{i + 1}"}
+            elif pattern == ContentPattern.LOOPED:
+                block.navigation = {"next": f"{block_type.value}_{(i + 1) % count}"}
+                block.exit_condition = context.get(
+                    "exit_condition", {"max_iterations": 3}
+                )
+            elif pattern == ContentPattern.BRANCHED:
+                block.choices = [
+                    {"text": f"Go to {j}", "target": f"{block_type.value}_{j}"}
+                    for j in range(count)
+                    if j != i
+                ]
+            blocks.append(block)
+        return blocks
 
-        quiz = Quiz(
-            title=self._type_config.title_template.format(topic=topic.title()),
-            description=self._type_config.description_template.format(topic=topic),
-            questions=questions,
-            passing_score=params.get("passing_score", 70),
-            time_limit=params.get("time_limit"),
-        )
-
-        return quiz.model_dump()
-
-    async def _generate_questions(
-        self, topic: str, num_questions: int, difficulty: str
-    ) -> List[Dict[str, Any]]:
-        """Generate quiz questions."""
-        questions = []
+    # Universal Block Generators
+    async def generate_question(
+        self,
+        topic: str = "general",
+        difficulty: str = "medium",
+        question: Optional[str] = None,
+        options: Optional[List[str]] = None,
+        correct_answer: Optional[int] = None,
+        explanation: Optional[str] = None,
+        **_,
+    ) -> QuizQuestion:
+        """Create a quiz question with options."""
         ctx = {"topic": topic, "difficulty": difficulty}
 
-        for _ in range(num_questions):
-            question_text = await self._generate_text("quiz_question", ctx)
-
-            # Generate options (one correct, three incorrect)
-            correct_idx = random.randint(0, 3)
-            options = []
-
-            for j in range(4):
-                if j == correct_idx:
-                    option = await self._generate_text("quiz_option_correct", ctx)
-                else:
-                    option = await self._generate_text("quiz_option", ctx)
-                options.append(option)
-
-            explanation = await self._generate_text("quiz_explanation", ctx)
-
-            questions.append(
-                QuizQuestion(
-                    question=question_text,
-                    options=options,
-                    correct_answer=correct_idx,
-                    explanation=explanation,
-                    difficulty=difficulty,
-                ).model_dump()
-            )
-
-        return questions
-
-    # =========================================================================
-    # Story Builder
-    # =========================================================================
-
-    async def _build_story(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Build branched narrative content.
-
-        Args:
-            params: Parameters including topic, genre, num_nodes
-
-        Returns:
-            BranchedNarrative dictionary
-        """
-        topic = params.get("topic", "adventure")
-        genre = params.get("genre", "fantasy")
-        num_nodes = params.get("num_nodes", 7)
-
-        logger.info(f"Generating story: {topic}, genre: {genre}, nodes: {num_nodes}")
-
-        nodes = await self._generate_story_nodes(topic, genre, num_nodes)
-
-        narrative = BranchedNarrative(
-            title=self._type_config.title_template.format(topic=topic.title()),
-            synopsis=self._type_config.description_template.format(topic=topic),
-            genre=genre,
-            start_node="start",
-            nodes=nodes,
-            characters=["Protagonist", "Guide", "Antagonist"],
+        # Generate or use provided values
+        q_text = question or await self._generate_text("quiz_question", ctx)
+        correct_idx = (
+            correct_answer if correct_answer is not None else random.randint(0, 3)
         )
 
-        return narrative.model_dump()
+        if options:
+            opts = options
+        else:
+            opts = []
+            for i in range(4):
+                key = "quiz_option_correct" if i == correct_idx else "quiz_option"
+                opts.append(await self._generate_text(key, ctx))
 
-    async def _generate_story_nodes(
-        self, topic: str, genre: str, num_nodes: int
-    ) -> Dict[str, Dict[str, Any]]:
-        """Generate story nodes with branches."""
+        expl = explanation or await self._generate_text("quiz_explanation", ctx)
+        return QuizQuestion(
+            question=q_text,
+            options=opts,
+            correct_answer=correct_idx,
+            explanation=expl,
+            difficulty=difficulty,
+        )
+
+    async def generate_story_node(
+        self,
+        node_id: str,
+        content: Optional[str] = None,
+        branches: Optional[List[Dict[str, str]]] = None,
+        tags: Optional[List[str]] = None,
+        is_ending: bool = False,
+        **kwargs,
+    ) -> StoryNode:
+        """Create a story node with branches."""
+        if content is None:
+            ctx = {
+                "topic": kwargs.get("topic", "adventure"),
+                "genre": kwargs.get("genre", "fantasy"),
+            }
+            path_type = kwargs.get("path_type", "main")
+            key = (
+                "story_ending"
+                if is_ending
+                else ("story_opening" if node_id == "start" else "story_path")
+            )
+            if key == "story_path":
+                ctx["path_type"] = path_type
+            if key == "story_ending":
+                ctx["ending_type"] = kwargs.get("ending_type", "neutral")
+            content = await self._generate_text(key, ctx)
+
+        return StoryNode(
+            node_id=node_id,
+            content=content,
+            branches=branches or [],
+            tags=tags or [],
+            is_ending=is_ending,
+        )
+
+    async def generate_chapter(
+        self, title: str = "Chapter", text: Optional[str] = None, **kwargs
+    ) -> Dict[str, Any]:
+        """Create a generic text chapter/section."""
+        if text is None:
+            text = await self._generate_text(
+                "chapter_content", {"title": title, **kwargs}
+            )
+        return {"title": title, "text": text, "metadata": kwargs.get("metadata", {})}
+
+    # Batch generators
+    async def generate_questions_set(
+        self, topic: str, count: int = 5, difficulty: str = "medium"
+    ) -> List[QuizQuestion]:
+        """Generate a set of quiz questions."""
+        return [await self.generate_question(topic, difficulty) for _ in range(count)]
+
+    async def generate_story_nodes_set(
+        self, topic: str, genre: str = "fantasy", num_nodes: int = 7
+    ) -> Dict[str, StoryNode]:
+        """Generate connected story nodes with branches."""
         nodes = {}
         ctx = {"topic": topic, "genre": genre}
 
-        # Opening node
-        opening_text = await self._generate_text("story_opening", ctx)
-        nodes["start"] = StoryNode(
-            node_id="start",
-            content=opening_text,
-            branches=[
-                {"text": "Take the bold path", "next_node_id": "bold_path"},
-                {"text": "Proceed with caution", "next_node_id": "cautious_path"},
-            ],
+        # Start node
+        nodes["start"] = await self.generate_story_node(
+            "start",
             tags=["opening", genre],
-            is_ending=False,
-        ).model_dump()
+            branches=[
+                {"text": "Take bold path", "next_node_id": "bold_path"},
+                {"text": "Proceed cautiously", "next_node_id": "cautious_path"},
+            ],
+            **ctx,
+        )
 
         # Path nodes
         if num_nodes >= 3:
-            bold_text = await self._generate_text(
-                "story_path", {**ctx, "path_type": "bold"}
-            )
-            nodes["bold_path"] = StoryNode(
-                node_id="bold_path",
-                content=bold_text,
+            nodes["bold_path"] = await self.generate_story_node(
+                "bold_path",
+                tags=["bold"],
+                path_type="bold",
                 branches=[
-                    {"text": "Face the challenge", "next_node_id": "challenge"},
+                    {"text": "Face challenge", "next_node_id": "challenge"},
                     {"text": "Find allies", "next_node_id": "allies"},
                 ],
-                tags=["bold"],
-                is_ending=False,
-            ).model_dump()
-
-            cautious_text = await self._generate_text(
-                "story_path", {**ctx, "path_type": "cautious"}
+                **ctx,
             )
-            nodes["cautious_path"] = StoryNode(
-                node_id="cautious_path",
-                content=cautious_text,
+            nodes["cautious_path"] = await self.generate_story_node(
+                "cautious_path",
+                tags=["cautious"],
+                path_type="cautious",
                 branches=[
                     {"text": "Continue alone", "next_node_id": "challenge"},
                     {"text": "Seek wisdom", "next_node_id": "wisdom_ending"},
                 ],
-                tags=["cautious"],
-                is_ending=False,
-            ).model_dump()
+                **ctx,
+            )
 
         # Intermediate nodes
         if num_nodes >= 5:
-            challenge_text = await self._generate_text(
-                "story_path", {**ctx, "path_type": "challenge"}
-            )
-            nodes["challenge"] = StoryNode(
-                node_id="challenge",
-                content=challenge_text,
-                branches=[{"text": "Claim victory", "next_node_id": "victory_ending"}],
+            nodes["challenge"] = await self.generate_story_node(
+                "challenge",
                 tags=["challenge"],
-                is_ending=False,
-            ).model_dump()
-
-            allies_text = await self._generate_text(
-                "story_path", {**ctx, "path_type": "allies"}
+                path_type="challenge",
+                branches=[{"text": "Claim victory", "next_node_id": "victory_ending"}],
+                **ctx,
             )
-            nodes["allies"] = StoryNode(
-                node_id="allies",
-                content=allies_text,
+            nodes["allies"] = await self.generate_story_node(
+                "allies",
+                tags=["allies"],
+                path_type="allies",
                 branches=[
                     {"text": "Continue together", "next_node_id": "alliance_ending"}
                 ],
-                tags=["allies"],
-                is_ending=False,
-            ).model_dump()
+                **ctx,
+            )
 
         # Endings
-        for ending_type, node_id in [
+        for etype, nid in [
             ("victory", "victory_ending"),
             ("alliance", "alliance_ending"),
             ("wisdom", "wisdom_ending"),
         ]:
-            ending_text = await self._generate_text(
-                "story_ending", {**ctx, "ending_type": ending_type}
+            nodes[nid] = await self.generate_story_node(
+                nid, tags=["ending", etype], is_ending=True, ending_type=etype, **ctx
             )
-            nodes[node_id] = StoryNode(
-                node_id=node_id,
-                content=ending_text,
-                branches=[],
-                tags=["ending", ending_type],
-                is_ending=True,
-            ).model_dump()
 
         return nodes
 
-    # =========================================================================
-    # Generic Builder (for future extensibility)
-    # =========================================================================
+    # Content builders
+    async def _build_content(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        params = {**self._type_config.default_params, **context}
+        if self._content_type == "quiz":
+            return await self._build_quiz(params)
+        elif self._content_type in ("branched_narrative", "story"):
+            return await self._build_story(params)
+        return await self._build_generic(params)
 
-    async def _build_generic(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Generic builder for new content types.
-
-        Falls back to basic model construction with title/description.
-        """
-        topic = params.get("topic", "general")
-        model_class = self._type_config.model_class
-
-        # Try to construct with basic fields
-        return model_class(
+    async def _build_quiz(self, p: Dict[str, Any]) -> Dict[str, Any]:
+        topic, num_q, difficulty = (
+            p.get("topic", "general"),
+            p.get("num_questions", 5),
+            p.get("difficulty", "medium"),
+        )
+        questions = await self.generate_questions_set(topic, num_q, difficulty)
+        return Quiz(
             title=self._type_config.title_template.format(topic=topic.title()),
             description=self._type_config.description_template.format(topic=topic),
-            **{k: v for k, v in params.items() if k not in ("topic",)},
+            questions=[q.model_dump() for q in questions],
+            passing_score=p.get("passing_score", 70),
+            time_limit=p.get("time_limit"),
+        ).model_dump()
+
+    async def _build_story(self, p: Dict[str, Any]) -> Dict[str, Any]:
+        topic, genre, num_nodes = (
+            p.get("topic", "adventure"),
+            p.get("genre", "fantasy"),
+            p.get("num_nodes", 7),
+        )
+        nodes = await self.generate_story_nodes_set(topic, genre, num_nodes)
+        return BranchedNarrative(
+            title=self._type_config.title_template.format(topic=topic.title()),
+            synopsis=self._type_config.description_template.format(topic=topic),
+            genre=genre,
+            start_node="start",
+            nodes={k: v.model_dump() for k, v in nodes.items()},
+            characters=["Protagonist", "Guide", "Antagonist"],
+        ).model_dump()
+
+    async def _build_generic(self, p: Dict[str, Any]) -> Dict[str, Any]:
+        topic = p.get("topic", "general")
+        return self._type_config.model_class(
+            title=self._type_config.title_template.format(topic=topic.title()),
+            description=self._type_config.description_template.format(topic=topic),
+            **{k: v for k, v in p.items() if k != "topic"},
         ).model_dump()
 
 
-# Convenience factory functions for backward compatibility
-def create_quiz_writer(agent_id: str = "quiz_writer") -> WriterAgent:
-    """Create a writer agent configured for quizzes."""
-    return WriterAgent(agent_id=agent_id, content_type="quiz")
-
-
-def create_story_writer(agent_id: str = "story_writer") -> WriterAgent:
-    """Create a writer agent configured for stories."""
-    return WriterAgent(agent_id=agent_id, content_type="story")
-
-
-# Backward-compatible class aliases
+# Aliases
 class StaticQuizWriterAgent(WriterAgent):
-    """Backward-compatible alias for quiz writer."""
-
     def __init__(self, agent_id: str = "quiz_writer"):
-        super().__init__(agent_id=agent_id, content_type="quiz")
+        super().__init__(agent_id, "quiz")
 
 
 class StoryWriterAgent(WriterAgent):
-    """Backward-compatible alias for story writer."""
-
     def __init__(self, agent_id: str = "story_writer"):
-        super().__init__(agent_id=agent_id, content_type="story")
+        super().__init__(agent_id, "story")
+
+
+def create_quiz_writer(agent_id: str = "quiz_writer") -> WriterAgent:
+    return WriterAgent(agent_id, "quiz")
+
+
+def create_story_writer(agent_id: str = "story_writer") -> WriterAgent:
+    return WriterAgent(agent_id, "story")
 
 
 __all__ = [
