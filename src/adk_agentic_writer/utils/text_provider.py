@@ -220,25 +220,67 @@ class TemplateTextProvider:
 class GeminiTextProvider:
     """LLM-powered text provider using Google ADK.
 
-    This is a boilerplate implementation. ADK integration will be added later.
-    Currently falls back to template-based generation.
+    Uses ADK Agent with InMemoryRunner for real AI text generation.
+    Falls back to template-based generation if ADK is unavailable.
     """
 
-    def __init__(self, model: str = "gemini-2.0-flash-exp"):
+    def __init__(self, model: str = "gemini-2.5-flash-lite"):
         """Initialize Gemini text provider.
 
         Args:
-            model: Gemini model to use
+            model: Gemini model to use (default: gemini-2.5-flash-lite)
         """
         self.model = model
         self._fallback = TemplateTextProvider()
-        self._adk_agent = None  # To be initialized with ADK
-        logger.info(f"Initialized GeminiTextProvider with model {model}")
+        self._adk_available = False
+        self._runner = None
+
+        # Check ADK availability
+        try:
+            import os
+            from google.adk.agents import Agent
+            from google.adk.runners import InMemoryRunner
+
+            if os.environ.get("GOOGLE_API_KEY"):
+                self._adk_available = True
+                logger.info(f"GeminiTextProvider initialized with ADK (model: {model})")
+            else:
+                logger.warning(
+                    "GOOGLE_API_KEY not set. Using template fallback. "
+                    "Get your key at: https://aistudio.google.com/app/apikey"
+                )
+        except ImportError:
+            logger.warning("Google ADK not available. Using template fallback.")
+
+    async def _ensure_runner(self) -> bool:
+        """Ensure ADK runner is initialized."""
+        if self._runner is not None:
+            return True
+
+        if not self._adk_available:
+            return False
+
+        try:
+            from google.adk.agents import Agent
+            from google.adk.runners import InMemoryRunner
+
+            agent = Agent(
+                name="text_generator",
+                model=self.model,
+                instruction=(
+                    "You are a concise content writer. Generate exactly what is requested. "
+                    "Return only the requested text, no explanations or formatting."
+                ),
+            )
+            self._runner = InMemoryRunner(agent=agent)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to initialize ADK runner: {e}")
+            self._adk_available = False
+            return False
 
     async def generate_text(self, prompt_key: str, context: Dict[str, Any]) -> str:
-        """Generate text using Gemini LLM.
-
-        Currently uses fallback templates. ADK integration to be added.
+        """Generate text using Gemini LLM via ADK.
 
         Args:
             prompt_key: Type of text to generate
@@ -247,36 +289,48 @@ class GeminiTextProvider:
         Returns:
             Generated text
         """
-        # TODO: Implement ADK LLM call
-        if self._adk_agent is None:
-            logger.debug(f"Using template fallback for {prompt_key}")
-            return await self._fallback.generate_text(prompt_key, context)
+        # Try ADK generation first
+        if await self._ensure_runner():
+            try:
+                prompt = self._build_prompt(prompt_key, context)
+                response = await self._runner.run_debug(prompt)
 
-        # Future ADK implementation:
-        # prompt = self._build_prompt(prompt_key, context)
-        # result = await self._adk_agent.run(prompt)
-        # return result.get("text", "")
+                # Extract text from response
+                if hasattr(response, "text"):
+                    return response.text.strip()
+                elif isinstance(response, str):
+                    return response.strip()
+                else:
+                    return str(response).strip()
 
+            except Exception as e:
+                logger.warning(f"ADK generation failed for {prompt_key}: {e}")
+
+        # Fallback to templates
+        logger.debug(f"Using template fallback for {prompt_key}")
         return await self._fallback.generate_text(prompt_key, context)
 
     def _build_prompt(self, prompt_key: str, context: Dict[str, Any]) -> str:
         """Build LLM prompt for text generation."""
         topic = context.get("topic", "the subject")
+        difficulty = context.get("difficulty", "medium")
+        genre = context.get("genre", "general")
 
         prompts = {
-            "quiz_question": f"Generate an engaging quiz question about {topic}. Return only the question text.",
-            "quiz_option": f"Generate a plausible but incorrect answer option for a quiz about {topic}. Return only the option text.",
-            "quiz_option_correct": f"Generate the correct answer for a quiz question about {topic}. Return only the option text.",
-            "quiz_explanation": f"Explain why this answer is correct in the context of {topic}. Be concise.",
-            "story_opening": f"Write an engaging opening paragraph for an interactive story about {topic}.",
-            "story_path": f"Write a short paragraph describing the next scene in a story about {topic}.",
-            "story_ending": f"Write a satisfying conclusion for a story about {topic}.",
-            "game_quest": f"Create a quest title for a game about {topic}.",
-            "game_objective": f"Create a specific objective for a quest about {topic}.",
-            "simulation_description": f"Write a brief description for an interactive simulation about {topic}.",
+            "quiz_question": f"Generate one engaging {difficulty}-difficulty quiz question about {topic}. Return only the question text.",
+            "quiz_option": f"Generate a plausible but incorrect answer option for a quiz about {topic}. Return only the option text (one short phrase).",
+            "quiz_option_correct": f"Generate the correct answer for a quiz question about {topic}. Return only the option text (one short phrase).",
+            "quiz_explanation": f"Explain why this answer is correct in the context of {topic}. Be concise, 1-2 sentences only.",
+            "story_opening": f"Write an engaging opening paragraph (3-4 sentences) for an interactive {genre} story about {topic}.",
+            "story_path": f"Write a short paragraph (2-3 sentences) describing the next scene in a {genre} story about {topic}.",
+            "story_ending": f"Write a satisfying conclusion paragraph (2-3 sentences) for a {genre} story about {topic}.",
+            "game_quest": f"Create a creative quest title (5-8 words) for a game about {topic}.",
+            "game_objective": f"Create a specific objective (one sentence) for a quest about {topic}.",
+            "simulation_description": f"Write a brief description (2-3 sentences) for an interactive simulation about {topic}.",
+            "chapter_content": f"Write a chapter paragraph (3-4 sentences) about {topic}.",
         }
 
-        return prompts.get(prompt_key, f"Generate content about {topic}")
+        return prompts.get(prompt_key, f"Generate short content about {topic}")
 
 
 __all__ = ["TextProvider", "TemplateTextProvider", "GeminiTextProvider"]
