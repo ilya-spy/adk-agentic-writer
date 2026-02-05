@@ -11,7 +11,7 @@ Generate interactive educational content (quizzes, stories, games, simulations) 
 
 **Two Agent Teams**
 - **Static Team**: Fast, template-based, no API calls
-- **Gemini Team**: AI-powered via Google ADK (coming soon)
+- **Gemini Team**: AI-powered via Google ADK with real LLM generation
 
 **4 Primary Tasks with 15 Content Type Aliases**
 - `generate_quiz` → quiz, trivia, test
@@ -32,7 +32,37 @@ Generate interactive educational content (quizzes, stories, games, simulations) 
 pip install -r requirements.txt
 ```
 
-### 2. Run Server
+### 2. Configure API Key (for Gemini Team)
+
+The Gemini team uses Google's Agent Development Kit (ADK) for real AI generation.
+
+**Get your API key:**
+1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey)
+2. Click "Create API Key"
+3. Copy the generated key
+
+**Set the API key:**
+
+```bash
+# Copy example env file
+cp .env.example .env
+
+# Edit .env and add your key
+# GOOGLE_API_KEY=your_api_key_here
+```
+
+Or set directly in terminal:
+```bash
+# Windows PowerShell
+$env:GOOGLE_API_KEY="your_api_key_here"
+
+# Linux/macOS
+export GOOGLE_API_KEY="your_api_key_here"
+```
+
+> **Note**: Without an API key, Gemini team falls back to static templates.
+
+### 3. Run Server
 
 ```bash
 # Direct
@@ -43,6 +73,18 @@ make run-backend
 ```
 
 Server runs at: `http://localhost:8000`
+
+### 4. Run ADK Web UI (Interactive Testing)
+
+For interactive agent testing with the ADK dev interface:
+
+```bash
+# From project root, with virtual env activated
+cd src/adk_agentic_writer/agents/gemini
+adk web --port 8080
+```
+
+Access at: `http://localhost:8080`
 
 ## Project Structure
 
@@ -147,6 +189,52 @@ Request → FastAPI → CoordinatorAgent → WriterAgent/DesignerAgent → Respo
 - **Coordinator**: Routes requests to appropriate agent based on content type
 - **WriterAgent**: Handles quiz, story (text-based content)
 - **DesignerAgent**: Handles game, simulation (structural content)
+
+## Gemini Team (ADK-Powered)
+
+The Gemini team uses Google's Agent Development Kit (ADK) for real AI content generation.
+
+### Features
+
+- **Real AI Generation**: Uses Gemini LLM for creative, engaging content
+- **Structured Output**: JSON schema validation for consistent responses
+- **InMemoryRunner**: Fast session management without persistence
+- **Graceful Fallback**: Falls back to static templates if API unavailable
+
+### Usage
+
+```python
+from adk_agentic_writer.agents.gemini import GeminiWriterAgent
+
+# Create Gemini-powered writer
+writer = GeminiWriterAgent(content_type="quiz")
+
+# Check if ADK is enabled
+print(f"ADK enabled: {writer.adk_enabled}")
+
+# Generate content (uses ADK if available, else templates)
+result = await writer.process_task(GENERATE_QUIZ, {
+    "topic": "Python Programming",
+    "num_questions": 5
+})
+```
+
+### Configuration
+
+| Environment Variable | Description | Default |
+|---------------------|-------------|---------|
+| `GOOGLE_API_KEY` | Google AI Studio API key | (required for ADK) |
+| `GEMINI_MODEL` | Model to use | `gemini-2.5-flash-lite` |
+
+### Testing Gemini Agents
+
+```bash
+# Run all tests (fallback mode without API key)
+pytest tests/integration/test_gemini_writer.py -v
+
+# Run live tests with API key
+GOOGLE_API_KEY=your_key pytest tests/integration/test_gemini_writer.py -v
+```
 
 ## Testing
 
