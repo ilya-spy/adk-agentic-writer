@@ -154,25 +154,42 @@ class TestDemoTeamCreation:
 
 
 class TestDemoContentGeneration:
-    """Test content generation with new generate() method."""
+    """Test content generation via coordinator."""
 
     @pytest.mark.asyncio
-    async def test_generate_quiz(self):
-        """Test generating a quiz using the new generate() method."""
-        demo = InteractiveDemo()
+    async def test_generate_quiz_via_coordinator(self):
+        """Test generating quiz via coordinator."""
+        from adk_agentic_writer.agents.static import CoordinatorAgent
 
-        # Create agent
-        agent = StaticQuizWriterAgent("test_agent")
-        demo.agents["test_agent"] = agent
+        coordinator = CoordinatorAgent()
 
-        # Generate content using new API
-        result = await agent.generate(
+        # Use convenience method
+        result = await coordinator.generate_content(
+            content_type="quiz",
             topic="Python",
             num_questions=3,
-            difficulty="medium",
         )
 
         assert result is not None
-        assert "title" in result
-        assert "questions" in result
-        assert len(result["questions"]) == 3
+        assert result["status"] == "completed"
+        assert "content" in result
+        assert "title" in result["content"]
+        assert "questions" in result["content"]
+        assert len(result["content"]["questions"]) == 3
+
+    @pytest.mark.asyncio
+    async def test_generate_block_directly(self):
+        """Test generating a block using ContentProtocol."""
+        from adk_agentic_writer.models.content_models import ContentBlockType
+
+        agent = StaticQuizWriterAgent("test_agent")
+
+        # Generate a single block via protocol
+        block = await agent.generate_block(
+            ContentBlockType.QUESTION,
+            {"topic": "Python", "difficulty": "medium"},
+        )
+
+        assert block is not None
+        assert block.block_type == ContentBlockType.QUESTION
+        assert "question" in block.content

@@ -4,17 +4,18 @@ Features:
 - Menu-driven interface
 - Step-by-step wizards for creating agents, teams
 - Status bar showing system state
-- Interactive quiz generation
+- Interactive content generation via Coordinator
 """
 
 import asyncio
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+from adk_agentic_writer.agents.static.coordinator import CoordinatorAgent
 from adk_agentic_writer.agents.static.writer import StaticQuizWriterAgent
 from adk_agentic_writer.runtime import AgentRuntime
 from adk_agentic_writer.teams.content_team import QUIZ_WRITER, QUIZ_WRITERS_POOL
@@ -25,7 +26,8 @@ class InteractiveDemo:
 
     def __init__(self):
         self.runtime = AgentRuntime(agent_class=StaticQuizWriterAgent)
-        self.agents: Dict[str, StaticQuizWriterAgent] = {}
+        self.coordinator = CoordinatorAgent()  # Central coordinator for API
+        self.agents: Dict[str, Any] = {}
         self.generated_content: List[Dict] = []
         self.running = True
 
@@ -167,48 +169,59 @@ class InteractiveDemo:
         input("\nPress Enter to continue...")
 
     async def wizard_generate_content(self):
-        """Wizard for generating content."""
+        """Wizard for generating content via coordinator."""
         self.clear_screen()
         self.print_status_bar()
         print("\n[WIZARD] Generate Content")
         print("=" * 80)
 
-        if not self.agents:
-            print("\n[ERROR] No agents available. Create an agent first!")
-            input("\nPress Enter to continue...")
+        # Discover content types from coordinator (grouped by task)
+        print("\nAvailable Content Types (grouped by task):")
+        grouped = self.coordinator.get_all_content_types()
+        all_types = []
+        for task_id, types in grouped.items():
+            print(f"\n  {task_id}:")
+            for ct in types:
+                all_types.append((ct, task_id))
+                print(f"    {len(all_types)}. {ct}")
+
+        type_choice = self.get_choice(len(all_types))
+        if type_choice == 0:
             return
+        content_type, task_id = all_types[type_choice - 1]
 
-        # Select agent
-        print("\nAvailable agents:")
-        agent_list = list(self.agents.items())
-        for i, (agent_id, agent) in enumerate(agent_list, 1):
-            params = agent.parameters
-            print(f"  {i}. {agent_id} (topic: {params.get('topic', 'N/A')})")
+        # Get parameters
+        topic = self.get_input("Topic", "Python Programming")
+        num_blocks = self.get_int("Number of blocks", 5, 2, 20)
 
-        agent_choice = self.get_choice(len(agent_list))
-        if agent_choice == 0:
-            return
-
-        agent_id, agent = agent_list[agent_choice - 1]
-
-        # Generate content using the new generate() method
-        print(f"\n[GENERATE] Generating quiz...")
-        print(f"  Agent: {agent_id}")
-        print(f"  Topic: {agent.parameters.get('topic', 'N/A')}")
-        print(f"  Questions: {agent.parameters.get('num_questions', 'N/A')}")
+        print(f"\n[GENERATE] Generating {content_type} via {task_id}...")
+        print(f"  Topic: {topic}")
+        print(f"  Blocks: {num_blocks}")
 
         try:
-            result = await agent.generate(
-                topic=agent.parameters.get("topic", "General"),
-                num_questions=agent.parameters.get("num_questions", 5),
-                difficulty=agent.parameters.get("difficulty", "medium"),
+            params = {"topic": topic}
+            if "quiz" in task_id:
+                params["num_questions"] = num_blocks
+            else:
+                params["num_nodes"] = num_blocks
+
+            result = await self.coordinator.generate_content(
+                content_type=content_type,
+                **params,
             )
 
             # Store generated content
-            self.generated_content.append({"agent": agent_id, "content": result})
+            content = result.get("content", result)
+            self.generated_content.append(
+                {
+                    "agent": result.get("agent_used", "coordinator"),
+                    "content_type": content_type,
+                    "content": content,
+                }
+            )
 
             print(f"\n[SUCCESS] Content generated successfully!")
-            self._display_content_summary(result)
+            self._display_content_summary(content)
 
         except Exception as e:
             print(f"\n[ERROR] Failed to generate content: {e}")
@@ -218,9 +231,15 @@ class InteractiveDemo:
     def _display_content_summary(self, content: Dict):
         """Display summary of generated content."""
         title = content.get("title", "N/A")
-        num_q = len(content.get("questions", []))
         print(f"\n  Title: {title}")
-        print(f"  Questions: {num_q}")
+
+        # Handle different content types
+        if "questions" in content:
+            print(f"  Questions: {len(content['questions'])}")
+        elif "nodes" in content:
+            print(f"  Nodes: {len(content['nodes'])}")
+        elif "variables" in content:
+            print(f"  Variables: {len(content['variables'])}")
 
     async def view_agents(self):
         """View all agents."""

@@ -1,4 +1,4 @@
-"""Designer agent for structural/interactive content with universal block generators."""
+"""Designer agent for structural/interactive content (game, simulation)."""
 
 import logging
 from typing import Any, Dict, List, Optional
@@ -13,6 +13,7 @@ from ...models.content_models import (
     SimulationVariable,
     WebSimulation,
 )
+from ...tasks.content_tasks import GENERATE_GAME, GENERATE_SIMULATION
 from ...utils.content_registry import CONTENT_REGISTRY
 from ...utils.text_provider import TextProvider, TemplateTextProvider
 from ..content_agent import ContentWriterAgent
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class DesignerAgent(ContentWriterAgent):
-    """Designer implementing ContentProtocol with universal block generators."""
+    """Designer publishes GENERATE_GAME and GENERATE_SIMULATION tasks."""
 
     def __init__(
         self,
@@ -41,6 +42,8 @@ class DesignerAgent(ContentWriterAgent):
             config.agent_config,
             text_provider=text_provider or TemplateTextProvider(),
         )
+        # Publish both designer tasks
+        self.supported_tasks.extend([GENERATE_GAME, GENERATE_SIMULATION])
 
     @property
     def content_type(self) -> str:
@@ -72,36 +75,6 @@ class DesignerAgent(ContentWriterAgent):
             pattern=context.get("pattern", ContentPattern.SEQUENTIAL),
             metadata=context.get("metadata", {}),
         )
-
-    async def generate_patterned_blocks(
-        self,
-        block_type: ContentBlockType,
-        pattern: ContentPattern,
-        context: Dict[str, Any],
-    ) -> List[ContentBlock]:
-        """Generate blocks with navigation based on pattern."""
-        count, blocks = context.get("count", 3), []
-        for i in range(count):
-            block = await self.generate_block(
-                block_type,
-                {**context, "block_id": f"{block_type.value}_{i}", "index": i},
-            )
-            block.pattern = pattern
-            if pattern == ContentPattern.SEQUENTIAL and i < count - 1:
-                block.navigation = {"next": f"{block_type.value}_{i + 1}"}
-            elif pattern == ContentPattern.LOOPED:
-                block.navigation = {"next": f"{block_type.value}_{(i + 1) % count}"}
-                block.exit_condition = context.get(
-                    "exit_condition", {"max_iterations": 3}
-                )
-            elif pattern == ContentPattern.BRANCHED:
-                block.choices = [
-                    {"text": f"Go to {j}", "target": f"{block_type.value}_{j}"}
-                    for j in range(count)
-                    if j != i
-                ]
-            blocks.append(block)
-        return blocks
 
     # Universal Block Generators
     def generate_variable(
@@ -166,7 +139,7 @@ class DesignerAgent(ContentWriterAgent):
     ) -> QuestNode:
         """Create a navigation node with choices."""
         if description is None:
-            description = await self._generate_text(
+            description = await self.generate_text(
                 "game_objective",
                 {"topic": kwargs.get("topic", "adventure"), "aspect": title},
             )
@@ -251,12 +224,13 @@ class DesignerAgent(ContentWriterAgent):
             rules.append("Special effects when primary exceeds threshold")
         return rules
 
-    # Content builders
+    # Content builders - decides based on task_id in context
     async def _build_content(self, context: Dict[str, Any]) -> Dict[str, Any]:
         params = {**self._type_config.default_params, **context}
-        if self._content_type in ("quest_game", "game"):
+        task_id = context.get("task_id", "")
+        if "game" in task_id:
             return await self._build_game(params)
-        elif self._content_type in ("web_simulation", "simulation"):
+        elif "simulation" in task_id:
             return await self._build_simulation(params)
         return await self._build_generic(params)
 
@@ -267,60 +241,85 @@ class DesignerAgent(ContentWriterAgent):
             p.get("num_nodes", 5),
         )
         nodes = {}
+        num_nodes = max(2, num_nodes)  # Min: start + mastery
+        num_middle = num_nodes - 2  # Nodes between start and mastery
 
-        # Start
-        title = await self._generate_text(
+        # Start node
+        title = await self.generate_text(
             "game_quest", {"topic": topic, "theme": p.get("theme", "fantasy")}
         )
+        start_choices = []
+        if num_middle > 0:
+            start_choices = [{"text": "Begin quest", "next_node_id": "quest_0"}]
+            if num_middle > 1:
+                start_choices.append(
+                    {
+                        "text": "Skip to challenge",
+                        "next_node_id": f"quest_{num_middle-1}",
+                    }
+                )
+        else:
+            start_choices = [{"text": "Complete quest", "next_node_id": "mastery"}]
+
         nodes["start"] = await self.generate_node(
-            "start",
-            title,
-            f"Begin your journey into {topic}.",
-            [
-                {"text": "Explore basics", "next_node_id": "basics"},
-                {"text": "Take challenge", "next_node_id": "challenge"},
-            ],
+            "start", title, f"Begin your journey into {topic}.", start_choices
         )
 
-        # Progressive nodes
-        if num_nodes >= 3:
-            nodes["basics"] = await self.generate_node(
-                "basics",
-                "Learning Basics",
+        # Generate middle quest nodes dynamically
+        quest_titles = [
+            "Learning Basics",
+            "The Challenge",
+            "Intermediate",
+            "Advanced",
+            "Expert Level",
+            "Final Trial",
+            "Hidden Path",
+            "Secret Quest",
+        ]
+        xp_per_node = 50
+
+        for i in range(num_middle):
+            is_last = i == num_middle - 1
+            node_title = quest_titles[i % len(quest_titles)]
+
+            # Choices: next node or skip to mastery
+            choices = []
+            if is_last:
+                choices = [{"text": "To mastery", "next_node_id": "mastery"}]
+            else:
+                choices = [{"text": "Continue", "next_node_id": f"quest_{i+1}"}]
+                if i + 2 <= num_middle - 1:
+                    choices.append(
+                        {"text": "Skip ahead", "next_node_id": f"quest_{i+2}"}
+                    )
+
+            # Requirements based on complexity
+            reqs = []
+            if complexity != "simple" and i > 0:
+                reqs = [f"Quest {i} Badge"]
+
+            nodes[f"quest_{i}"] = await self.generate_node(
+                f"quest_{i}",
+                node_title,
                 topic=topic,
-                choices=[
-                    {"text": "To intermediate", "next_node_id": "intermediate"},
-                    {"text": "Try challenge", "next_node_id": "challenge"},
-                ],
-                rewards=["Basic Knowledge", "50 XP"],
-            )
-        if num_nodes >= 4:
-            nodes["challenge"] = await self.generate_node(
-                "challenge",
-                "The Challenge",
-                topic=topic,
-                choices=[{"text": "To mastery", "next_node_id": "mastery"}],
-                rewards=["Challenge Badge", "100 XP"],
-                requirements=["Basic Knowledge"] if complexity != "simple" else [],
-            )
-        if num_nodes >= 5 and complexity != "simple":
-            nodes["intermediate"] = await self.generate_node(
-                "intermediate",
-                "Intermediate",
-                topic=topic,
-                choices=[{"text": "To mastery", "next_node_id": "mastery"}],
-                rewards=["Intermediate Badge", "150 XP"],
-                requirements=["Basic Knowledge"],
+                choices=choices,
+                rewards=[f"Quest {i+1} Badge", f"{(i+1) * xp_per_node} XP"],
+                requirements=reqs,
             )
 
-        # Mastery (ending)
+        # Mastery node (ending)
+        final_reqs = (
+            [f"Quest {num_middle} Badge"]
+            if complexity != "simple" and num_middle > 0
+            else []
+        )
         nodes["mastery"] = await self.generate_node(
             "mastery",
             f"Mastery of {topic.title()}",
             f"Congratulations! You mastered {topic}.",
             [],
-            [f"{topic.title()} Master", "500 XP"],
-            ["Challenge Badge"] if complexity != "simple" else [],
+            [f"{topic.title()} Master", f"{num_nodes * 100} XP"],
+            final_reqs,
         )
 
         return QuestGame(
@@ -336,7 +335,7 @@ class DesignerAgent(ContentWriterAgent):
         variables = self.generate_variables_set(topic, complexity)
         return WebSimulation(
             title=self._type_config.title_template.format(topic=topic.title()),
-            description=await self._generate_text(
+            description=await self.generate_text(
                 "simulation_description", {"topic": topic}
             ),
             variables=variables,
