@@ -1,78 +1,65 @@
 # Teams
 
-Pre-configured agent teams with specialized roles and agent pools.
+Pre-configured agent pools for content generation and editorial workflows.
 
-## Architecture
+## Overview
+
+Teams provide `AgentConfig` instances for agent instantiation:
 
 ```
-Workflow → Tasks → Teams → Agents
+Workflow → Tasks → Teams (configs) → Agents
 ```
-
-**Flow**: Workflows orchestrate → Tasks setup context → Teams provide configs → Agents instantiate
-
-**Formula**: `Team = Roles + Configs + Pools`
-
----
 
 ## Content Team (`content_team.py`)
 
-Specialized writers for different content types.
+Configurations for content-generating agents:
 
-| Role | Purpose | Temp |
-|------|---------|------|
-| `CONTENT_WRITER` | General editorial content | 0.7 |
-| `STORY_WRITER` | Interactive narratives | 0.85 |
-| `QUIZ_WRITER` | Educational quizzes | 0.7 |
-| `GAME_WRITER` | Quest-based games | 0.75 |
-| `SIMULATION_WRITER` | Web simulations | 0.65 |
+| Config | Role | Purpose |
+|--------|------|---------|
+| `CONTENT_WRITER` | WRITER | General content |
+| `STORY_WRITER` | WRITER | Narratives |
+| `QUIZ_WRITER` | WRITER | Quizzes |
+| `GAME_WRITER` | DESIGNER | Games |
+| `SIMULATION_WRITER` | DESIGNER | Simulations |
 
-**Pools**: `STORY_WRITERS_POOL` (3), `QUIZ_WRITERS_POOL` (2), `GAME_WRITERS_POOL` (2), `SIMULATION_WRITERS_POOL` (1)
-
----
+**Note**: Static team uses unified `WriterAgent` and `DesignerAgent` that handle multiple content types via task routing.
 
 ## Editorial Team (`editorial_team.py`)
 
-Review and refinement specialists.
+Review and refinement specialists:
 
-| Role | Purpose | Temp |
-|------|---------|------|
-| `EDITORIAL_REVIEWER` | Quality assurance | 0.5 |
-| `EDITORIAL_REFINER` | Content improvement | 0.6 |
+| Config | Role | Purpose |
+|--------|------|---------|
+| `EDITORIAL_REVIEWER` | REVIEWER | Quality review |
+| `EDITORIAL_REFINER` | REFINER | Content improvement |
 
-**Pools**: `EDITORIAL_REVIEWERS_POOL` (2), `EDITORIAL_REFINERS_POOL` (2), `EDITORIAL_GROUP_POOL` (2)
+## Agent Pools
 
----
+Pre-defined pools for parallel workflows:
+
+- `STORY_WRITERS_POOL` - Multiple story writers
+- `QUIZ_WRITERS_POOL` - Multiple quiz writers
+- `EDITORIAL_REVIEWERS_POOL` - Review team
 
 ## Usage
 
 ```python
-from adk_agentic_writer.teams import STORY_WRITER, STORY_WRITERS_POOL
-from adk_agentic_writer.agents import BaseAgent
+from adk_agentic_writer.teams import STORY_WRITER, QUIZ_WRITERS_POOL
+from adk_agentic_writer.agents import ContentWriterAgent
 
-# Instantiate agent from config
-story_agent = BaseAgent(config=STORY_WRITER)
-
-# Use pool in workflow
-workflow = ParallelEditorialWorkflow(
-    name="story_variants",
-    team_pool=STORY_WRITERS_POOL,
-    generator=story_agent
+# Create agent from config
+agent = ContentWriterAgent(
+    agent_id="story_1",
+    config=STORY_WRITER
 )
+
+# Use pool for parallel generation
+for config in QUIZ_WRITERS_POOL.configs:
+    agent = ContentWriterAgent(f"quiz_{i}", config)
 ```
-
----
-
-## Connections
-
-- **Agents**: AgentConfig → BaseAgent instantiation with role-specific settings
-- **Tasks**: Tasks specify `agent_role`, matched to team pool agents
-- **Workflows**: Orchestrate task execution using agent pools for parallel work
-
----
 
 ## Key Principles
 
-✅ **Role-Based** - Specialized by content type  
-✅ **Configurable** - Temperature tuned per role  
-✅ **Pooled** - Multi-agent collaboration  
-✅ **Type-Safe** - Enum-based roles
+- **Role-Based**: Configs tuned per content type
+- **Pooled**: Multi-agent for parallel work
+- **Configurable**: Temperature, max_tokens per role

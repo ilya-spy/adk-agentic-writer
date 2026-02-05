@@ -1,136 +1,117 @@
 # Models
 
-Type-safe data models for agents, workflows, content, and editorial operations.
+Type-safe data models for agents, tasks, and content.
 
 ## Overview
 
-**Models** define the data structures used throughout the system:
-
-- **Agent Models**: Agent configuration, tasks, state, and orchestration
-- **Content Models**: Interactive content types (quiz, story, game, simulation)
-- **Editorial Models**: Review, refinement, feedback, and quality metrics
-
-**Formula**: `Models = Structure + Validation + Type Safety`
-
----
+- **Agent Models**: Configuration, tasks, state, roles
+- **Content Models**: Quiz, Story, Game, Simulation structures
+- **Editorial Models**: Review, feedback, quality metrics
 
 ## Agent Models (`agent_models.py`)
 
-Core orchestration and agent configuration.
-
-### Configuration & Orchestration
-
-| Model | Purpose | Used In |
-|-------|---------|---------|
-| `AgentConfig` | Agent system instructions + parameters | `teams/` → `agents/` |
-| `AgentTask` | Task definition with prompt + dependencies | `tasks/` → `workflows/` |
-| `TeamMetadata` | Agent pool configuration | `teams/` → `workflows/` |
-| `WorkflowMetadata` | Workflow pattern + scope definition | `workflows/` |
-
-### Enums
-
-| Enum | Values | Usage |
-|------|--------|-------|
-| `AgentRole` | WRITER, REVIEWER, REFINER, EDITOR, etc. | Task assignment |
-| `WorkflowPattern` | SEQUENTIAL, PARALLEL, LOOP, CONDITIONAL | Execution strategy |
-| `WorkflowScope` | AGENT, CONTENT, EDITORIAL | Domain separation |
-
-### Runtime State
+### Core Types
 
 | Model | Purpose |
 |-------|---------|
-| `AgentState` | Current status, tasks, variables |
-| `AgentStatus` | IDLE, WORKING, WAITING, COMPLETED, ERROR |
-| `AgentMessage` | Inter-agent communication |
+| `AgentConfig` | Agent configuration (role, instructions, params) |
+| `AgentTask` | Task with prompt, content_types, parameters |
+| `AgentState` | Runtime state (status, variables) |
+| `AgentModel` | Agent model config (name, parameters) |
 
----
+### AgentTask
+
+Central model for task-based architecture:
+
+```python
+class AgentTask(BaseModel):
+    task_id: str                    # "generate_quiz"
+    agent_role: AgentRole           # WRITER, DESIGNER
+    prompt: str                     # "Generate quiz about {topic}"
+    parameters: Dict[str, Any]      # {"topic": "", "num_questions": 5}
+    content_types: List[str]        # ["quiz", "trivia", "test"]
+    output_key: Optional[str]       # "content"
+```
+
+### AgentRole Enum
+
+```python
+class AgentRole(str, Enum):
+    COORDINATOR = "coordinator"
+    WRITER = "writer"
+    DESIGNER = "designer"
+    EDITOR = "editor"
+    REVIEWER = "reviewer"
+    REFINER = "refiner"
+    ANALYZER = "analyzer"
+    STRATEGIST = "strategist"
+    STREAMER = "streamer"
+```
 
 ## Content Models (`content_models.py`)
 
-Structured interactive content types.
+### Content Structures
 
-| Model | Purpose | Used In |
-|-------|---------|---------|
-| `Quiz` | Educational quizzes with questions | Content generation |
-| `QuestGame` | Quest-based games with nodes | Content generation |
-| `BranchedNarrative` | Interactive stories with choices | Content generation |
-| `WebSimulation` | Simulations with variables + controls | Content generation |
+| Model | Fields |
+|-------|--------|
+| `Quiz` | title, questions, passing_score |
+| `QuizQuestion` | question, options, correct_answer, explanation |
+| `BranchedNarrative` | title, synopsis, start_node, nodes |
+| `StoryNode` | node_id, content, branches, is_ending |
+| `QuestGame` | title, description, start_node, nodes |
+| `QuestNode` | node_id, title, choices, rewards, requirements |
+| `WebSimulation` | title, variables, controls, rules |
 
-**ContentType Enum**: `QUIZ`, `QUEST_GAME`, `BRANCHED_NARRATIVE`, `WEB_SIMULATION`
+### Block Types
 
----
+```python
+class ContentBlockType(str, Enum):
+    SCENE = "scene"
+    CARD = "card"
+    CHAPTER = "chapter"
+    SECTION = "section"
+    SLIDE = "slide"
+    QUESTION = "question"
+    NODE = "node"
+    CUSTOM = "custom"
 
-## Editorial Models (`editorial_models.py`)
-
-Review, refinement, and quality tracking.
-
-| Model | Purpose | Used In |
-|-------|---------|---------|
-| `Feedback` | Specific improvement suggestions | Editorial workflows |
-| `ContentRevision` | Version tracking with changes | Editorial workflows |
-| `QualityMetrics` | Quality scores (0-100) | Evaluation tasks |
-| `ValidationResult` | Validation errors + warnings | Validation tasks |
-| `EditorialRequest` | Editorial action request | API endpoints |
-| `EditorialResponse` | Refined content + feedback | API responses |
-| `RefinementContext` | Tone, audience, constraints | Refinement tasks |
-
-**EditorialAction Enum**: `VALIDATE`, `REFINE`, `REVIEW`, `APPROVE`, `REJECT`
-
-**FeedbackType Enum**: `GRAMMAR`, `CLARITY`, `ACCURACY`, `STRUCTURE`, `TONE`, `ENGAGEMENT`
-
----
+class ContentPattern(str, Enum):
+    SEQUENTIAL = "sequential"
+    LOOPED = "looped"
+    BRANCHED = "branched"
+    CONDITIONAL = "conditional"
+    PARALLEL = "parallel"
+```
 
 ## Usage
 
 ```python
 from adk_agentic_writer.models import (
-    AgentConfig, AgentTask, TeamMetadata,
+    AgentTask, AgentRole, AgentConfig,
     Quiz, BranchedNarrative,
-    Feedback, QualityMetrics
+    ContentBlockType, ContentPattern
 )
 
-# Define agent configuration
-config = AgentConfig(
-    role="story_writer",
-    system_instruction="Write engaging stories...",
-    temperature=0.85,
-    max_tokens=2048
-)
-
-# Create task
+# Create task with content_types
 task = AgentTask(
-    task_id="write_story",
+    task_id="generate_quiz",
     agent_role=AgentRole.WRITER,
-    prompt="Write a story about {topic}",
-    output_key="content_block"
+    prompt="Generate quiz about {topic}",
+    content_types=["quiz", "trivia", "test"],
+    parameters={"topic": "", "num_questions": 5}
 )
 
-# Execute task
-result = await agent.process_task(task=task)
-
-# TODO: show AgentTasks that can generate structured responses as below
-
-# Generated content
-story = BranchedNarrative(
-    title="Adventure",
-    start_node="intro",
-    nodes={"intro": StoryNode(...)}
-)
-
-# Provided feedback
-feedback = Feedback(
-    feedback_type=FeedbackType.CLARITY,
-    content="Simplify the opening paragraph",
-    severity="medium"
+# Content structure
+quiz = Quiz(
+    title="Python Quiz",
+    questions=[...],
+    passing_score=70
 )
 ```
 
----
-
 ## Key Principles
 
-✅ **Type-Safe** - Pydantic validation for all models  
-✅ **Composable** - Models reference each other naturally  
-✅ **Domain-Driven** - Clear separation (agent/content/editorial)  
-✅ **Extensible** - Easy to add new content types or roles
-
+- **Type-Safe**: Pydantic validation
+- **Task-Centric**: AgentTask with content_types for discovery
+- **Composable**: Models reference each other
+- **Extensible**: Easy to add content types

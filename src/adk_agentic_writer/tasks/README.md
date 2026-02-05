@@ -1,79 +1,80 @@
 # Tasks
 
-Atomic work units with prompts, roles, and data flow definitions.
+Task templates with content type aliases for discovery.
 
 ## Overview
 
-**AgentTask** defines a single unit of work for an agent:
+**AgentTask** defines a unit of work with:
+- `task_id`: Unique identifier
+- `agent_role`: Role that handles this task (WRITER, DESIGNER)
+- `prompt`: Template with `{variable}` substitution
+- `content_types`: Aliases for API/UI discovery
+- `parameters`: Default values
+- `output_key`: State variable for result
 
-- **Role**: Agent type (WRITER, REVIEWER, REFINER, EDITOR, STREAMER)
-- **Prompt**: Instruction template with `{variable}` substitution
-- **Output Key**: State variable to store result
-- **Dependencies**: Required predecessor task IDs
+## Primary Tasks
 
-**Data Flow**: Task `output_key` → Next task's `{input_variable}`
+Tasks published by agents via `get_supported_tasks()`:
 
----
+| Task | Agent | Content Types (Aliases) |
+|------|-------|------------------------|
+| `GENERATE_QUIZ` | WRITER | quiz, trivia, test |
+| `GENERATE_STORY` | WRITER | story, narrative, branched_narrative, adventure |
+| `GENERATE_GAME` | DESIGNER | game, quest_game, quest, rpg |
+| `GENERATE_SIMULATION` | DESIGNER | simulation, web_simulation, interactive, simulator |
 
-## Task Categories
+### Task Discovery
 
-### Content Tasks (`content_tasks.py`)
+```python
+from adk_agentic_writer.agents import CoordinatorAgent
 
-All generation tasks output to `content_block`:
+coordinator = CoordinatorAgent()
+
+# Get all tasks with content_types
+for task in coordinator.get_supported_tasks():
+    print(f"{task.task_id}: {task.content_types}")
+
+# Get task for a content type alias
+task = coordinator.get_task_for_content_type("trivia")  # GENERATE_QUIZ
+task = coordinator.get_task_for_content_type("rpg")     # GENERATE_GAME
+```
+
+## Block-Level Tasks
+
+Internal tasks for granular control:
 
 - `GENERATE_BLOCK` - Single content unit
 - `GENERATE_SEQUENTIAL_BLOCKS` - Linear sequence
-- `GENERATE_LOOPED_BLOCKS` - Repeatable with exit conditions
-- `GENERATE_BRANCHED_BLOCKS` - Choice-based navigation
-- `GENERATE_CONDITIONAL_BLOCKS` - State-based display
-- `GENERATE_VARIANT_BLOCKS` - Multiple variations
-- `GENERATE_ADAPTIVE_BLOCK` - Behavior-adapted content
-- `GENERATE_STREAMING_BLOCK` - Progressive generation
+- `GENERATE_LOOPED_BLOCKS` - Repeatable with exit
+- `GENERATE_BRANCHED_BLOCKS` - Choice-based
+- `GENERATE_CONDITIONAL_BLOCKS` - State-based
 
-**Support Tasks**:
-- `ANALYZE_USER_BEHAVIOR` → `behavior_analysis`
-- `ADAPT_CONTENT_STRATEGY` → `content_strategy`
-- `STREAM_CONTENT_BLOCK` → `content_stream`
+## Editorial Tasks
 
-### Editorial Tasks (`editorial_tasks.py`)
+Refinement and quality:
 
-Refinement and quality improvement:
-
-- `REVIEW_DRAFT` → `review_feedback`
-- `REFINE_BASED_ON_REVIEW` → `refined_draft`
-- `FINALIZE_CONTENT` → `final_content`
-- `EVALUATE_CONTENT_QUALITY` → `evaluation_result`
-- `REFINE_ITERATIVELY` → `refined_content`
-- `ANALYZE_CONTENT_TYPE` → `content_type_analysis`
-- `SELECT_EDITING_STRATEGY` → `editing_strategy`
-- `APPLY_ADAPTIVE_EDITING` → `edited_content`
-- `REVIEW_VARIANTS_QUALITY` → `quality_scores`
-- `SELECT_BEST_VARIANT` → `selected_content`
-
----
+- `REVIEW_CONTENT` - Generate feedback
+- `VALIDATE_CONTENT` - Check requirements
+- `REFINE_CONTENT` - Improve based on feedback
 
 ## Usage
 
 ```python
-from adk_agentic_writer.tasks import content_tasks, editorial_tasks
-
-# Access task
-task = content_tasks.GENERATE_ADAPTIVE_BLOCK
+from adk_agentic_writer.tasks import GENERATE_QUIZ, GENERATE_STORY
 
 # Task properties
-task.task_id          # "generate_adaptive_block"
-task.agent_role       # AgentRole.WRITER
-task.output_key       # "content_block"
-task.dependencies     # ["adapt_content_strategy"]
-task.prompt           # Template with {variables}
-```
+GENERATE_QUIZ.task_id        # "generate_quiz"
+GENERATE_QUIZ.agent_role     # AgentRole.WRITER
+GENERATE_QUIZ.content_types  # ["quiz", "trivia", "test"]
+GENERATE_QUIZ.parameters     # {"topic": "", "num_questions": 5}
 
----
+# Import specific task
+from adk_agentic_writer.tasks.content_tasks import GENERATE_GAME
+```
 
 ## Key Principles
 
-✅ **Atomic** - Each task does one thing  
-✅ **Composable** - Tasks chain via output → input  
-✅ **Declarative** - Dependencies explicitly defined  
-✅ **Unified Output** - All generation → `content_block`
-
+- **Discoverable**: Tasks publish content_types for API/UI
+- **Aliased**: Multiple content types map to one task
+- **Templated**: Prompts use `{variable}` substitution
+- **Type-safe**: Pydantic validation
