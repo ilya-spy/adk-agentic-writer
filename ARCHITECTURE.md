@@ -1,432 +1,150 @@
 # Architecture
 
-> Multi-agent content generation system with Static and Gemini teams
+> Task-based multi-agent content generation system
 
-## System Overview
+## Overview
 
-ADK Agentic Writer generates interactive educational content (Quiz, Story, Game, Simulation) using coordinated agents. Two teams: **Static** (template-based, fast) and **Gemini** (AI-powered, quality).
-
-**Key Principles**: Protocol-driven design, single base class, FastAPI backend serves both API and static HTML on port 8000.
-
----
-
-## Architecture
+ADK Agentic Writer generates interactive content using coordinated agents. Content types (quiz, story, game, simulation) are aliases that map to tasks published by agents.
 
 ```
-Frontend (Static HTML: index.html, showcase.html, frontend.html)
-    ↓
-Backend (FastAPI :8000)
-    ↓
-Agent Teams (Static | Gemini)
-    ↓
-Protocols + Models + Workflows
+Frontend (showcase.html) → FastAPI (:8000) → CoordinatorAgent → WriterAgent/DesignerAgent
 ```
-
----
 
 ## Directory Structure
 
 ```
-adk-agentic-writer/
-├── src/adk_agentic_writer/
-│   ├── protocols/              # Interface definitions
-│   │   ├── agent_protocol.py   # AgentProtocol (process_task)
-│   │   ├── content_protocol.py # ContentProtocol (UX patterns)
-│   │   └── editorial_protocol.py # EditorialProtocol (review/refine)
-│   ├── models/                 # Data structures
-│   │   ├── agent_models.py     # Agent states, configs, roles
-│   │   ├── content_models.py   # Quiz, Story, Game, Simulation
-│   │   └── editorial_models.py # Feedback, QualityMetrics, Revisions
-│   ├── workflows/              # Orchestration patterns
-│   │   ├── base_workflow.py    # Sequential, Parallel, Loop, Conditional
-│   │   ├── agent_workflows.py
-│   │   ├── editorial_workflows.py
-│   │   └── content_workflows.py
-│   ├── agents/                 # Agent implementations
-│   │   ├── base_agent.py       # Single base class
-│   │   ├── static/             # Template-based (6 agents)
-│   │   └── gemini/             # AI-powered (6 agents)
-│   └── backend/
-│       └── api.py              # FastAPI server
-├── frontend/public/            # Static HTML files
-├── tests/                      # Unit & integration tests
-├── requirements.txt
-└── requirements-dev.txt
+src/adk_agentic_writer/
+├── agents/
+│   ├── base_agent.py         # BaseAgent: core agent class
+│   ├── stateful_agent.py     # StatefulAgent: state + task execution
+│   ├── content_agent.py      # ContentWriterAgent: ContentProtocol
+│   ├── static/
+│   │   ├── coordinator.py    # Routes content_type → task → agent
+│   │   ├── writer.py         # WriterAgent (quiz, story)
+│   │   └── designer.py       # DesignerAgent (game, simulation)
+│   └── gemini/               # Gemini team (stubs)
+├── backend/
+│   └── api.py                # FastAPI endpoints
+├── models/
+│   ├── agent_models.py       # AgentTask, AgentConfig, AgentRole
+│   └── content_models.py     # Quiz, Story, Game, Simulation models
+├── protocols/
+│   ├── agent_protocol.py     # process_task interface
+│   └── content_protocol.py   # ContentProtocol (generate_block, etc.)
+├── tasks/
+│   └── content_tasks.py      # GENERATE_QUIZ, GENERATE_STORY, etc.
+└── workflows/                # Orchestration patterns
 ```
 
----
+## Core Concepts
 
-## Core Components
+### AgentTask
 
-### Protocols (Interfaces)
-- **AgentProtocol**: `process_task(task_description, parameters) -> Dict`
-- **EditorialProtocol**: `review_content()`, `refine_content()`, `validate_content()`
-- **ContentProtocol**: `stream_content()`, `generate_block()`, `interactive_update()`
+Tasks are the unit of work. Each task has:
+- `task_id`: Unique identifier (e.g., "generate_quiz")
+- `agent_role`: Role that handles this task (WRITER, DESIGNER)
+- `prompt`: Template with `{variable}` substitution
+- `content_types`: Aliases that map to this task
+- `parameters`: Default parameter values
 
-### Models
-- **Agent**: `AgentRole`, `AgentState`, `AgentStatus`, `AgentMessage`, `AgentTask`
-- **Content**: `Quiz`, `BranchedNarrative`, `QuestGame`, `WebSimulation`
-- **Editorial**: `Feedback`, `QualityMetrics`, `ContentRevision`, `ValidationResult`
+```python
+GENERATE_QUIZ = AgentTask(
+    task_id="generate_quiz",
+    agent_role=AgentRole.WRITER,
+    prompt="Generate a quiz about {topic}",
+    content_types=["quiz", "trivia", "test"],
+    parameters={"topic": "", "num_questions": 5}
+)
+```
 
-### Agents
+### Task Discovery
 
-**6 Types** × **2 Teams** = **12 Agents**
+Agents publish tasks via `get_supported_tasks()`. The coordinator aggregates these and builds mappings:
 
-| Type | Role | Responsibility |
-|------|------|----------------|
-| Coordinator | COORDINATOR | Orchestrates workflows |
-| Quiz Writer | CONTENT_CREATOR | Generates quizzes |
-| Story Writer | CONTENT_CREATOR | Generates narratives |
-| Game Designer | CONTENT_CREATOR | Generates games |
-| Simulation Designer | CONTENT_CREATOR | Generates simulations |
-| Reviewer | REVIEWER | Reviews content |
+```python
+coordinator = CoordinatorAgent()
 
-**Teams**:
-- **Static** (`agents/static/`): Templates, no API, instant
-- **Gemini** (`agents/gemini/`): AI-powered, requires API key, 2-5s
+# Task discovery
+tasks = coordinator.get_supported_tasks()
+# [GENERATE_QUIZ, GENERATE_STORY, GENERATE_GAME, GENERATE_SIMULATION]
 
-### Backend (FastAPI)
+# Content type → Task mapping
+coordinator.get_task_for_content_type("trivia")  # Returns GENERATE_QUIZ
+coordinator.get_task_for_content_type("rpg")     # Returns GENERATE_GAME
 
-**Endpoints** (port 8000):
-- `GET /` → index.html
-- `GET /showcase` → showcase.html
-- `GET /frontend` → frontend.html
-- `POST /generate` → Generate content
-- `GET /teams` → List teams
-- `GET /health` → Health check
-- `GET /docs` → OpenAPI docs
+# All content types grouped by task
+coordinator.get_all_content_types()
+# {"generate_quiz": ["quiz", "trivia", "test"], ...}
+```
 
----
+### Agent Hierarchy
+
+```
+BaseAgent (id, role, config)
+    ↓
+StatefulAgent (state, variables, process_task)
+    ↓
+ContentWriterAgent (ContentProtocol: generate_text, generate_block)
+    ↓
+WriterAgent / DesignerAgent (content builders)
+```
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | Home page |
+| `/showcase` | GET | Content showcase UI |
+| `/tasks` | GET | Tasks with content_types |
+| `/content-types` | GET | All aliases (flat + grouped) |
+| `/generate` | POST | Generate content |
+| `/generate/with-review` | POST | Generate with review |
+| `/generate/adaptive` | POST | Adaptive workflow |
+| `/health` | GET | Health check |
 
 ## Data Flow
 
 ```
-1. User Request (HTTP)
-2. FastAPI (/generate)
-3. Coordinator Agent
-4. Specialized Agent (Quiz/Story/Game/Simulation)
-5. Optional: Reviewer Agent
-6. JSON Response
-7. Frontend Rendering
+1. Request: POST /generate {content_type: "trivia", topic: "History"}
+2. API: coordinator.generate_content("trivia", "History")
+3. Coordinator: get_task_for_content_type("trivia") → GENERATE_QUIZ
+4. Coordinator: route to WriterAgent
+5. WriterAgent: process_task(task, context)
+6. WriterAgent: _build_quiz(params) based on task_id
+7. Response: {title, questions, ...}
 ```
 
----
+## Content Models
 
-## Content Types
+| Model | Structure |
+|-------|-----------|
+| Quiz | `{title, questions: [{question, options, correct_answer}]}` |
+| BranchedNarrative | `{title, synopsis, start_node, nodes: {id: {content, branches}}}` |
+| QuestGame | `{title, description, nodes: {id: {title, choices, rewards}}}` |
+| WebSimulation | `{title, variables, controls, rules}` |
 
-**Quiz**: `{title, questions: [{question, options, correct_answer, explanation}]}`
+## Protocols
 
-**Branched Narrative**: `{title, synopsis, start_node, nodes: {node_id: {content, branches}}}`
+**ContentProtocol** (implemented by ContentWriterAgent):
+- `generate_text(prompt_key, context)` → text
+- `generate_block(block_type, context)` → ContentBlock
+- `generate_patterned_blocks(block_type, pattern, context)` → List[ContentBlock]
 
-**Quest Game**: `{title, description, quests: [{quest_id, objectives, rewards}]}`
+**AgentProtocol** (implemented by all agents):
+- `process_task(task, parameters)` → Dict
+- `update_status(status)` → None
+- `get_state()` → AgentState
 
-**Web Simulation**: `{title, variables, controls, rules, visualization_type}`
+## Extension
 
----
+**Add new content type:**
+1. Add task in `tasks/content_tasks.py` with `content_types` aliases
+2. Import and publish in agent's `get_supported_tasks()`
+3. Add builder method in agent (e.g., `_build_newtype()`)
+4. Add model in `models/content_models.py`
+5. Add UI rendering in `showcase.html`
 
-## Team Comparison
-
-| | Static | Gemini |
-|-|--------|--------|
-| Speed | ⚡ <100ms | 🐢 2-5s |
-| Quality | Good | Excellent |
-| Creativity | Template | AI-generated |
-| API Key | ❌ | ✅ Required |
-| Cost | Free | API costs |
-| Tasks | 1 basic | 9 specialized |
-
----
-
-## Deployment
-
-**Local**:
-```bash
-pip install -r requirements.txt
-uvicorn src.adk_agentic_writer.backend.api:app --reload
-# http://localhost:8000
-```
-
-**Docker**:
-```bash
-docker-compose up --build
-```
-
----
-
-## Architecture Overview
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      AgentRuntime                           │
-│  - Instantiates agents and teams                            │
-│  - Manages workflows                                        │
-│  - Routes tasks to agents                                   │
-└────────────────┬────────────────────────────────────────────┘
-                 │
-                 ├─────────────────┬─────────────────┐
-                 ▼                 ▼                 ▼
-        ┌────────────────┐ ┌────────────────┐ ┌────────────────┐
-        │  Team 1        │ │  Team 2        │ │  Team 3        │
-        │  Quiz Writers  │ │  Reviewers     │ │  Story Writers │
-        └────────┬───────┘ └────────┬───────┘ └────────┬───────┘
-                 │                  │                  │
-        ┌────────┴────────┐         │         ┌────────┴────────┐
-        ▼                 ▼         ▼         ▼                 ▼
-   ┌─────────┐      ┌─────────┐ ┌─────────┐ ┌─────────┐  ┌─────────┐
-   │ Agent 1 │      │ Agent 2 │ │ Agent 3 │ │ Agent 4 │  │ Agent 5 │
-   └─────────┘      └─────────┘ └─────────┘ └─────────┘  └─────────┘
-```
-
-## StatefulAgent Architecture
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│                     StatefulAgent                            │
-├──────────────────────────────────────────────────────────────┤
-│  State Management:                                           │
-│  ┌────────────────┐  ┌────────────────┐                      │
-│  │   Variables    │  │   Parameters   │                      │
-│  │  (runtime)     │  │  (config)      │                      │
-│  ├────────────────┤  ├────────────────┤                      │
-│  │ content_block  │  │ topic          │                      │
-│  │ feedback       │  │ num_questions  │                      │
-│  │ content_stream │  │ difficulty     │                      │
-│  │ review_result  │  │ passing_score  │                      │
-│  └────────────────┘  └────────────────┘                      │
-├──────────────────────────────────────────────────────────────┤
-│  Protocol Implementation:                                    │
-│  • AgentProtocol: process_task, update_status, get_state     │
-│  • ContentProtocol: generate_block, generate_sequential...   │
-│  • EditorialProtocol: validate_content, refine_content       │
-├──────────────────────────────────────────────────────────────┤
-│  Task Execution:                                             │
-│  1. Receive AgentTask                                        │
-│  2. Substitute {variables} in prompt                         │
-│  3. Validate requirements                                    │
-│  4. Execute task logic                                       │
-│  5. Store result in variables[output_key]                    │
-│  6. Update status                                            │
-└──────────────────────────────────────────────────────────────┘
-```
-
-## Task-Based Execution Flow
-
-```
-┌─────────────┐
-│  AgentTask  │
-│             │
-│ task_id     │──────┐
-│ agent_role  │      │
-│ prompt      │      │  "Generate quiz about {topic}"
-│ parameters  │      │
-│ output_key  │      │
-└─────────────┘      │
-                     ▼
-              ┌──────────────────┐
-              │ Variable         │
-              │ Substitution     │
-              └────────┬─────────┘
-                       │
-                       │  "Generate quiz about Python"
-                       ▼
-              ┌──────────────────┐
-              │ Task Handler     │
-              │ (_execute_task)  │
-              └────────┬─────────┘
-                       │
-                       ▼
-              ┌──────────────────┐
-              │ Protocol Method  │
-              │ (generate_block) │
-              └────────┬─────────┘
-                       │
-                       ▼
-              ┌──────────────────┐
-              │ Store Result     │
-              │ variables[       │
-              │   output_key     │
-              │ ]                │
-              └──────────────────┘
-```
-
-## ContentProtocol Patterns
-
-```
-┌────────────────────────────────────────────────────────────┐
-│                  ContentProtocol Methods                   │
-├────────────────────────────────────────────────────────────┤
-│                                                            │
-│  1. Sequential Blocks                                      │
-│     Block 1 → Block 2 → Block 3 → Block 4                  │
-│     Use: Chapters, tutorials, linear stories               │
-│                                                            │
-│  2. Looped Blocks                                          │
-│     ┌─→ Block 1 → Block 2 → Block 3 ─┐                     │
-│     │                                  │                   │
-│     └──────── (until condition) ←─────┘                    │
-│     Use: Practice mode, mini-games, drills                 │
-│                                                            │
-│  3. Branched Blocks                                        │
-│            Block 1 (choice point)                          │
-│              ├─→ Block 2a (path A)                         │
-│              ├─→ Block 2b (path B)                         │
-│              └─→ Block 2c (path C)                         │
-│     Use: Adaptive difficulty, story branches               │
-│                                                            │
-│  4. Conditional Blocks                                     │
-│     Block 1 [if score > 80]                                │
-│     Block 2 [if completed prerequisite]                    │
-│     Block 3 [if achievement unlocked]                      │
-│     Use: Bonus content, achievements, prerequisites        │
-│                                                            │
-│  5. Mixed Patterns                                         │
-│     Combine above for complex narratives                   │
-│     Sequential → Branched → Looped → Conditional           │
-│                                                            │
-└────────────────────────────────────────────────────────────┘
-```
-
-## Data Flow Example
-
-```
-1. User Request
-   ↓
-   topic: "Python"
-   num_questions: 5
-   difficulty: "medium"
-
-2. AgentRuntime
-   ↓
-   Creates/retrieves agent
-   Sets parameters
-
-3. StatefulAgent
-   ↓
-   agent.parameters = {
-     "topic": "Python",
-     "num_questions": 5,
-     "difficulty": "medium"
-   }
-
-4. Task Execution
-   ↓
-   task.prompt = "Generate quiz about {topic}"
-   resolved = "Generate quiz about Python"
-
-5. ContentProtocol
-   ↓
-   generate_block(
-     block_type=QUESTION,
-     context=parameters
-   )
-
-6. Result Storage
-   ↓
-   agent.variables["content_block"] = quiz_data
-
-7. Return to User
-   ↓
-   {
-     "title": "Python Quiz",
-     "questions": [...],
-     "passing_score": 70
-   }
-```
-
-## Workflow Integration
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Workflow Types                       │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│  SEQUENTIAL: Agent A → Agent B → Agent C                │
-│  ├─ Generate → Review → Refine                          │
-│  └─ Each output feeds into next                         │
-│                                                         │
-│  PARALLEL: [Agent A, Agent B, Agent C] → Merge          │
-│  ├─ Generate 3 variants simultaneously                  │
-│  └─ Select best or combine                              │
-│                                                         │
-│  LOOP: Agent → Check → Agent → Check → Done             │
-│  ├─ Iterative refinement                                │
-│  └─ Until quality threshold met                         │
-│                                                         │
-│  CONDITIONAL: Condition → [Agent A | Agent B | Agent C] │
-│  ├─ Route based on content type                         │
-│  └─ Different strategies per type                       │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
-```
-
-## Team Collaboration
-
-```
-┌──────────────────────────────────────────────────────────┐
-│                  Quiz Writers Team                       │
-├──────────────────────────────────────────────────────────┤
-│                                                          │
-│  Team Metadata:                                          │
-│  - name: "quiz_writers_pool"                             │
-│  - scope: CONTENT                                        │
-│  - roles: [QUIZ_WRITER, QUIZ_WRITER]                     │
-│                                                          │
-│  ┌─────────────────┐      ┌─────────────────┐            │
-│  │  Quiz Writer 1  │      │  Quiz Writer 2  │            │
-│  │                 │      │                 │            │
-│  │  Variables:     │      │  Variables:     │            │
-│  │  - content_1    │      │  - content_2    │            │
-│  │                 │      │                 │            │
-│  │  Parameters:    │      │  Parameters:    │            │
-│  │  - topic: "ML"  │      │  - topic: "AI"  │            │
-│  └─────────────────┘      └─────────────────┘            │
-│                                                          │
-│  Coordination:                                           │
-│  - Runtime assigns tasks to available agents             │
-│  - Agents work independently                             │
-│  - Results merged by workflow                            │
-│                                                          │
-└──────────────────────────────────────────────────────────┘
-```
-
-## Usage Patterns
-
-### Pattern 1: Simple Generation
-```python
-agent = StaticQuizWriterAgent("quiz_1")
-agent.update_parameters({"topic": "Python", "num_questions": 5})
-result = await agent.process_task(GENERATE_BLOCK)
-```
-
-### Pattern 2: With Runtime
-```python
-runtime = AgentRuntime()
-team = runtime.create_team(QUIZ_WRITERS_POOL, configs)
-result = await runtime.execute_task_with_agent(
-    team[0].agent_id, task, params
-)
-```
-
-### Pattern 3: Sequential Workflow
-```python
-# Generate
-quiz = await agent.process_task(GENERATE_TASK)
-
-# Validate
-is_valid = await agent.validate_content(quiz)
-
-# Refine
-refined = await agent.refine_content(quiz, feedback)
-```
-
-## Extension Points
-
-**New Content Type**: Define model → Add to enum → Create agents → Update coordinator → Add frontend rendering
-
-**New Agent**: Inherit BaseAgent → Implement process_task() → Register with coordinator
-
-**New Workflow**: Inherit base pattern → Implement execution logic
-
----
-
-Built with FastAPI, Pydantic, and Google ADK.
+**Add new agent:**
+1. Inherit from `ContentWriterAgent`
+2. Implement `generate_block()` and `_build_content()`
+3. Register in coordinator
