@@ -120,22 +120,12 @@ class StatefulAgent(BaseAgent):
         logger.debug(f"Agent {self.agent_id} status: {status}")
 
     def prepare_task_context(self, task: AgentTask) -> Dict[str, Any]:
-        """Prepare context for task execution by merging variables and parameters.
-
-        Args:
-            task: Task to prepare context for
-
-        Returns:
-            Merged context dictionary with precedence: parameters < variables < task.parameters
-        """
-        # Start with parameters (configuration)
-        context = {**self.parameters}
-        # Add variables (runtime state takes precedence over config parameters)
-        context.update(self.variables)
-        # Task parameters override everything
+        """Prepare context for task execution. Includes task_id for routing."""
+        context = {**(self.state.variables)}
+        context.update(self.model.parameters)
         if task.parameters:
             context.update(task.parameters)
-
+        context["task_id"] = task.task_id  # For content type routing
         return context
 
     def substitute_task_prompt(self, task: AgentTask) -> str:

@@ -28,28 +28,17 @@ class WorkflowScope(str, Enum):
 
 
 class AgentRole(str, Enum):
-    """
-    Base agent roles - abstract categories.
+    """Base agent roles - abstract categories used by tasks."""
 
-    Teams extend this with specific roles in their own files.
-    Example: ContentRole(str, Enum) adds STORY_WRITER, QUIZ_WRITER, etc.
-    """
-
-    # Base abstract roles (not used directly, extended by teams)
+    COORDINATOR = "coordinator"
     WRITER = "writer"
+    DESIGNER = "designer"
     EDITOR = "editor"
     REVIEWER = "reviewer"
     REFINER = "refiner"
     ANALYZER = "analyzer"
     STRATEGIST = "strategist"
     STREAMER = "streamer"
-
-    # Legacy roles (for backward compatibility with existing agents)
-    COORDINATOR = "coordinator"
-    QUIZ_WRITER = "quiz_writer"
-    STORY_WRITER = "story_writer"
-    GAME_DESIGNER = "game_designer"
-    SIMULATION_DESIGNER = "simulation_designer"
 
 
 class WorkflowMetadata(BaseModel):
@@ -195,43 +184,20 @@ class AgentMessage(BaseModel):
 
 
 class AgentTask(BaseModel):
-    """
-    Task assigned to an agent.
-
-    All agents communicate via process_task using AgentTask.
-    Higher-level protocols (ContentProtocol, EditorialProtocol) are expressed as tasks
-    so agents can decide which teams and workflows to use.
-
-    The prompt can use variable substitution: "Write a story about {topic}"
-    Variables are resolved from AgentState.variables at runtime.
-    """
+    """Task assigned to an agent. Includes content_types for discovery."""
 
     task_id: str = Field(..., description="Unique task identifier")
     status: AgentStatus = Field(AgentStatus.IDLE, description="Current task status")
     agent_role: AgentRole = Field(..., description="Agent role for this task")
-    prompt: str = Field(
-        ...,
-        description="Task prompt with variable substitution support (e.g., 'Write about {topic}')",
+    prompt: str = Field(..., description="Task prompt with {variable} substitution")
+    parameters: Optional[Dict[str, Any]] = Field(None, description="Task parameters")
+    dependencies: Optional[List[str]] = Field(default_factory=list)
+    content_types: List[str] = Field(
+        default_factory=list, description="Content type aliases this task handles"
     )
-    parameters: Optional[Dict[str, Any]] = Field(
-        None, description="Task parameters and input data"
-    )
-    dependencies: Optional[List[str]] = Field(
-        default_factory=list, description="IDs of prerequisite tasks"
-    )
-
-    # Workflow and team hints for orchestration
-    suggested_workflow: Optional[WorkflowDecision] = Field(
-        None, description="Suggested workflow name to use"
-    )
-    suggested_team: Optional[TeamMetadata] = Field(
-        None, description="Suggested team name to use"
-    )
-
-    # Output management for stage reuse
-    output_key: Optional[str] = Field(
-        None, description="Key to store output in AgentState.variables"
-    )
+    suggested_workflow: Optional[WorkflowDecision] = Field(None)
+    suggested_team: Optional[TeamMetadata] = Field(None)
+    output_key: Optional[str] = Field(None, description="Key to store output")
 
 
 class AgentState(BaseModel):

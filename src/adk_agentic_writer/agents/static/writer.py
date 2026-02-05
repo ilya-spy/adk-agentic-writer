@@ -1,4 +1,4 @@
-"""Writer agent for text-based content with universal block generators."""
+"""Writer agent for text-based content (quiz, story)."""
 
 import logging
 import random
@@ -13,6 +13,7 @@ from ...models.content_models import (
     BranchedNarrative,
     StoryNode,
 )
+from ...tasks.content_tasks import GENERATE_QUIZ, GENERATE_STORY
 from ...utils.content_registry import CONTENT_REGISTRY
 from ...utils.text_provider import TextProvider, TemplateTextProvider
 from ..content_agent import ContentWriterAgent
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class WriterAgent(ContentWriterAgent):
-    """Writer implementing ContentProtocol with universal block generators."""
+    """Writer publishes GENERATE_QUIZ and GENERATE_STORY tasks."""
 
     def __init__(
         self,
@@ -41,6 +42,8 @@ class WriterAgent(ContentWriterAgent):
             config.agent_config,
             text_provider=text_provider or TemplateTextProvider(),
         )
+        # Publish both writer tasks
+        self.supported_tasks.extend([GENERATE_QUIZ, GENERATE_STORY])
 
     @property
     def content_type(self) -> str:
@@ -73,36 +76,6 @@ class WriterAgent(ContentWriterAgent):
             metadata=context.get("metadata", {}),
         )
 
-    async def generate_patterned_blocks(
-        self,
-        block_type: ContentBlockType,
-        pattern: ContentPattern,
-        context: Dict[str, Any],
-    ) -> List[ContentBlock]:
-        """Generate blocks with navigation based on pattern."""
-        count, blocks = context.get("count", 3), []
-        for i in range(count):
-            block = await self.generate_block(
-                block_type,
-                {**context, "block_id": f"{block_type.value}_{i}", "index": i},
-            )
-            block.pattern = pattern
-            if pattern == ContentPattern.SEQUENTIAL and i < count - 1:
-                block.navigation = {"next": f"{block_type.value}_{i + 1}"}
-            elif pattern == ContentPattern.LOOPED:
-                block.navigation = {"next": f"{block_type.value}_{(i + 1) % count}"}
-                block.exit_condition = context.get(
-                    "exit_condition", {"max_iterations": 3}
-                )
-            elif pattern == ContentPattern.BRANCHED:
-                block.choices = [
-                    {"text": f"Go to {j}", "target": f"{block_type.value}_{j}"}
-                    for j in range(count)
-                    if j != i
-                ]
-            blocks.append(block)
-        return blocks
-
     # Universal Block Generators
     async def generate_question(
         self,
@@ -118,7 +91,7 @@ class WriterAgent(ContentWriterAgent):
         ctx = {"topic": topic, "difficulty": difficulty}
 
         # Generate or use provided values
-        q_text = question or await self._generate_text("quiz_question", ctx)
+        q_text = question or await self.generate_text("quiz_question", ctx)
         correct_idx = (
             correct_answer if correct_answer is not None else random.randint(0, 3)
         )
@@ -129,9 +102,9 @@ class WriterAgent(ContentWriterAgent):
             opts = []
             for i in range(4):
                 key = "quiz_option_correct" if i == correct_idx else "quiz_option"
-                opts.append(await self._generate_text(key, ctx))
+                opts.append(await self.generate_text(key, ctx))
 
-        expl = explanation or await self._generate_text("quiz_explanation", ctx)
+        expl = explanation or await self.generate_text("quiz_explanation", ctx)
         return QuizQuestion(
             question=q_text,
             options=opts,
@@ -165,7 +138,7 @@ class WriterAgent(ContentWriterAgent):
                 ctx["path_type"] = path_type
             if key == "story_ending":
                 ctx["ending_type"] = kwargs.get("ending_type", "neutral")
-            content = await self._generate_text(key, ctx)
+            content = await self.generate_text(key, ctx)
 
         return StoryNode(
             node_id=node_id,
@@ -180,7 +153,7 @@ class WriterAgent(ContentWriterAgent):
     ) -> Dict[str, Any]:
         """Create a generic text chapter/section."""
         if text is None:
-            text = await self._generate_text(
+            text = await self.generate_text(
                 "chapter_content", {"title": title, **kwargs}
             )
         return {"title": title, "text": text, "metadata": kwargs.get("metadata", {})}
@@ -195,81 +168,72 @@ class WriterAgent(ContentWriterAgent):
     async def generate_story_nodes_set(
         self, topic: str, genre: str = "fantasy", num_nodes: int = 7
     ) -> Dict[str, StoryNode]:
-        """Generate connected story nodes with branches."""
+        """Generate connected story nodes with branches. Respects num_nodes."""
         nodes = {}
         ctx = {"topic": topic, "genre": genre}
 
-        # Start node
+        # Calculate structure based on num_nodes (min 2: start + ending)
+        num_nodes = max(2, num_nodes)
+        num_middle = max(0, num_nodes - 2)  # Nodes between start and endings
+        num_endings = min(3, max(1, num_nodes // 3))  # 1-3 endings based on size
+
+        # Start node - branches depend on middle nodes
+        middle_branches = []
+        for i in range(min(2, num_middle)):
+            middle_branches.append({"text": f"Path {i+1}", "next_node_id": f"node_{i}"})
+        if not middle_branches:
+            middle_branches.append({"text": "Continue", "next_node_id": "ending_0"})
+
         nodes["start"] = await self.generate_story_node(
-            "start",
-            tags=["opening", genre],
-            branches=[
-                {"text": "Take bold path", "next_node_id": "bold_path"},
-                {"text": "Proceed cautiously", "next_node_id": "cautious_path"},
-            ],
-            **ctx,
+            "start", tags=["opening", genre], branches=middle_branches, **ctx
         )
 
-        # Path nodes
-        if num_nodes >= 3:
-            nodes["bold_path"] = await self.generate_story_node(
-                "bold_path",
-                tags=["bold"],
-                path_type="bold",
-                branches=[
-                    {"text": "Face challenge", "next_node_id": "challenge"},
-                    {"text": "Find allies", "next_node_id": "allies"},
-                ],
-                **ctx,
-            )
-            nodes["cautious_path"] = await self.generate_story_node(
-                "cautious_path",
-                tags=["cautious"],
-                path_type="cautious",
-                branches=[
-                    {"text": "Continue alone", "next_node_id": "challenge"},
-                    {"text": "Seek wisdom", "next_node_id": "wisdom_ending"},
-                ],
+        # Generate middle nodes dynamically
+        for i in range(num_middle):
+            is_last_middle = i >= num_middle - num_endings
+            if is_last_middle:
+                # Link to endings
+                ending_idx = i - (num_middle - num_endings)
+                branches = [
+                    {"text": "Reach conclusion", "next_node_id": f"ending_{ending_idx}"}
+                ]
+            else:
+                # Link to next node(s)
+                branches = [{"text": "Continue", "next_node_id": f"node_{i+1}"}]
+                if i + 2 < num_middle:
+                    branches.append(
+                        {"text": "Skip ahead", "next_node_id": f"node_{i+2}"}
+                    )
+
+            nodes[f"node_{i}"] = await self.generate_story_node(
+                f"node_{i}",
+                tags=[f"chapter_{i+1}"],
+                path_type=f"path_{i}",
+                branches=branches,
                 **ctx,
             )
 
-        # Intermediate nodes
-        if num_nodes >= 5:
-            nodes["challenge"] = await self.generate_story_node(
-                "challenge",
-                tags=["challenge"],
-                path_type="challenge",
-                branches=[{"text": "Claim victory", "next_node_id": "victory_ending"}],
+        # Generate endings
+        ending_types = ["victory", "alliance", "wisdom", "mystery", "tragic"]
+        for i in range(num_endings):
+            etype = ending_types[i % len(ending_types)]
+            nodes[f"ending_{i}"] = await self.generate_story_node(
+                f"ending_{i}",
+                tags=["ending", etype],
+                is_ending=True,
+                ending_type=etype,
                 **ctx,
-            )
-            nodes["allies"] = await self.generate_story_node(
-                "allies",
-                tags=["allies"],
-                path_type="allies",
-                branches=[
-                    {"text": "Continue together", "next_node_id": "alliance_ending"}
-                ],
-                **ctx,
-            )
-
-        # Endings
-        for etype, nid in [
-            ("victory", "victory_ending"),
-            ("alliance", "alliance_ending"),
-            ("wisdom", "wisdom_ending"),
-        ]:
-            nodes[nid] = await self.generate_story_node(
-                nid, tags=["ending", etype], is_ending=True, ending_type=etype, **ctx
             )
 
         return nodes
 
-    # Content builders
+    # Content builders - decides based on task_id in context
     async def _build_content(self, context: Dict[str, Any]) -> Dict[str, Any]:
         params = {**self._type_config.default_params, **context}
-        if self._content_type == "quiz":
+        task_id = context.get("task_id", "")
+        if "quiz" in task_id:
             return await self._build_quiz(params)
-        elif self._content_type in ("branched_narrative", "story"):
+        elif "story" in task_id:
             return await self._build_story(params)
         return await self._build_generic(params)
 

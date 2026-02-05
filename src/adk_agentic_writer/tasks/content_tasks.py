@@ -1,16 +1,58 @@
-"""Task definitions for content generation workflows."""
+"""Task templates for content generation.
+
+Each task includes content_types (aliases) for discovery.
+Agents import tasks and publish via get_supported_tasks().
+"""
 
 from ..models.agent_models import AgentRole, AgentTask
 
-# Task: generate_block
-# Produces: content_block
+# ============================================================================
+# Primary Content Tasks - each with content_types aliases
+# ============================================================================
+
+GENERATE_QUIZ = AgentTask(
+    task_id="generate_quiz",
+    agent_role=AgentRole.WRITER,
+    prompt="Generate a quiz about {topic} with {num_questions} questions.",
+    parameters={"topic": "", "num_questions": 5, "difficulty": "medium"},
+    content_types=["quiz", "trivia", "test"],
+    output_key="content",
+)
+
+GENERATE_STORY = AgentTask(
+    task_id="generate_story",
+    agent_role=AgentRole.WRITER,
+    prompt="Generate a branched narrative about {topic} with {num_nodes} nodes.",
+    parameters={"topic": "", "num_nodes": 7, "genre": "fantasy"},
+    content_types=["story", "narrative", "branched_narrative", "adventure"],
+    output_key="content",
+)
+
+GENERATE_GAME = AgentTask(
+    task_id="generate_game",
+    agent_role=AgentRole.DESIGNER,
+    prompt="Generate a quest game about {topic} with {num_nodes} nodes.",
+    parameters={"topic": "", "num_nodes": 5, "complexity": "medium"},
+    content_types=["game", "quest_game", "quest", "rpg"],
+    output_key="content",
+)
+
+GENERATE_SIMULATION = AgentTask(
+    task_id="generate_simulation",
+    agent_role=AgentRole.DESIGNER,
+    prompt="Generate an interactive simulation about {topic}.",
+    parameters={"topic": "", "complexity": "medium"},
+    content_types=["simulation", "web_simulation", "interactive", "simulator"],
+    output_key="content",
+)
+
+# Block-level task (internal use)
 GENERATE_BLOCK = AgentTask(
     task_id="generate_block",
     agent_role=AgentRole.WRITER,
-    prompt="""Generate a single content block about the following topic.
-
-Block type: {block_type}
-Topic: {topic}""",
+    prompt="Generate a {block_type} block about {topic}.",
+    parameters={"topic": "", "block_type": "content"},
+    content_types=[],  # Internal, not for UI
     output_key="content_block",
 )
 

@@ -50,7 +50,7 @@ async def test_base_agent_status_update() -> None:
 @pytest.mark.asyncio
 async def test_base_agent_get_state() -> None:
     """Test getting agent state."""
-    config = AgentConfig(role=AgentRole.QUIZ_WRITER, instruction="Test instruction")
+    config = AgentConfig(role=AgentRole.WRITER, instruction="Test instruction")
     model = AgentModel(name="test_agent")
 
     agent = DummyAgent("test_agent", config=config, model=model)
@@ -62,7 +62,7 @@ async def test_base_agent_get_state() -> None:
 @pytest.mark.asyncio
 async def test_agent_parameters() -> None:
     """Test agent parameters."""
-    config = AgentConfig(role=AgentRole.QUIZ_WRITER, instruction="Test")
+    config = AgentConfig(role=AgentRole.WRITER, instruction="Test")
     model = AgentModel(name="test_agent", parameters={"topic": "Python"})
 
     agent = DummyAgent("test_agent", config=config, model=model)

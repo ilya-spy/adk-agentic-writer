@@ -171,54 +171,26 @@ async def health():
 
 @app.post("/generate", response_model=GenerateResponse)
 async def generate_content(request: GenerateRequest):
-    """Generate content using specified team."""
+    """Generate content using coordinator.generate_content()."""
     request_id = str(uuid.uuid4())
 
-    # Validate team
     if request.team not in ["static", "gemini"]:
         raise HTTPException(status_code=400, detail=f"Invalid team: {request.team}")
 
-    # Check if team is initialized
     if not agent_systems[request.team].get("initialized"):
         raise HTTPException(
-            status_code=503, detail=f"{request.team.capitalize()} team not available"
+            status_code=503, detail=f"{request.team} team not available"
         )
 
-    # Get coordinator
     coordinator = agent_systems[request.team]["coordinator"]
 
     try:
-        # Prepare parameters
-        params = request.parameters.copy() if request.parameters else {}
-        topic = request.topic
-
-        # Generate content based on team and content type
-        if request.team == "static":
-            # Static team uses generate_content method
-            result = await coordinator.generate_content(
-                content_type=request.content_type, topic=topic, **params
-            )
-        else:
-            # Gemini team uses structured tasks (old interface for now)
-            params["content_type"] = request.content_type
-            params["topic"] = topic
-
-            if GEMINI_AVAILABLE and SupportedTask:
-                task_mapping = {
-                    "quiz": SupportedTask.GENERATE_QUIZ,
-                    "branched_narrative": SupportedTask.GENERATE_STORY,
-                    "quest_game": SupportedTask.GENERATE_GAME,
-                    "web_simulation": SupportedTask.GENERATE_SIMULATION,
-                }
-                task = task_mapping.get(
-                    request.content_type, SupportedTask.GENERATE_QUIZ
-                )
-                params["task"] = task
-
-            # Note: Gemini coordinator still uses old interface
-            result = await coordinator.process_task(
-                f"Generate {request.content_type}", params
-            )
+        # Use coordinator's generate_content convenience method
+        result = await coordinator.generate_content(
+            content_type=request.content_type,
+            topic=request.topic,
+            **(request.parameters or {}),
+        )
 
         return GenerateResponse(
             request_id=request_id,
@@ -228,9 +200,8 @@ async def generate_content(request: GenerateRequest):
             status="completed",
         )
 
-    except ValueError as e:
-        # Handle invalid content types gracefully
-        logger.warning(f"Invalid content type or parameters: {e}")
+    except Exception as e:
+        logger.error(f"Error: {e}")
         return GenerateResponse(
             request_id=request_id,
             team=request.team,
@@ -238,9 +209,6 @@ async def generate_content(request: GenerateRequest):
             content={"error": str(e), "status": "failed"},
             status="error",
         )
-    except Exception as e:
-        logger.error(f"Error generating content: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/generate/with-review", response_model=GenerateResponse)
@@ -608,33 +576,48 @@ async def get_teams():
     }
 
 
-@app.get("/content-types")
-async def get_content_types():
-    """Get available content types."""
+@app.get("/tasks")
+async def get_tasks():
+    """Get available tasks with their content_types aliases."""
+    if not agent_systems["static"].get("initialized"):
+        return {"tasks": []}
+
+    coordinator = agent_systems["static"]["coordinator"]
     return {
-        "content_types": [
+        "tasks": [
             {
-                "value": "quiz",
-                "label": "Quiz",
-                "description": "Interactive quizzes with multiple choice questions",
-            },
-            {
-                "value": "quest_game",
-                "label": "Quest Game",
-                "description": "Quest-based adventure games with choices and rewards",
-            },
-            {
-                "value": "branched_narrative",
-                "label": "Branched Story",
-                "description": "Branching storylines with multiple endings",
-            },
-            {
-                "value": "web_simulation",
-                "label": "Simulation",
-                "description": "Interactive simulations with variables and controls",
-            },
+                "task_id": t.task_id,
+                "label": t.task_id.replace("generate_", "").replace("_", " ").title(),
+                "content_types": t.content_types,
+                "parameters": list((t.parameters or {}).keys()),
+            }
+            for t in coordinator.get_supported_tasks()
         ]
     }
+
+
+@app.get("/content-types")
+async def get_content_types():
+    """Get all content type aliases from tasks."""
+    if not agent_systems["static"].get("initialized"):
+        return {"content_types": [], "grouped": {}}
+
+    coordinator = agent_systems["static"]["coordinator"]
+    grouped = coordinator.get_all_content_types()
+
+    # Flatten for simple UI selector
+    content_types = []
+    for task in coordinator.get_supported_tasks():
+        for ct in task.content_types:
+            content_types.append(
+                {
+                    "value": ct,
+                    "task_id": task.task_id,
+                    "label": ct.replace("_", " ").title(),
+                }
+            )
+
+    return {"content_types": content_types, "grouped": grouped}
 
 
 if __name__ == "__main__":

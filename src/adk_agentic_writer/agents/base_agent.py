@@ -4,9 +4,9 @@ Both static/ and gemini/ agents inherit from this base class.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
-from ..models.agent_models import AgentConfig, AgentModel
+from ..models.agent_models import AgentConfig, AgentModel, AgentTask
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +18,7 @@ class BaseAgent:
     - id: Agent identifier
     - config: AgentConfig (role, instruction, temperature)
     - model: AgentModel (name, tools, parameters, workflows, teams)
+    - _supported_tasks: List of tasks this agent can handle
 
     Subclasses (StatefulAgent) add runtime state management.
     """
@@ -38,6 +39,7 @@ class BaseAgent:
         self.id = agent_id
         self.config = config
         self.model = model
+        self.supported_tasks: List[AgentTask] = []
 
         logger.info(f"Initialized BaseAgent {agent_id} with role {config.role}")
 
@@ -64,6 +66,24 @@ class BaseAgent:
         """Update parameters."""
         self.model.parameters.update(updates)
         logger.debug(f"Agent {self.id} updated {len(updates)} parameters")
+
+    def get_supported_tasks(self) -> List[AgentTask]:
+        """Get list of tasks this agent can handle.
+
+        Subclasses should override to publish their capabilities.
+        """
+        return self.supported_tasks
+
+    def supports_task(self, task_id: str) -> bool:
+        """Check if agent supports a specific task."""
+        return any(t.task_id == task_id for t in self.get_supported_tasks())
+
+    def get_task_by_id(self, task_id: str) -> Optional[AgentTask]:
+        """Get task template by ID."""
+        for task in self.get_supported_tasks():
+            if task.task_id == task_id:
+                return task
+        return None
 
     async def receive_message(
         self, message: str, sender: str, data: Optional[Dict[str, Any]] = None

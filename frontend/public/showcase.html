@@ -300,15 +300,27 @@
         <div class="form-group">
             <label for="contentType">Content Type:</label>
             <select id="contentType">
-                <option value="quiz">Quiz</option>
-                <option value="branched_narrative">Branched Story</option>
-                <option value="quest_game">Quest Game</option>
-                <option value="web_simulation">Simulation</option>
+                <option value="">Loading...</option>
             </select>
         </div>
         <div class="form-group">
             <label for="topic">Topic:</label>
             <input type="text" id="topic" value="Python Programming" placeholder="Enter a topic...">
+        </div>
+        <div class="form-group" id="blockCountGroup">
+            <label for="blockCount">Number of Blocks:</label>
+            <input type="number" id="blockCount" value="5" min="1" max="20">
+            <small id="blockCountHint" style="color: #666; font-size: 12px; display: block; margin-top: 4px;">
+                Questions for Quiz, Nodes for Story/Game, Variables based on complexity for Simulation
+            </small>
+        </div>
+        <div class="form-group" id="complexityGroup" style="display: none;">
+            <label for="complexity">Complexity:</label>
+            <select id="complexity">
+                <option value="simple">Simple (2 variables)</option>
+                <option value="medium" selected>Medium (3 variables)</option>
+                <option value="complex">Complex (4 variables)</option>
+            </select>
         </div>
         <button onclick="generateContent()" id="generateBtn">Generate & Display</button>
     </div>
@@ -318,6 +330,97 @@
     <script>
         const API_BASE = 'http://localhost:8000';
         let logs = [];
+
+        // Content type category mappings (single source of truth)
+        const CONTENT_CATEGORIES = {
+            quiz: ['quiz', 'trivia', 'test'],
+            story: ['story', 'narrative', 'branched_narrative', 'adventure'],
+            game: ['game', 'quest_game', 'quest', 'rpg'],
+            simulation: ['simulation', 'web_simulation', 'interactive', 'simulator']
+        };
+
+        // Get category for a content type
+        function getContentCategory(contentType) {
+            for (const [category, types] of Object.entries(CONTENT_CATEGORIES)) {
+                if (types.includes(contentType)) return category;
+            }
+            return 'unknown';
+        }
+
+        // Fetch content types from API (grouped by task)
+        async function loadContentTypes() {
+            const select = document.getElementById('contentType');
+            try {
+                const response = await fetch(`${API_BASE}/content-types`);
+                const data = await response.json();
+                select.innerHTML = '';
+                
+                // Group by task_id for optgroups
+                const grouped = data.grouped || {};
+                for (const [taskId, types] of Object.entries(grouped)) {
+                    const group = document.createElement('optgroup');
+                    group.label = taskId.replace('generate_', '').replace('_', ' ').toUpperCase();
+                    types.forEach(ct => {
+                        const option = document.createElement('option');
+                        option.value = ct;
+                        option.textContent = ct.replace('_', ' ').charAt(0).toUpperCase() + ct.replace('_', ' ').slice(1);
+                        group.appendChild(option);
+                    });
+                    select.appendChild(group);
+                }
+                generateContent();
+            } catch (error) {
+                console.error('Failed to load content types:', error);
+                select.innerHTML = '<option value="quiz">Quiz</option>';
+            }
+        }
+        loadContentTypes();
+
+        // Update UI hints based on content type
+        document.getElementById('contentType').addEventListener('change', function() {
+            const type = this.value;
+            const category = getContentCategory(type);
+            const blockCountGroup = document.getElementById('blockCountGroup');
+            const complexityGroup = document.getElementById('complexityGroup');
+            const blockCountInput = document.getElementById('blockCount');
+            const blockCountHint = document.getElementById('blockCountHint');
+
+            if (category === 'simulation') {
+                blockCountGroup.style.display = 'none';
+                complexityGroup.style.display = 'block';
+            } else {
+                blockCountGroup.style.display = 'block';
+                complexityGroup.style.display = 'none';
+                
+                if (category === 'quiz') {
+                    blockCountInput.value = 5;
+                    blockCountHint.textContent = 'Number of quiz questions to generate';
+                } else if (category === 'story') {
+                    blockCountInput.value = 7;
+                    blockCountHint.textContent = 'Number of story nodes/scenes';
+                } else if (category === 'game') {
+                    blockCountInput.value = 5;
+                    blockCountHint.textContent = 'Number of game nodes/quests';
+                }
+            }
+        });
+
+        // Build parameters based on content type
+        function buildParameters(contentType) {
+            const blockCount = parseInt(document.getElementById('blockCount').value) || 5;
+            const complexity = document.getElementById('complexity').value;
+            const category = getContentCategory(contentType);
+
+            if (category === 'quiz') {
+                return { num_questions: blockCount };
+            } else if (category === 'story' || category === 'game') {
+                return { num_nodes: blockCount };
+            } else if (category === 'simulation') {
+                return { complexity: complexity };
+            } else {
+                return { num_blocks: blockCount };
+            }
+        }
 
         function addLog(agent, message, type = 'info') {
             const timestamp = new Date().toLocaleTimeString();
@@ -372,7 +475,10 @@
                 await new Promise(resolve => setTimeout(resolve, 200));
                 addLog('Agent', `Initializing ${contentType} generation`, 'info');
 
-                // Generate content
+                // Generate content with dynamic parameters
+                const params = buildParameters(contentType);
+                addLog('Agent', `Using parameters: ${JSON.stringify(params)}`, 'info');
+                
                 const startTime = Date.now();
                 const response = await fetch(`${API_BASE}/generate`, {
                     method: 'POST',
@@ -383,10 +489,7 @@
                         team: team,
                         content_type: contentType,
                         topic: topic,
-                        parameters: {
-                            num_questions: 3,
-                            num_branches: 3
-                        }
+                        parameters: params
                     })
                 });
 
@@ -424,7 +527,7 @@
                 output.innerHTML = renderContent(contentType, content, topic, team, data);
                 
                 // If it's a story, render the first node
-                if (contentType === 'branched_narrative') {
+                if (getContentCategory(contentType) === 'story') {
                     window.storyPath = [];
                     renderStoryNode(window.currentNode);
                 }
@@ -451,6 +554,9 @@
         function renderContent(contentType, content, topic, team, fullData) {
             console.log('renderContent called with:', {contentType, content, topic, team, fullData});
             
+            const category = getContentCategory(contentType);
+            console.log('Rendering category:', category);
+            
             let html = '<div class="container">';
             
             // Show logs first
@@ -475,7 +581,7 @@
                 html += '<pre style="font-size: 11px; background: #f5f5f5; padding: 10px;">' + JSON.stringify(fullData, null, 2) + '</pre>';
             }
 
-            if (contentType === 'quiz') {
+            if (category === 'quiz') {
                 html += `<h3>${content.title || 'Quiz'}</h3>`;
 
                 (content.questions || []).forEach((q, i) => {
@@ -492,7 +598,7 @@
                     html += `</div>`;
                 });
 
-            } else if (contentType === 'branched_narrative') {
+            } else if (category === 'story') {
                 html += `<h3>${content.title || 'Story'}</h3>`;
                 html += `<p style="font-style: italic; color: #666;">${content.synopsis || ''}</p>`;
 
@@ -505,7 +611,7 @@
 
                 html += `<div id="story-container"></div>`;
 
-            } else if (contentType === 'web_simulation') {
+            } else if (category === 'simulation') {
                 html += `<h3>${content.title || 'Simulation'}</h3>`;
                 html += `<p style="font-style: italic; color: #666; margin-bottom: 20px;">${content.description || ''}</p>`;
 
@@ -619,7 +725,7 @@
                     `;
                 }
 
-            } else if (contentType === 'quest_game') {
+            } else if (category === 'game') {
                 html += `<h3>${content.title || 'Quest Game'}</h3>`;
                 html += `<p style="font-style: italic; color: #666; margin-bottom: 20px;">${content.description || ''}</p>`;
                 
@@ -782,10 +888,8 @@
             renderStoryNode(nodeId);
         }
 
-        // Auto-generate on page load
-        window.addEventListener('load', () => {
-            generateContent();
-        });
+        // Auto-generate after content types load
+        // (loadContentTypes is called at script start, then we auto-generate)
     </script>
 </body>
 </html>

@@ -29,13 +29,13 @@ def test_agent_task_creation() -> None:
     """Test creating an agent task."""
     task = AgentTask(
         task_id="task_1",
-        agent_role=AgentRole.QUIZ_WRITER,
+        agent_role=AgentRole.WRITER,
         prompt="Create a quiz about Python",
         parameters={"num_questions": 5},
     )
 
     assert task.task_id == "task_1"
-    assert task.agent_role == AgentRole.QUIZ_WRITER
+    assert task.agent_role == AgentRole.WRITER
     assert task.prompt == "Create a quiz about Python"
     assert task.parameters["num_questions"] == 5
     assert task.status == AgentStatus.IDLE
@@ -61,12 +61,12 @@ def test_agent_message_creation() -> None:
 def test_agent_config_creation() -> None:
     """Test creating an agent config."""
     config = AgentConfig(
-        role=AgentRole.QUIZ_WRITER,
+        role=AgentRole.WRITER,
         instruction="You are a quiz writer.",
         temperature=0.7,
     )
 
-    assert config.role == AgentRole.QUIZ_WRITER
+    assert config.role == AgentRole.WRITER
     assert config.instruction == "You are a quiz writer."
     assert config.temperature == 0.7
 
