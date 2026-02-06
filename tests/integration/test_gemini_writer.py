@@ -1,19 +1,18 @@
 """Integration tests for Gemini Writer Agent.
 
-These tests require GOOGLE_API_KEY to be set for full ADK testing.
-Without API key, tests verify fallback to static templates works.
+Tests require GOOGLE_API_KEY for live LLM tests.
+Non-live tests verify configuration and initialization.
 """
 
 import os
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from adk_agentic_writer.agents.gemini.writer import (
     GeminiWriterAgent,
     GeminiQuizWriterAgent,
     GeminiStoryWriterAgent,
     ADKAgentWrapper,
-    GeminiTextProvider,
 )
 from adk_agentic_writer.teams.content_team import (
     QUIZ_WRITER,
@@ -21,30 +20,29 @@ from adk_agentic_writer.teams.content_team import (
     get_config_for_role,
     ContentRole,
 )
-from adk_agentic_writer.models.content_models import Quiz, BranchedNarrative
 from adk_agentic_writer.tasks.content_tasks import GENERATE_QUIZ, GENERATE_STORY
+from adk_agentic_writer.utils.content_registry import CONTENT_REGISTRY
 
 
 class TestAgentConfigPrompts:
-    """Test AgentConfig data and BaseAgent prompt methods."""
+    """Test AgentConfig data and prompt templates."""
 
     def test_quiz_config_has_prompts(self):
-        """Test QUIZ_WRITER config has prompt templates."""
+        """Test QUIZ_WRITER config has required prompt templates."""
+        assert "quiz_question_complete" in QUIZ_WRITER.prompt_templates
         assert "quiz_question" in QUIZ_WRITER.prompt_templates
-        assert "quiz_option" in QUIZ_WRITER.prompt_templates
-        assert "quiz_explanation" in QUIZ_WRITER.prompt_templates
 
     def test_story_config_has_prompts(self):
-        """Test STORY_WRITER config has prompt templates."""
-        assert "story_opening" in STORY_WRITER.prompt_templates
-        assert "story_path" in STORY_WRITER.prompt_templates
+        """Test STORY_WRITER config has required prompt templates."""
+        assert "story_node_complete" in STORY_WRITER.prompt_templates
+        assert "story_structure" in STORY_WRITER.prompt_templates
         assert "story_ending" in STORY_WRITER.prompt_templates
 
     def test_get_prompt_via_agent(self):
         """Test agent.get_prompt with variable substitution."""
         agent = GeminiWriterAgent(content_type="quiz")
         prompt = agent.get_prompt(
-            "quiz_question", {"topic": "Python", "difficulty": "medium"}
+            "quiz_question_complete", {"topic": "Python", "difficulty": "medium"}
         )
         assert "Python" in prompt
         assert "medium" in prompt
@@ -72,6 +70,23 @@ class TestAgentConfigPrompts:
         assert "challenging" in modified.lower()
 
 
+class TestContentRegistry:
+    """Test content registry integration."""
+
+    def test_quiz_in_registry(self):
+        """Test quiz type is in registry."""
+        config = CONTENT_REGISTRY.get("quiz")
+        assert config is not None
+        assert config.schema_description
+        assert config.sample_output
+
+    def test_story_in_registry(self):
+        """Test story type is in registry."""
+        config = CONTENT_REGISTRY.get("story")
+        assert config is not None
+        assert config.schema_description
+
+
 class TestGeminiWriterAgentInit:
     """Test GeminiWriterAgent initialization."""
 
@@ -92,7 +107,7 @@ class TestGeminiWriterAgentInit:
         """Test agent uses config from content_team."""
         agent = GeminiWriterAgent(content_type="quiz")
         assert agent.config.role == ContentRole.QUIZ_WRITER
-        assert "quiz_question" in agent.config.prompt_templates
+        assert "quiz_question_complete" in agent.config.prompt_templates
 
     def test_init_with_custom_model(self):
         """Test initialization with custom model name."""
@@ -115,7 +130,7 @@ class TestGeminiWriterAgentInit:
 
 
 class TestGeminiWriterAliases:
-    """Test backward-compatible alias classes."""
+    """Test convenience alias classes."""
 
     def test_quiz_writer_alias(self):
         """Test GeminiQuizWriterAgent alias."""
@@ -137,7 +152,7 @@ class TestGeminiWriterPromptMethods:
         """Test agent.get_prompt uses config."""
         agent = GeminiWriterAgent(content_type="quiz")
         agent.update_parameters({"topic": "Python"})
-        prompt = agent.get_prompt("quiz_question", {"difficulty": "hard"})
+        prompt = agent.get_prompt("quiz_question_complete", {"difficulty": "hard"})
         assert "Python" in prompt
 
     def test_build_generation_prompt(self):
@@ -149,75 +164,27 @@ class TestGeminiWriterPromptMethods:
         assert "Python" in prompt
         assert "3" in prompt
 
-
-class TestGeminiWriterFallback:
-    """Test fallback to static templates when ADK unavailable."""
-
-    @pytest.mark.asyncio
-    async def test_generate_question_fallback(self):
-        """Test question generation falls back to templates."""
+    def test_build_generation_prompt_with_schema(self):
+        """Test build_generation_prompt includes schema from registry."""
         agent = GeminiWriterAgent(content_type="quiz")
-        question = await agent.generate_question(topic="Python", difficulty="medium")
-
-        assert question.question  # Has question text
-        assert len(question.options) == 4  # Has 4 options
-        assert 0 <= question.correct_answer <= 3  # Valid correct index
-        assert question.explanation  # Has explanation
-
-    @pytest.mark.asyncio
-    async def test_generate_story_node_fallback(self):
-        """Test story node generation falls back to templates."""
-        agent = GeminiWriterAgent(content_type="story")
-        node = await agent.generate_story_node(
-            node_id="start",
-            topic="Dragons",
-            genre="fantasy",
+        config = CONTENT_REGISTRY.get("quiz")
+        prompt = agent.build_generation_prompt(
+            context={"topic": "Test", "num_questions": 2, "difficulty": "easy"},
+            schema_description=config.schema_description,
+            sample_output=config.sample_output,
         )
-
-        assert node.node_id == "start"
-        assert node.content  # Has content text
-        assert not node.is_ending
-
-    @pytest.mark.asyncio
-    async def test_build_quiz_fallback(self):
-        """Test full quiz building with fallback."""
-        agent = GeminiWriterAgent(content_type="quiz")
-        result = await agent._build_quiz(
-            {
-                "topic": "Python",
-                "num_questions": 3,
-                "difficulty": "easy",
-            }
-        )
-
-        # Validate structure
-        assert "title" in result
-        assert "questions" in result
-        assert len(result["questions"]) == 3
-
-    @pytest.mark.asyncio
-    async def test_build_story_fallback(self):
-        """Test full story building with fallback."""
-        agent = GeminiWriterAgent(content_type="story")
-        result = await agent._build_story(
-            {
-                "topic": "Adventure",
-                "genre": "fantasy",
-                "num_nodes": 5,
-            }
-        )
-
-        # Validate structure
-        assert "title" in result
-        assert "nodes" in result
-        assert "start" in result["nodes"]
+        assert "JSON" in prompt  # Schema included
 
 
 class TestADKAgentWrapper:
     """Test ADKAgentWrapper class."""
 
-    def test_wrapper_init(self):
-        """Test wrapper initialization with config."""
+    @pytest.mark.skipif(
+        not os.environ.get("GOOGLE_API_KEY"),
+        reason="GOOGLE_API_KEY required for wrapper initialization",
+    )
+    def test_wrapper_init_with_key(self):
+        """Test wrapper initialization with API key."""
         wrapper = ADKAgentWrapper(
             name="test_agent",
             config=QUIZ_WRITER,
@@ -225,43 +192,58 @@ class TestADKAgentWrapper:
         )
         assert wrapper.name == "test_agent"
         assert wrapper.model_name == "gemini-2.5-flash-lite"
-        assert not wrapper._initialized
 
-    def test_parse_json_response_clean(self):
+    def test_wrapper_init_without_key_raises(self):
+        """Test wrapper raises without API key."""
+        with patch.dict(os.environ, {"GOOGLE_API_KEY": ""}, clear=False):
+            # Remove the key temporarily
+            original = os.environ.pop("GOOGLE_API_KEY", None)
+            try:
+                with pytest.raises(RuntimeError, match="GOOGLE_API_KEY"):
+                    ADKAgentWrapper(
+                        name="test",
+                        config=QUIZ_WRITER,
+                        model_name="gemini-2.5-flash-lite",
+                    )
+            finally:
+                if original:
+                    os.environ["GOOGLE_API_KEY"] = original
+
+    @pytest.mark.skipif(
+        not os.environ.get("GOOGLE_API_KEY"),
+        reason="GOOGLE_API_KEY required",
+    )
+    def test_parse_json_clean(self):
         """Test parsing clean JSON response."""
-        wrapper = ADKAgentWrapper(name="test", config=QUIZ_WRITER)
-        result = wrapper._parse_json_response('{"key": "value"}')
+        wrapper = ADKAgentWrapper(
+            name="test", config=QUIZ_WRITER, model_name="gemini-2.5-flash-lite"
+        )
+        result = wrapper._parse_json('{"key": "value"}')
         assert result == {"key": "value"}
 
-    def test_parse_json_response_markdown(self):
+    @pytest.mark.skipif(
+        not os.environ.get("GOOGLE_API_KEY"),
+        reason="GOOGLE_API_KEY required",
+    )
+    def test_parse_json_markdown(self):
         """Test parsing JSON with markdown code blocks."""
-        wrapper = ADKAgentWrapper(name="test", config=QUIZ_WRITER)
-        result = wrapper._parse_json_response('```json\n{"key": "value"}\n```')
+        wrapper = ADKAgentWrapper(
+            name="test", config=QUIZ_WRITER, model_name="gemini-2.5-flash-lite"
+        )
+        result = wrapper._parse_json('```json\n{"key": "value"}\n```')
         assert result == {"key": "value"}
 
-    def test_parse_json_response_invalid(self):
-        """Test parsing invalid JSON returns error structure."""
-        wrapper = ADKAgentWrapper(name="test", config=QUIZ_WRITER)
-        result = wrapper._parse_json_response("not json")
-        assert "error" in result
-
-
-class TestGeminiTextProvider:
-    """Test GeminiTextProvider class."""
-
-    def test_provider_init(self):
-        """Test provider initialization with config."""
-        provider = GeminiTextProvider(config=QUIZ_WRITER)
-        assert provider.config == QUIZ_WRITER
-        assert provider.model_name == "gemini-2.5-flash-lite"
-
-    @pytest.mark.asyncio
-    async def test_provider_fallback(self):
-        """Test provider falls back to templates without API key."""
-        provider = GeminiTextProvider(config=QUIZ_WRITER)
-        text = await provider.generate_text("quiz_question", {"topic": "Python"})
-        assert text  # Returns something
-        assert "Python" in text  # Topic is in text
+    @pytest.mark.skipif(
+        not os.environ.get("GOOGLE_API_KEY"),
+        reason="GOOGLE_API_KEY required",
+    )
+    def test_parse_json_invalid_raises(self):
+        """Test parsing invalid JSON raises ValueError."""
+        wrapper = ADKAgentWrapper(
+            name="test", config=QUIZ_WRITER, model_name="gemini-2.5-flash-lite"
+        )
+        with pytest.raises(ValueError, match="Invalid JSON"):
+            wrapper._parse_json("not json")
 
 
 @pytest.mark.skipif(
@@ -271,72 +253,85 @@ class TestGeminiTextProvider:
 class TestGeminiWriterLive:
     """Live tests requiring GOOGLE_API_KEY.
 
-    These tests make actual API calls to Gemini.
-    Run with: GOOGLE_API_KEY=your_key pytest tests/integration/test_gemini_writer.py -v
-
-    Note: Tests may fail with 429 rate limiting on free tier.
-    This is expected and confirms the integration is working.
+    Run with: GOOGLE_API_KEY=your_key pytest tests/integration/test_gemini_writer.py -v -k Live
     """
 
     @pytest.mark.asyncio
-    async def test_live_quiz_generation(self):
-        """Test live quiz generation with ADK."""
+    async def test_live_generate_question(self):
+        """Test live question generation."""
         agent = GeminiWriterAgent(content_type="quiz")
-        assert agent.adk_enabled, "ADK should be enabled with API key"
 
         try:
-            result = await agent._build_content_with_adk(
-                {
-                    "task_id": "generate_quiz",
-                    "topic": "Python basics",
-                    "num_questions": 2,
-                    "difficulty": "easy",
-                }
-            )
+            question = await agent.generate_question(topic="Python", difficulty="easy")
 
-            assert "title" in result
-            assert "questions" in result
-            assert len(result["questions"]) >= 1
+            assert question.question
+            assert len(question.options) == 4
+            assert 0 <= question.correct_answer <= 3
+            assert question.explanation
         except Exception as e:
             if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                pytest.skip("Rate limited by Gemini API (free tier limit)")
+                pytest.skip("Rate limited by Gemini API")
+            if "connection" in str(e).lower():
+                pytest.skip("Network connection issue")
             raise
 
     @pytest.mark.asyncio
-    async def test_live_story_generation(self):
-        """Test live story generation with ADK."""
+    async def test_live_generate_quiz(self):
+        """Test live quiz generation."""
+        agent = GeminiWriterAgent(content_type="quiz")
+
+        try:
+            quiz = await agent.generate_quiz(
+                topic="Python basics", num_questions=2, difficulty="easy"
+            )
+
+            assert quiz.title
+            assert len(quiz.questions) >= 1
+        except Exception as e:
+            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                pytest.skip("Rate limited by Gemini API")
+            if "connection" in str(e).lower():
+                pytest.skip("Network connection issue")
+            raise
+
+    @pytest.mark.asyncio
+    async def test_live_generate_story(self):
+        """Test live story generation."""
         agent = GeminiWriterAgent(content_type="story")
 
         try:
-            result = await agent._build_content_with_adk(
-                {
-                    "task_id": "generate_story",
-                    "topic": "A magical forest",
-                    "num_nodes": 3,
-                    "genre": "fantasy",
-                }
+            story = await agent.generate_story(
+                topic="A magical forest", genre="fantasy", num_nodes=3
             )
 
-            assert "title" in result
-            assert "nodes" in result
+            assert story.title
+            assert "start" in story.nodes
         except Exception as e:
             if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                pytest.skip("Rate limited by Gemini API (free tier limit)")
+                pytest.skip("Rate limited by Gemini API")
+            if "connection" in str(e).lower():
+                pytest.skip("Network connection issue")
             raise
 
     @pytest.mark.asyncio
-    async def test_live_text_generation(self):
-        """Test live text generation."""
-        provider = GeminiTextProvider(config=QUIZ_WRITER)
+    async def test_live_generate_story_node(self):
+        """Test live story node generation."""
+        agent = GeminiWriterAgent(content_type="story")
 
         try:
-            text = await provider.generate_text(
-                "quiz_question", {"topic": "Machine Learning", "difficulty": "medium"}
+            node = await agent.generate_story_node(
+                node_id="start",
+                topic="Dragons",
+                genre="fantasy",
+                available_nodes=["node_0", "node_1"],
             )
 
-            assert text
-            assert len(text) > 10  # Got substantial content
+            assert node.node_id == "start"
+            assert node.content
+            assert len(node.branches) > 0
         except Exception as e:
             if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                pytest.skip("Rate limited by Gemini API (free tier limit)")
+                pytest.skip("Rate limited by Gemini API")
+            if "connection" in str(e).lower():
+                pytest.skip("Network connection issue")
             raise

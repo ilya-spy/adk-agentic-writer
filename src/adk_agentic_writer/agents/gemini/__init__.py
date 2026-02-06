@@ -1,7 +1,7 @@
 """Gemini-powered agent implementations using Google ADK.
 
 Provides real AI content generation via Google's Agent Development Kit.
-Falls back to static templates if ADK is unavailable or API key not set.
+Requires GOOGLE_API_KEY environment variable.
 
 Prompts and configurations are defined in teams/content_team.py.
 Use get_config_for_role() to get AgentConfig with prompts for a role.
@@ -13,7 +13,6 @@ from .writer import (
     GeminiQuizWriterAgent,
     GeminiStoryWriterAgent,
     ADKAgentWrapper,
-    GeminiTextProvider,
 )
 from .designer import (
     GeminiDesignerAgent,
@@ -36,5 +35,4 @@ __all__ = [
     "GeminiSimulationDesignerAgent",
     # ADK utilities
     "ADKAgentWrapper",
-    "GeminiTextProvider",
 ]

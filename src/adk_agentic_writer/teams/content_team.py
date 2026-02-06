@@ -76,6 +76,25 @@ Requirements:
 Topic context: Create engaging, factual questions that test understanding of {topic}.
 Make questions progressively more challenging if difficulty is "medium" or "hard".""",
     prompt_templates={
+        # Complete question generation (preferred - LLM decides correct answer)
+        "quiz_question_complete": """Generate one complete quiz question about {topic} at {difficulty} difficulty.
+
+Return valid JSON with this exact structure:
+{{
+  "question": "The question text here",
+  "options": ["Option A", "Option B", "Option C", "Option D"],
+  "correct_answer": 0,
+  "explanation": "Brief explanation of why this is correct",
+  "difficulty": "{difficulty}"
+}}
+
+Requirements:
+- Create exactly 4 distinct options
+- correct_answer is the 0-based index (0-3) of the correct option
+- Make 3 options plausible but wrong (distractors)
+- The explanation should teach why the answer is correct
+- Return ONLY the JSON object, no other text""",
+        # Legacy individual prompts (fallback)
         "quiz_question": "Generate one engaging {difficulty}-difficulty quiz question about {topic}. Return only the question text.",
         "quiz_option": "Generate a plausible but incorrect answer option for a quiz about {topic}. Return only the option text (one short phrase).",
         "quiz_option_correct": "Generate the correct answer for a quiz question about {topic}. Return only the option text (one short phrase).",
@@ -120,6 +139,52 @@ Requirements:
 
 Make the story engaging with vivid descriptions and meaningful choices.""",
     prompt_templates={
+        # Complete story node generation (preferred - LLM decides branches)
+        "story_node_complete": """Generate a story node for an interactive {genre} narrative about {topic}.
+
+Node context:
+- Node ID: {node_id}
+- Node type: {node_type}
+- Available next nodes: {available_nodes}
+
+Return valid JSON with this exact structure:
+{{
+  "node_id": "{node_id}",
+  "content": "2-4 sentences of narrative text",
+  "branches": [
+    {{"text": "Choice description (5-10 words)", "next_node_id": "valid_node_id"}}
+  ],
+  "tags": ["relevant", "tags"],
+  "is_ending": false
+}}
+
+Requirements:
+- Content should be vivid and engaging
+- Each branch text should be a meaningful player choice
+- Branch next_node_id MUST be from available_nodes list
+- If this is an ending node, set is_ending: true and branches: []
+- Return ONLY the JSON object""",
+        # Complete story structure (for generating interconnected nodes)
+        "story_structure": """Create a complete branched story structure about {topic} in the {genre} genre.
+
+Requirements:
+- Create exactly {num_nodes} nodes total
+- Include a "start" node as entry point
+- Include {num_endings} ending nodes (ending_0, ending_1, etc.)
+- Middle nodes should be named node_0, node_1, etc.
+- Each non-ending node needs 1-3 branches with meaningful choices
+- All branches must connect to valid existing nodes
+- Create multiple paths through the story
+
+Return valid JSON with this structure:
+{{
+  "nodes": {{
+    "start": {{"node_id": "start", "content": "...", "branches": [...], "tags": [...], "is_ending": false}},
+    "node_0": {{...}},
+    "ending_0": {{"node_id": "ending_0", "content": "...", "branches": [], "tags": ["ending"], "is_ending": true}}
+  }}
+}}""",
+        # Legacy individual prompts (fallback)
         "story_opening": "Write an engaging opening paragraph (3-4 sentences) for an interactive {genre} story about {topic}.",
         "story_path": "Write a short paragraph (2-3 sentences) describing the next scene in a {genre} story about {topic}.",
         "story_ending": "Write a satisfying {ending_type} conclusion paragraph (2-3 sentences) for a {genre} story about {topic}.",
