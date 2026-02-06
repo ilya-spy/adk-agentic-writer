@@ -11,6 +11,8 @@ Usage:
         agent_config=MY_AGENT_CONFIG,
         category="writer",  # or "designer"
         default_params={"field": "value"},
+        schema_description="JSON schema for this content...",
+        sample_output={"example": "data"},
     ))
 
     # Get config for content type
@@ -40,6 +42,109 @@ from ..teams.content_team import (
     GAME_WRITER,
     SIMULATION_WRITER,
 )
+from .schema_helpers import build_schema_instruction
+
+
+# =============================================================================
+# Schema Descriptions (centralized for all content types)
+# =============================================================================
+
+QUIZ_SCHEMA_DESCRIPTION = """
+Output JSON Schema:
+{
+  "title": "string - Engaging quiz title",
+  "description": "string - Brief quiz description",
+  "questions": [
+    {
+      "question": "string - The question text",
+      "options": ["string", "string", "string", "string"],
+      "correct_answer": 0-3,
+      "explanation": "string - Why this answer is correct",
+      "difficulty": "easy|medium|hard"
+    }
+  ],
+  "passing_score": 70,
+  "time_limit": null
+}"""
+
+STORY_SCHEMA_DESCRIPTION = """
+Output JSON Schema:
+{
+  "title": "string - Story title",
+  "synopsis": "string - Brief story overview",
+  "genre": "string - Story genre",
+  "start_node": "start",
+  "nodes": {
+    "start": {
+      "node_id": "start",
+      "content": "string - Opening narrative",
+      "branches": [{"text": "choice", "next_node_id": "node_0"}],
+      "tags": ["opening"],
+      "is_ending": false
+    },
+    "ending_0": {
+      "node_id": "ending_0",
+      "content": "string - Ending narrative",
+      "branches": [],
+      "tags": ["ending"],
+      "is_ending": true
+    }
+  },
+  "characters": ["string"]
+}"""
+
+
+# =============================================================================
+# Sample Outputs (for model guidance)
+# =============================================================================
+
+SAMPLE_QUIZ_OUTPUT = {
+    "title": "Python Programming Fundamentals",
+    "description": "Test your knowledge of Python basics",
+    "questions": [
+        {
+            "question": "What is the correct way to define a function in Python?",
+            "options": [
+                "function myFunc():",
+                "def myFunc():",
+                "func myFunc():",
+                "define myFunc():",
+            ],
+            "correct_answer": 1,
+            "explanation": "In Python, functions are defined using the 'def' keyword.",
+            "difficulty": "easy",
+        }
+    ],
+    "passing_score": 70,
+    "time_limit": None,
+}
+
+SAMPLE_STORY_OUTPUT = {
+    "title": "The Quest for Knowledge",
+    "synopsis": "An adventure through the realm of learning",
+    "genre": "fantasy",
+    "start_node": "start",
+    "nodes": {
+        "start": {
+            "node_id": "start",
+            "content": "You stand at the entrance of the ancient library...",
+            "branches": [
+                {"text": "Enter through the main door", "next_node_id": "node_0"},
+                {"text": "Search for a side entrance", "next_node_id": "node_1"},
+            ],
+            "tags": ["opening"],
+            "is_ending": False,
+        },
+        "ending_0": {
+            "node_id": "ending_0",
+            "content": "You emerge victorious with newfound wisdom...",
+            "branches": [],
+            "tags": ["ending", "victory"],
+            "is_ending": True,
+        },
+    },
+    "characters": ["Protagonist", "The Keeper"],
+}
 
 
 @dataclass
@@ -54,6 +159,8 @@ class ContentTypeConfig:
         default_params: Default parameters when none provided
         title_template: Template for generating title (uses {topic})
         description_template: Template for description (uses {topic})
+        schema_description: JSON schema description for structured output
+        sample_output: Sample output for model guidance
     """
 
     content_type: str
@@ -64,6 +171,8 @@ class ContentTypeConfig:
     title_template: str = "{topic} Content"
     description_template: str = "Content about {topic}"
     component_models: Dict[str, Type[BaseModel]] = field(default_factory=dict)
+    schema_description: str = ""
+    sample_output: Dict[str, Any] = field(default_factory=dict)
 
 
 class ContentRegistry:
@@ -113,6 +222,8 @@ CONTENT_REGISTRY.register(
         title_template="{topic} Quiz",
         description_template="Test your knowledge about {topic}",
         component_models={"question": QuizQuestion},
+        schema_description=QUIZ_SCHEMA_DESCRIPTION,
+        sample_output=SAMPLE_QUIZ_OUTPUT,
     )
 )
 
@@ -126,6 +237,8 @@ CONTENT_REGISTRY.register(
         title_template="The {topic} Chronicles",
         description_template="An interactive story about {topic}",
         component_models={"node": StoryNode},
+        schema_description=STORY_SCHEMA_DESCRIPTION,
+        sample_output=SAMPLE_STORY_OUTPUT,
     )
 )
 
@@ -139,9 +252,12 @@ CONTENT_REGISTRY.register(
         title_template="The {topic} Chronicles",
         description_template="An interactive story about {topic}",
         component_models={"node": StoryNode},
+        schema_description=STORY_SCHEMA_DESCRIPTION,
+        sample_output=SAMPLE_STORY_OUTPUT,
     )
 )
 
+# Game and simulation use build_schema_instruction for dynamic schema
 CONTENT_REGISTRY.register(
     ContentTypeConfig(
         content_type="quest_game",
@@ -152,6 +268,8 @@ CONTENT_REGISTRY.register(
         title_template="{topic} Quest",
         description_template="An interactive quest game about {topic}",
         component_models={"node": QuestNode},
+        schema_description=build_schema_instruction(QuestGame),
+        sample_output={},
     )
 )
 
@@ -165,6 +283,8 @@ CONTENT_REGISTRY.register(
         title_template="{topic} Quest",
         description_template="An interactive quest game about {topic}",
         component_models={"node": QuestNode},
+        schema_description=build_schema_instruction(QuestGame),
+        sample_output={},
     )
 )
 
@@ -178,6 +298,8 @@ CONTENT_REGISTRY.register(
         title_template="{topic} Simulation",
         description_template="An interactive simulation about {topic}",
         component_models={"variable": SimulationVariable, "control": SimulationControl},
+        schema_description=build_schema_instruction(WebSimulation),
+        sample_output={},
     )
 )
 
@@ -191,8 +313,19 @@ CONTENT_REGISTRY.register(
         title_template="{topic} Simulation",
         description_template="An interactive simulation about {topic}",
         component_models={"variable": SimulationVariable, "control": SimulationControl},
+        schema_description=build_schema_instruction(WebSimulation),
+        sample_output={},
     )
 )
 
 
-__all__ = ["ContentTypeConfig", "ContentRegistry", "CONTENT_REGISTRY"]
+__all__ = [
+    "ContentTypeConfig",
+    "ContentRegistry",
+    "CONTENT_REGISTRY",
+    # Schema definitions
+    "QUIZ_SCHEMA_DESCRIPTION",
+    "STORY_SCHEMA_DESCRIPTION",
+    "SAMPLE_QUIZ_OUTPUT",
+    "SAMPLE_STORY_OUTPUT",
+]

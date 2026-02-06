@@ -163,7 +163,12 @@ class AgentStatus(str, Enum):
 
 
 class AgentConfig(BaseModel):
-    """Configuration for an agent specialist."""
+    """Configuration for an agent specialist.
+
+    Pure data model for agent configuration.
+    Prompt templates use {variable} substitution from context.
+    Methods for prompt building are in BaseAgent.
+    """
 
     role: Union[AgentRole, str, Enum] = Field(
         ..., description="Agent role (base or team-specific)"
@@ -171,6 +176,18 @@ class AgentConfig(BaseModel):
     instruction: str = Field(..., description="System instruction for the agent")
     temperature: float = Field(0.7, description="Generation temperature")
     max_tokens: Optional[int] = Field(None, description="Maximum tokens to generate")
+    generation_prompt: str = Field(
+        "Generate content about {topic}.",
+        description="Main generation prompt template with {variable} substitution",
+    )
+    prompt_templates: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Named prompt templates for specific content blocks",
+    )
+    prompt_modifiers: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Modifiers that adjust prompts",
+    )
 
 
 class AgentMessage(BaseModel):
