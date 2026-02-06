@@ -3,6 +3,7 @@
 Both static/ and gemini/ agents inherit from this base class.
 """
 
+import json
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -16,10 +17,11 @@ class BaseAgent:
 
     Stores:
     - id: Agent identifier
-    - config: AgentConfig (role, instruction, temperature)
+    - config: AgentConfig (role, instruction, temperature, prompts)
     - model: AgentModel (name, tools, parameters, workflows, teams)
     - _supported_tasks: List of tasks this agent can handle
 
+    Provides prompt building methods that operate on config data.
     Subclasses (StatefulAgent) add runtime state management.
     """
 
@@ -33,7 +35,7 @@ class BaseAgent:
 
         Args:
             agent_id: Unique identifier
-            config: Agent configuration (role, instruction)
+            config: Agent configuration (role, instruction, prompts)
             model: Agent model (tools, workflows, teams)
         """
         self.id = agent_id
@@ -66,6 +68,89 @@ class BaseAgent:
         """Update parameters."""
         self.model.parameters.update(updates)
         logger.debug(f"Agent {self.id} updated {len(updates)} parameters")
+
+    # =========================================================================
+    # Prompt Building Methods
+    # =========================================================================
+    def get_prompt(self, key: str, context: Optional[Dict[str, Any]] = None) -> str:
+        """Get a prompt template from config with variable substitution.
+
+        Args:
+            key: Prompt template key (e.g., 'quiz_question', 'story_opening')
+            context: Variables for substitution
+
+        Returns:
+            Formatted prompt string
+        """
+        template = self.config.prompt_templates.get(key, "")
+        if not template:
+            return ""
+
+        full_context = {**self.parameters}
+        if context:
+            full_context.update(context)
+
+        try:
+            return template.format(**full_context)
+        except KeyError:
+            return template
+
+    def build_generation_prompt(
+        self,
+        context: Optional[Dict[str, Any]] = None,
+        schema_description: str = "",
+        sample_output: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Build the full generation prompt with optional schema.
+
+        Uses config.generation_prompt as base template.
+        Appends schema_description and sample_output if provided.
+
+        Args:
+            context: Variables for substitution
+            schema_description: JSON schema description (from content registry)
+            sample_output: Sample output dict for model guidance
+
+        Returns:
+            Complete generation prompt
+        """
+        full_context = {**self.parameters}
+        if context:
+            full_context.update(context)
+
+        try:
+            prompt = self.config.generation_prompt.format(**full_context)
+        except KeyError:
+            prompt = self.config.generation_prompt
+
+        if schema_description:
+            prompt += f"\n\n{schema_description}"
+
+        if sample_output:
+            prompt += f"\n\nExample output:\n{json.dumps(sample_output, indent=2)}"
+
+        return prompt
+
+    def apply_prompt_modifiers(
+        self, prompt: str, modifiers: Optional[List[str]] = None
+    ) -> str:
+        """Apply modifiers from config to a prompt.
+
+        Args:
+            prompt: Base prompt
+            modifiers: List of modifier keys to apply
+
+        Returns:
+            Prompt with modifiers applied
+        """
+        if not modifiers:
+            return prompt
+
+        parts = [prompt]
+        for mod_key in modifiers:
+            if mod_key in self.config.prompt_modifiers:
+                parts.append(self.config.prompt_modifiers[mod_key])
+        return "\n".join(parts)
 
     def get_supported_tasks(self) -> List[AgentTask]:
         """Get list of tasks this agent can handle.

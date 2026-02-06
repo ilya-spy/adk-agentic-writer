@@ -15,47 +15,61 @@ from adk_agentic_writer.agents.gemini.writer import (
     ADKAgentWrapper,
     GeminiTextProvider,
 )
-from adk_agentic_writer.agents.gemini.prompts import (
-    build_quiz_prompt,
-    build_story_prompt,
-    get_system_instruction,
-    QUIZ_SYSTEM_INSTRUCTION,
-    STORY_SYSTEM_INSTRUCTION,
+from adk_agentic_writer.teams.content_team import (
+    QUIZ_WRITER,
+    STORY_WRITER,
+    get_config_for_role,
+    ContentRole,
 )
 from adk_agentic_writer.models.content_models import Quiz, BranchedNarrative
 from adk_agentic_writer.tasks.content_tasks import GENERATE_QUIZ, GENERATE_STORY
 
 
-class TestGeminiPrompts:
-    """Test prompt building functions."""
+class TestAgentConfigPrompts:
+    """Test AgentConfig data and BaseAgent prompt methods."""
 
-    def test_build_quiz_prompt(self):
-        """Test quiz prompt generation."""
-        prompt = build_quiz_prompt(topic="Python", num_questions=5, difficulty="medium")
+    def test_quiz_config_has_prompts(self):
+        """Test QUIZ_WRITER config has prompt templates."""
+        assert "quiz_question" in QUIZ_WRITER.prompt_templates
+        assert "quiz_option" in QUIZ_WRITER.prompt_templates
+        assert "quiz_explanation" in QUIZ_WRITER.prompt_templates
+
+    def test_story_config_has_prompts(self):
+        """Test STORY_WRITER config has prompt templates."""
+        assert "story_opening" in STORY_WRITER.prompt_templates
+        assert "story_path" in STORY_WRITER.prompt_templates
+        assert "story_ending" in STORY_WRITER.prompt_templates
+
+    def test_get_prompt_via_agent(self):
+        """Test agent.get_prompt with variable substitution."""
+        agent = GeminiWriterAgent(content_type="quiz")
+        prompt = agent.get_prompt(
+            "quiz_question", {"topic": "Python", "difficulty": "medium"}
+        )
+        assert "Python" in prompt
+        assert "medium" in prompt
+
+    def test_build_generation_prompt_via_agent(self):
+        """Test agent.build_generation_prompt includes context."""
+        agent = GeminiWriterAgent(content_type="quiz")
+        prompt = agent.build_generation_prompt(
+            context={"topic": "Python", "num_questions": 5, "difficulty": "medium"}
+        )
         assert "Python" in prompt
         assert "5" in prompt
-        assert "medium" in prompt
-        assert "JSON" in prompt  # Schema description included
 
-    def test_build_story_prompt(self):
-        """Test story prompt generation."""
-        prompt = build_story_prompt(topic="Dragons", num_nodes=7, genre="fantasy")
-        assert "Dragons" in prompt
-        assert "7" in prompt
-        assert "fantasy" in prompt
-        assert "JSON" in prompt
+    def test_get_config_for_role(self):
+        """Test get_config_for_role returns correct config."""
+        assert get_config_for_role("quiz") == QUIZ_WRITER
+        assert get_config_for_role("story") == STORY_WRITER
+        assert get_config_for_role(ContentRole.QUIZ_WRITER) == QUIZ_WRITER
 
-    def test_get_system_instruction_quiz(self):
-        """Test system instruction for quiz types."""
-        for content_type in ["quiz", "trivia", "test"]:
-            instruction = get_system_instruction(content_type)
-            assert instruction == QUIZ_SYSTEM_INSTRUCTION
-
-    def test_get_system_instruction_story(self):
-        """Test system instruction for story types."""
-        for content_type in ["story", "narrative", "adventure"]:
-            instruction = get_system_instruction(content_type)
-            assert instruction == STORY_SYSTEM_INSTRUCTION
+    def test_apply_modifiers_via_agent(self):
+        """Test agent.apply_prompt_modifiers adds modifier text."""
+        agent = GeminiWriterAgent(content_type="quiz")
+        base_prompt = "Generate a quiz."
+        modified = agent.apply_prompt_modifiers(base_prompt, ["difficulty_hard"])
+        assert "challenging" in modified.lower()
 
 
 class TestGeminiWriterAgentInit:
@@ -73,6 +87,12 @@ class TestGeminiWriterAgentInit:
         agent = GeminiWriterAgent(agent_id="test_story", content_type="story")
         assert agent.content_type == "story"
         assert GENERATE_STORY in agent.supported_tasks
+
+    def test_init_uses_role_config(self):
+        """Test agent uses config from content_team."""
+        agent = GeminiWriterAgent(content_type="quiz")
+        assert agent.config.role == ContentRole.QUIZ_WRITER
+        assert "quiz_question" in agent.config.prompt_templates
 
     def test_init_with_custom_model(self):
         """Test initialization with custom model name."""
@@ -108,6 +128,26 @@ class TestGeminiWriterAliases:
         agent = GeminiStoryWriterAgent()
         assert agent.content_type == "story"
         assert "story" in agent.agent_id
+
+
+class TestGeminiWriterPromptMethods:
+    """Test prompt building methods on agent."""
+
+    def test_get_prompt(self):
+        """Test agent.get_prompt uses config."""
+        agent = GeminiWriterAgent(content_type="quiz")
+        agent.update_parameters({"topic": "Python"})
+        prompt = agent.get_prompt("quiz_question", {"difficulty": "hard"})
+        assert "Python" in prompt
+
+    def test_build_generation_prompt(self):
+        """Test agent.build_generation_prompt uses config."""
+        agent = GeminiWriterAgent(content_type="quiz")
+        prompt = agent.build_generation_prompt(
+            {"topic": "Python", "num_questions": 3, "difficulty": "easy"}
+        )
+        assert "Python" in prompt
+        assert "3" in prompt
 
 
 class TestGeminiWriterFallback:
@@ -177,11 +217,11 @@ class TestADKAgentWrapper:
     """Test ADKAgentWrapper class."""
 
     def test_wrapper_init(self):
-        """Test wrapper initialization."""
+        """Test wrapper initialization with config."""
         wrapper = ADKAgentWrapper(
             name="test_agent",
+            config=QUIZ_WRITER,
             model_name="gemini-2.5-flash-lite",
-            instruction="Test instruction",
         )
         assert wrapper.name == "test_agent"
         assert wrapper.model_name == "gemini-2.5-flash-lite"
@@ -189,19 +229,19 @@ class TestADKAgentWrapper:
 
     def test_parse_json_response_clean(self):
         """Test parsing clean JSON response."""
-        wrapper = ADKAgentWrapper(name="test")
+        wrapper = ADKAgentWrapper(name="test", config=QUIZ_WRITER)
         result = wrapper._parse_json_response('{"key": "value"}')
         assert result == {"key": "value"}
 
     def test_parse_json_response_markdown(self):
         """Test parsing JSON with markdown code blocks."""
-        wrapper = ADKAgentWrapper(name="test")
+        wrapper = ADKAgentWrapper(name="test", config=QUIZ_WRITER)
         result = wrapper._parse_json_response('```json\n{"key": "value"}\n```')
         assert result == {"key": "value"}
 
     def test_parse_json_response_invalid(self):
         """Test parsing invalid JSON returns error structure."""
-        wrapper = ADKAgentWrapper(name="test")
+        wrapper = ADKAgentWrapper(name="test", config=QUIZ_WRITER)
         result = wrapper._parse_json_response("not json")
         assert "error" in result
 
@@ -210,14 +250,15 @@ class TestGeminiTextProvider:
     """Test GeminiTextProvider class."""
 
     def test_provider_init(self):
-        """Test provider initialization."""
-        provider = GeminiTextProvider()
+        """Test provider initialization with config."""
+        provider = GeminiTextProvider(config=QUIZ_WRITER)
+        assert provider.config == QUIZ_WRITER
         assert provider.model_name == "gemini-2.5-flash-lite"
 
     @pytest.mark.asyncio
     async def test_provider_fallback(self):
         """Test provider falls back to templates without API key."""
-        provider = GeminiTextProvider()
+        provider = GeminiTextProvider(config=QUIZ_WRITER)
         text = await provider.generate_text("quiz_question", {"topic": "Python"})
         assert text  # Returns something
         assert "Python" in text  # Topic is in text
@@ -286,7 +327,7 @@ class TestGeminiWriterLive:
     @pytest.mark.asyncio
     async def test_live_text_generation(self):
         """Test live text generation."""
-        provider = GeminiTextProvider()
+        provider = GeminiTextProvider(config=QUIZ_WRITER)
 
         try:
             text = await provider.generate_text(

@@ -2,11 +2,11 @@
 
 Implements real AI generation via ADK Agent with:
 - InMemoryRunner for session management
-- Structured JSON output via output_schema
+- Structured JSON output via config schema_description
 - Support for quiz and story content types
+- Prompts and instructions from AgentConfig
 """
 
-import asyncio
 import json
 import logging
 import os
@@ -25,16 +25,9 @@ from ...models.content_models import (
     StoryNode,
 )
 from ...tasks.content_tasks import GENERATE_QUIZ, GENERATE_STORY
+from ...teams.content_team import get_config_for_role, QUIZ_WRITER, STORY_WRITER
 from ...utils.content_registry import CONTENT_REGISTRY
 from ..content_agent import ContentWriterAgent
-from .prompts import (
-    QUIZ_SYSTEM_INSTRUCTION,
-    STORY_SYSTEM_INSTRUCTION,
-    build_generation_prompt,
-    get_system_instruction,
-    SAMPLE_QUIZ_OUTPUT,
-    SAMPLE_STORY_OUTPUT,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +59,7 @@ class ADKAgentWrapper:
     """Wrapper for ADK Agent with InMemoryRunner.
 
     Handles:
-    - Agent initialization with system instruction
+    - Agent initialization with system instruction from AgentConfig
     - Session management via InMemoryRunner
     - Async execution with structured output
     """
@@ -74,14 +67,12 @@ class ADKAgentWrapper:
     def __init__(
         self,
         name: str,
+        config: AgentConfig,
         model_name: str = "gemini-2.5-flash-lite",
-        instruction: str = "",
-        output_schema: Optional[Type[BaseModel]] = None,
     ):
         self.name = name
+        self.config = config
         self.model_name = model_name
-        self.instruction = instruction
-        self.output_schema = output_schema
         self._agent: Optional[Any] = None
         self._runner: Optional[Any] = None
         self._initialized = False
@@ -96,7 +87,7 @@ class ADKAgentWrapper:
             return False
 
         try:
-            # Configure retry options (exp_base is the exponential backoff multiplier)
+            # Configure retry options
             retry_config = types.HttpRetryOptions(
                 attempts=3,
                 exp_base=2,
@@ -104,12 +95,11 @@ class ADKAgentWrapper:
                 http_status_codes=[429, 500, 503, 504],
             )
 
-            # Create ADK Agent
+            # Create ADK Agent with instruction from config
             self._agent = Agent(
                 name=self.name,
                 model=self.model_name,
-                instruction=self.instruction,
-                # output_schema requires specific model support
+                instruction=self.config.instruction,
             )
 
             # Create InMemoryRunner
@@ -129,7 +119,6 @@ class ADKAgentWrapper:
                 raise RuntimeError("Failed to initialize ADK agent")
 
         try:
-            # Run with debug to get full response
             response = await self._runner.run_debug(prompt)
 
             # Extract text response
@@ -138,7 +127,6 @@ class ADKAgentWrapper:
             elif isinstance(response, str):
                 return self._parse_json_response(response)
             else:
-                # Try to get content from response object
                 content = str(response)
                 return self._parse_json_response(content)
 
@@ -148,7 +136,6 @@ class ADKAgentWrapper:
 
     def _parse_json_response(self, text: str) -> Dict[str, Any]:
         """Parse JSON from agent response, handling markdown code blocks."""
-        # Clean up response - remove markdown code blocks if present
         cleaned = text.strip()
         if cleaned.startswith("```json"):
             cleaned = cleaned[7:]
@@ -163,40 +150,46 @@ class ADKAgentWrapper:
         except json.JSONDecodeError as e:
             logger.warning(f"Failed to parse JSON response: {e}")
             logger.debug(f"Raw response: {text[:500]}")
-            # Return error structure
             return {"error": "Failed to parse JSON", "raw": text[:1000]}
 
 
 class GeminiTextProvider:
     """LLM-powered text provider using ADK agents.
 
-    Provides text generation for individual content blocks.
+    Uses prompt templates from AgentConfig for text generation.
     """
 
-    def __init__(self, model_name: str = "gemini-2.5-flash-lite"):
+    def __init__(
+        self,
+        config: AgentConfig,
+        model_name: str = "gemini-2.5-flash-lite",
+    ):
+        self.config = config
         self.model_name = model_name
-        self._agents: Dict[str, ADKAgentWrapper] = {}
+        self._agent: Optional[ADKAgentWrapper] = None
 
-    async def _get_agent(self, prompt_key: str) -> ADKAgentWrapper:
-        """Get or create agent for prompt type."""
-        if prompt_key not in self._agents:
-            # Determine instruction based on prompt key
-            if "quiz" in prompt_key:
-                instruction = QUIZ_SYSTEM_INSTRUCTION
-            elif "story" in prompt_key:
-                instruction = STORY_SYSTEM_INSTRUCTION
-            else:
-                instruction = "You are a helpful content creator."
-
-            self._agents[prompt_key] = ADKAgentWrapper(
-                name=f"text_gen_{prompt_key}",
+    async def _ensure_agent(self) -> ADKAgentWrapper:
+        """Ensure ADK agent is initialized."""
+        if self._agent is None:
+            self._agent = ADKAgentWrapper(
+                name="text_generator",
+                config=self.config,
                 model_name=self.model_name,
-                instruction=instruction,
             )
-        return self._agents[prompt_key]
+        return self._agent
+
+    def _get_prompt(self, key: str, context: Dict[str, Any]) -> str:
+        """Get prompt template from config with variable substitution."""
+        template = self.config.prompt_templates.get(key, "")
+        if not template:
+            return ""
+        try:
+            return template.format(**context)
+        except KeyError:
+            return template
 
     async def generate_text(self, prompt_key: str, context: Dict[str, Any]) -> str:
-        """Generate text using ADK agent."""
+        """Generate text using ADK agent with config prompt templates."""
         if not ADK_AVAILABLE or not _check_api_key():
             # Fallback to template
             from ...utils.text_provider import TemplateTextProvider
@@ -204,25 +197,22 @@ class GeminiTextProvider:
             fallback = TemplateTextProvider()
             return await fallback.generate_text(prompt_key, context)
 
-        agent = await self._get_agent(prompt_key)
-        topic = context.get("topic", "the subject")
-
-        prompts = {
-            "quiz_question": f"Generate an engaging quiz question about {topic}. Return only the question text, no JSON.",
-            "quiz_option": f"Generate a plausible but incorrect answer option for a quiz about {topic}. Return only the option text.",
-            "quiz_option_correct": f"Generate the correct answer for a quiz question about {topic}. Return only the option text.",
-            "quiz_explanation": f"Explain why this answer is correct in the context of {topic}. Be concise, 1-2 sentences.",
-            "story_opening": f"Write an engaging opening paragraph (3-4 sentences) for an interactive story about {topic}.",
-            "story_path": f"Write a short paragraph (2-3 sentences) describing the next scene in a story about {topic}.",
-            "story_ending": f"Write a satisfying conclusion paragraph (2-3 sentences) for a story about {topic}.",
-        }
-
-        prompt = prompts.get(prompt_key, f"Generate content about {topic}")
+        # Get prompt from config templates
+        prompt = self._get_prompt(prompt_key, context)
+        if not prompt:
+            # Fallback if template not defined
+            topic = context.get("topic", "the subject")
+            prompt = f"Generate content about {topic} for {prompt_key}."
 
         try:
+            agent = await self._ensure_agent()
             result = await agent.run(prompt)
             if isinstance(result, dict):
-                return result.get("text", result.get("content", str(result)))
+                # For text prompts, try to get raw text
+                if "error" not in result:
+                    return str(result.get("text", result.get("content", str(result))))
+                # Parse error, return raw
+                return result.get("raw", str(result))[:500]
             return str(result)
         except Exception as e:
             logger.warning(f"ADK text generation failed: {e}, using fallback")
@@ -236,6 +226,7 @@ class GeminiWriterAgent(ContentWriterAgent):
     """Gemini-powered writer agent for quiz and story generation.
 
     Uses ADK Agent with InMemoryRunner for real AI generation.
+    Prompts and instructions come from AgentConfig in content_team.py.
     Falls back to static templates if ADK is unavailable.
     """
 
@@ -248,15 +239,19 @@ class GeminiWriterAgent(ContentWriterAgent):
         self._content_type = content_type
         self._model_name = model_name
 
-        config = CONTENT_REGISTRY.get(content_type)
-        if not config:
+        # Get content type config from registry (for title templates, etc.)
+        type_config = CONTENT_REGISTRY.get(content_type)
+        if not type_config:
             raise ValueError(f"Unknown content type: {content_type}")
-        if config.category != "writer":
+        if type_config.category != "writer":
             raise ValueError(f"Content type '{content_type}' is not a writer type")
-        self._type_config = config
+        self._type_config = type_config
 
-        # Initialize with Gemini text provider
-        text_provider = GeminiTextProvider(model_name=model_name)
+        # Get role config with prompts from content_team
+        role_config = get_config_for_role(content_type)
+
+        # Initialize with Gemini text provider using role config
+        text_provider = GeminiTextProvider(config=role_config, model_name=model_name)
 
         # Create AgentModel matching ADK structure
         model = AgentModel(
@@ -267,7 +262,7 @@ class GeminiWriterAgent(ContentWriterAgent):
 
         super().__init__(
             agent_id=agent_id,
-            config=config.agent_config,
+            config=role_config,
             model=model,
             text_provider=text_provider,
         )
@@ -293,14 +288,13 @@ class GeminiWriterAgent(ContentWriterAgent):
         """Check if ADK is available and configured."""
         return self._use_adk
 
-    async def _get_adk_agent(self, task_id: str) -> ADKAgentWrapper:
-        """Get or create ADK agent for task."""
+    async def _get_adk_agent(self) -> ADKAgentWrapper:
+        """Get or create ADK agent using config."""
         if self._adk_agent is None:
-            instruction = get_system_instruction(self._content_type)
             self._adk_agent = ADKAgentWrapper(
-                name=f"{self.agent_id}_{task_id}",
+                name=f"{self.agent_id}_generator",
+                config=self.config,
                 model_name=self._model_name,
-                instruction=instruction,
             )
         return self._adk_agent
 
@@ -320,21 +314,16 @@ class GeminiWriterAgent(ContentWriterAgent):
         return await self._build_content(context)
 
     async def _build_content_with_adk(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Build content using ADK agent for full generation."""
-        task_id = context.get("task_id", "")
-        params = {**self._type_config.default_params, **context}
+        """Build content using ADK agent with config-based prompts."""
+        # Build generation prompt with schema from content registry
+        prompt = self.build_generation_prompt(
+            context=context,
+            schema_description=self._type_config.schema_description,
+            sample_output=self._type_config.sample_output,
+        )
 
-        # Get appropriate ADK agent
-        agent = await self._get_adk_agent(task_id)
-
-        # Build generation prompt with schema
-        prompt = build_generation_prompt(task_id, params)
-
-        # Add sample output for guidance
-        if "quiz" in task_id:
-            prompt += f"\n\nExample of expected output structure:\n{json.dumps(SAMPLE_QUIZ_OUTPUT, indent=2)}"
-        elif "story" in task_id:
-            prompt += f"\n\nExample of expected output structure:\n{json.dumps(SAMPLE_STORY_OUTPUT, indent=2)}"
+        # Get ADK agent
+        agent = await self._get_adk_agent()
 
         # Run ADK agent
         await self.update_status(AgentStatus.WORKING)
