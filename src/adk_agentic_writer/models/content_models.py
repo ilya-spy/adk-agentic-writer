@@ -66,8 +66,12 @@ class QuizQuestion(BaseModel):
     options: List[str] = Field(..., description="List of answer options")
     correct_answer: int = Field(..., description="Index of the correct answer")
     explanation: Optional[str] = Field(None, description="Explanation of the answer")
-    difficulty: str = Field(
-        "medium", description="Question difficulty: easy, medium, hard"
+    tier: str = Field(
+        "mid",
+        description="Scoring tier: low (1pt), mid (2pt), or high (3pt)",
+    )
+    score: int = Field(
+        1, description="Point value by tier: low=1, mid=2, high=3"
     )
 
 
@@ -76,6 +80,10 @@ class Quiz(BaseModel):
 
     title: str = Field(..., description="Quiz title")
     description: str = Field(..., description="Quiz description")
+    difficulty: str = Field(
+        "medium",
+        description="Overall quiz difficulty: easy, medium, or hard",
+    )
     questions: List[QuizQuestion] = Field(..., description="List of questions")
     time_limit: Optional[int] = Field(None, description="Time limit in minutes")
     passing_score: int = Field(70, description="Minimum percentage to pass")

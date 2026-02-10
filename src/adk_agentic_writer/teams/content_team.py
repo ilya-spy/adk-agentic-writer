@@ -38,7 +38,7 @@ class ContentRole(str, Enum):
 # Common Prompt Components
 # =============================================================================
 
-_COMMON_INSTRUCTION = """You are an expert content creator specializing in interactive educational content.
+_COMMON_INSTRUCTION = """You are an expert content creator specializing in interactive and engaging content for modern editorials.
 Your responses must be valid JSON matching the exact schema provided.
 Be creative, engaging, and educational. Ensure all content is appropriate for general audiences."""
 
@@ -57,7 +57,6 @@ QUIZ_WRITER = AgentConfig(
 
 You create engaging educational quizzes with:
 - Clear, thought-provoking questions
-- 4 distinct answer options (1 correct, 3 plausible distractors)
 - Helpful explanations for the correct answer
 - Varying difficulty levels
 
@@ -66,39 +65,37 @@ You create engaging educational quizzes with:
     max_tokens=1536,
     generation_prompt="""Generate an educational quiz about "{topic}".
 
-Requirements:
-- Create exactly {num_questions} questions
-- Difficulty level: {difficulty}
-- Each question must have exactly 4 options
-- correct_answer is the 0-based index of the correct option
-- Include a brief explanation for each answer
+The overall TOPIC difficulty is "{difficulty}" — this controls how hard the question
+CONTENT is (e.g. easy = beginner-friendly facts, hard = advanced/tricky knowledge).
 
-Topic context: Create engaging, factual questions that test understanding of {topic}.
-Make questions progressively more challenging if difficulty is "medium" or "hard".""",
+IMPORTANT -- follow ALL of these rules precisely:
+
+1. Create exactly {num_questions} questions.
+2. Each question MUST have exactly {num_options} answer options (not more, not fewer).
+3. correct_answer = 0-based index of the correct option. Vary the index across questions.
+4. Include a brief explanation for each answer.
+5. SCORING TIERS (independent of topic difficulty):
+   Every quiz MUST contain a MIX of three scoring tiers:
+     - "low"  → score = 1 point  (straightforward recall)
+     - "mid"  → score = 2 points (requires understanding)
+     - "high" → score = 3 points (requires analysis / synthesis)
+   You MUST include at least one question at EACH tier. Distribute as evenly as possible.
+   Set each question's "tier" field to exactly "low", "mid", or "high".
+   Set each question's "score" field to the matching value (1, 2, or 3).
+6. passing_score = integer in range 60-70% of total points (sum of all question scores).
+7. time_limit = integer minutes, reasonable for the question count and difficulty.""",
     prompt_templates={
         # Complete question generation (preferred - LLM decides correct answer)
-        "quiz_question_complete": """Generate one complete quiz question about {topic} at {difficulty} difficulty.
+        "quiz_question_complete": """Generate one quiz question about {topic} at {difficulty} difficulty.
 
-Return valid JSON with this exact structure:
-{{
-  "question": "The question text here",
-  "options": ["Option A", "Option B", "Option C", "Option D"],
-  "correct_answer": 0,
-  "explanation": "Brief explanation of why this is correct",
-  "difficulty": "{difficulty}"
-}}
+Return valid JSON:
+{{"question": "...", "options": ["A","B","C","D"], "correct_answer": 0,
+  "explanation": "...", "tier": "low|mid|high", "score": 1}}
 
-Requirements:
-- Create exactly 4 distinct options
-- correct_answer is the 0-based index (0-3) of the correct option
-- Make 3 options plausible but wrong (distractors)
-- The explanation should teach why the answer is correct
-- Return ONLY the JSON object, no other text""",
+- Exactly {num_options} options, correct_answer = 0-based index
+- Plausible distractors, educational explanation
+- Return ONLY the JSON object""",
         # Legacy individual prompts (fallback)
-        "quiz_question": "Generate one engaging {difficulty}-difficulty quiz question about {topic}. Return only the question text.",
-        "quiz_option": "Generate a plausible but incorrect answer option for a quiz about {topic}. Return only the option text (one short phrase).",
-        "quiz_option_correct": "Generate the correct answer for a quiz question about {topic}. Return only the option text (one short phrase).",
-        "quiz_explanation": "Explain why this answer is correct in the context of {topic}. Be concise, 1-2 sentences only.",
     },
     prompt_modifiers={
         "difficulty_easy": "Keep questions simple and straightforward, suitable for beginners.",

@@ -7,12 +7,12 @@ Prompts and configurations are defined in teams/content_team.py.
 Use get_config_for_role() to get AgentConfig with prompts for a role.
 """
 
+from .wrapper import ADKAgentWrapper
 from .coordinator import GeminiCoordinatorAgent, SupportedTask
 from .writer import (
     GeminiWriterAgent,
     GeminiQuizWriterAgent,
     GeminiStoryWriterAgent,
-    ADKAgentWrapper,
 )
 from .designer import (
     GeminiDesignerAgent,
@@ -21,6 +21,8 @@ from .designer import (
 )
 
 __all__ = [
+    # ADK utilities
+    "ADKAgentWrapper",
     # Coordinator
     "GeminiCoordinatorAgent",
     "SupportedTask",
@@ -33,6 +35,4 @@ __all__ = [
     # Designer aliases
     "GeminiGameDesignerAgent",
     "GeminiSimulationDesignerAgent",
-    # ADK utilities
-    "ADKAgentWrapper",
 ]

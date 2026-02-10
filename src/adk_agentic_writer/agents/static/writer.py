@@ -110,7 +110,7 @@ class WriterAgent(ContentWriterAgent):
             options=opts,
             correct_answer=correct_idx,
             explanation=expl,
-            difficulty=difficulty,
+            tier=difficulty,  # static writer maps difficulty param to tier
         )
 
     async def generate_story_node(
@@ -247,6 +247,7 @@ class WriterAgent(ContentWriterAgent):
         return Quiz(
             title=self._type_config.title_template.format(topic=topic.title()),
             description=self._type_config.description_template.format(topic=topic),
+            difficulty=difficulty,
             questions=[q.model_dump() for q in questions],
             passing_score=p.get("passing_score", 70),
             time_limit=p.get("time_limit"),

@@ -1,14 +1,18 @@
-"""Gemini-powered coordinator agent (stub).
+"""Gemini-powered coordinator agent using ADK.
 
-TODO: Implement ADK integration for intelligent task routing.
-Currently mirrors the static CoordinatorAgent interface.
+Routes content generation tasks to Gemini-powered writer and designer agents.
+Requires GOOGLE_API_KEY for LLM generation.
 """
 
+import logging
 from enum import Enum
+from typing import Any, Dict
 
 from ..static.coordinator import CoordinatorAgent
 from .writer import GeminiWriterAgent
 from .designer import GeminiDesignerAgent
+
+logger = logging.getLogger(__name__)
 
 
 class SupportedTask(str, Enum):
@@ -21,17 +25,33 @@ class SupportedTask(str, Enum):
 
 
 class GeminiCoordinatorAgent(CoordinatorAgent):
-    """Gemini coordinator agent stub.
+    """Gemini coordinator using ADK-powered agents.
 
-    Placeholder for ADK-powered intelligent coordination.
-    Currently inherits from static CoordinatorAgent.
+    Replaces static agents with Gemini agents and rebuilds task mappings.
     """
 
     def __init__(self, agent_id: str = "gemini_coordinator"):
         super().__init__(agent_id=agent_id)
-        # Override with Gemini agents (stubs for now)
+
+        # Replace with Gemini agents
         self._writer = GeminiWriterAgent("gemini_writer")
         self._designer = GeminiDesignerAgent("gemini_designer")
+
+        # CRITICAL: Rebuild task mappings with Gemini agents
+        self._task_to_agent: Dict[str, Any] = {}
+        for agent in [self._writer, self._designer]:
+            for task in agent.get_supported_tasks():
+                self._task_to_agent[task.task_id] = agent
+
+        # Rebuild content_type -> task mapping
+        self._content_type_to_task = {}
+        for task in self.get_supported_tasks():
+            for ct in task.content_types:
+                self._content_type_to_task[ct] = task
+
+        logger.info(
+            f"GeminiCoordinator: {len(self._task_to_agent)} tasks mapped to Gemini agents"
+        )
 
 
 __all__ = ["GeminiCoordinatorAgent", "SupportedTask"]
