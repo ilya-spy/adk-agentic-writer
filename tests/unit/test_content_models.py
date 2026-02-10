@@ -20,13 +20,15 @@ def test_quiz_question_creation() -> None:
         options=["A snake", "A programming language", "A movie", "A game"],
         correct_answer=1,
         explanation="Python is a high-level programming language",
-        difficulty="easy",
+        tier="low",
+        score=1,
     )
     
     assert question.question == "What is Python?"
     assert len(question.options) == 4
     assert question.correct_answer == 1
-    assert question.difficulty == "easy"
+    assert question.tier == "low"
+    assert question.score == 1
 
 
 def test_quiz_creation() -> None:
@@ -42,11 +44,13 @@ def test_quiz_creation() -> None:
     quiz = Quiz(
         title="Math Quiz",
         description="Test your math skills",
+        difficulty="easy",
         questions=questions,
         passing_score=70,
     )
     
     assert quiz.title == "Math Quiz"
+    assert quiz.difficulty == "easy"
     assert len(quiz.questions) == 1
     assert quiz.passing_score == 70
 

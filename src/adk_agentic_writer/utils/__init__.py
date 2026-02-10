@@ -16,6 +16,11 @@ from .content_registry import (
     ContentRegistry,
     CONTENT_REGISTRY,
 )
+from .proxy_utils import (
+    clear_proxy_env,
+    get_proxy_diagnostics,
+    PROXY_VARS,
+)
 
 __all__ = [
     # Variable/schema utilities
@@ -31,4 +36,8 @@ __all__ = [
     "ContentTypeConfig",
     "ContentRegistry",
     "CONTENT_REGISTRY",
+    # Proxy utilities
+    "clear_proxy_env",
+    "get_proxy_diagnostics",
+    "PROXY_VARS",
 ]

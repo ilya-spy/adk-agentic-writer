@@ -182,6 +182,11 @@
             background: rgba(220, 53, 69, 0.1);
         }
 
+        .log-warning {
+            border-left-color: #f59e0b;
+            background: rgba(245, 158, 11, 0.15);
+        }
+
         .log-info {
             border-left-color: #17a2b8;
             background: rgba(23, 162, 184, 0.1);
@@ -294,7 +299,7 @@
             <label for="team">Team:</label>
             <select id="team">
                 <option value="static">Static Team (Fast, Template-based)</option>
-                <option value="gemini" disabled>Gemini Team (Coming Soon)</option>
+                <option value="gemini">Gemini Team (AI-Powered via ADK)</option>
             </select>
         </div>
         <div class="form-group">
@@ -314,6 +319,26 @@
                 Questions for Quiz, Nodes for Story/Game, Variables based on complexity for Simulation
             </small>
         </div>
+        <div class="form-group" id="difficultyGroup" style="display: none;">
+            <label for="difficulty">Difficulty:</label>
+            <select id="difficulty">
+                <option value="easy">Easy</option>
+                <option value="medium" selected>Medium</option>
+                <option value="hard">Hard</option>
+            </select>
+            <small style="color: #666; font-size: 12px; display: block; margin-top: 4px;">
+                Questions are split into 3 tiers within this level (low/mid/high = 1/2/3 pts)
+            </small>
+        </div>
+        <div class="form-group" id="numOptionsGroup" style="display: none;">
+            <label for="numOptions">Answer Options per Question:</label>
+            <select id="numOptions">
+                <option value="3">3 options</option>
+                <option value="4" selected>4 options</option>
+                <option value="5">5 options</option>
+                <option value="6">6 options</option>
+            </select>
+        </div>
         <div class="form-group" id="complexityGroup" style="display: none;">
             <label for="complexity">Complexity:</label>
             <select id="complexity">
@@ -328,7 +353,7 @@
     <div id="output"></div>
 
     <script>
-        const API_BASE = 'http://localhost:8000';
+        const API_BASE = window.location.origin;
         let logs = [];
 
         // Content type category mappings (single source of truth)
@@ -368,6 +393,8 @@
                     });
                     select.appendChild(group);
                 }
+                // Trigger UI update for initial content type
+                select.dispatchEvent(new Event('change'));
                 generateContent();
             } catch (error) {
                 console.error('Failed to load content types:', error);
@@ -382,26 +409,33 @@
             const category = getContentCategory(type);
             const blockCountGroup = document.getElementById('blockCountGroup');
             const complexityGroup = document.getElementById('complexityGroup');
+            const numOptionsGroup = document.getElementById('numOptionsGroup');
             const blockCountInput = document.getElementById('blockCount');
             const blockCountHint = document.getElementById('blockCountHint');
+
+            const difficultyGroup = document.getElementById('difficultyGroup');
+
+            // Reset visibility
+            numOptionsGroup.style.display = 'none';
+            difficultyGroup.style.display = 'none';
+            complexityGroup.style.display = 'none';
+            blockCountGroup.style.display = 'block';
 
             if (category === 'simulation') {
                 blockCountGroup.style.display = 'none';
                 complexityGroup.style.display = 'block';
-            } else {
-                blockCountGroup.style.display = 'block';
-                complexityGroup.style.display = 'none';
-                
-                if (category === 'quiz') {
-                    blockCountInput.value = 5;
-                    blockCountHint.textContent = 'Number of quiz questions to generate';
-                } else if (category === 'story') {
-                    blockCountInput.value = 7;
-                    blockCountHint.textContent = 'Number of story nodes/scenes';
-                } else if (category === 'game') {
-                    blockCountInput.value = 5;
-                    blockCountHint.textContent = 'Number of game nodes/quests';
-                }
+            } else if (category === 'quiz') {
+                blockCountInput.value = 5;
+                blockCountInput.min = 3;
+                blockCountHint.textContent = 'Number of quiz questions (min 3 for low/mid/high tiers)';
+                difficultyGroup.style.display = 'block';
+                numOptionsGroup.style.display = 'block';
+            } else if (category === 'story') {
+                blockCountInput.value = 7;
+                blockCountHint.textContent = 'Number of story nodes/scenes';
+            } else if (category === 'game') {
+                blockCountInput.value = 5;
+                blockCountHint.textContent = 'Number of game nodes/quests';
             }
         });
 
@@ -409,10 +443,12 @@
         function buildParameters(contentType) {
             const blockCount = parseInt(document.getElementById('blockCount').value) || 5;
             const complexity = document.getElementById('complexity').value;
+            const numOptions = parseInt(document.getElementById('numOptions').value) || 4;
+            const difficulty = document.getElementById('difficulty').value;
             const category = getContentCategory(contentType);
 
             if (category === 'quiz') {
-                return { num_questions: blockCount };
+                return { num_questions: Math.max(blockCount, 3), num_options: numOptions, difficulty: difficulty };
             } else if (category === 'story' || category === 'game') {
                 return { num_nodes: blockCount };
             } else if (category === 'simulation') {
@@ -499,14 +535,33 @@
 
                 const data = await response.json();
                 console.log('API Response:', data);
-                
+                const duration = Date.now() - startTime;
+
+                // Check for API-level error (200 OK but status=error)
+                if (data.status === 'error') {
+                    let errMsg = data.content?.error || 'Unknown error';
+                    // Extract clean refusal message if present
+                    const isRefusal = errMsg.includes('LLM refused to generate content:');
+                    if (isRefusal) {
+                        errMsg = errMsg.replace(/.*LLM refused to generate content:\s*/, '');
+                    } else if (errMsg.includes('Invalid JSON from')) {
+                        // Extract the "Raw:" portion which often contains the LLM's actual message
+                        const rawMatch = errMsg.match(/Raw:\s*(.*)/s);
+                        if (rawMatch) errMsg = rawMatch[1];
+                    }
+                    const label = isRefusal ? 'Content Declined' : 'Generation Failed';
+                    addLog('Agent', `${label}: ${errMsg}`, 'error');
+                    addLog('Coordinator', `Workflow failed after ${duration}ms`, 'error');
+                    output.innerHTML = '<div class="container"><h2>🔄 Generation Process</h2><div class="logs-container" id="logs"></div></div>';
+                    updateLogsDisplay();
+                    return;
+                }
+
                 // Extract content - API returns nested structure with reviewer wrapping
                 let content;
                 if (data.content && data.content.content && data.content.content.original_content) {
-                    // Reviewed content (has original_content from reviewer)
                     content = data.content.content.original_content;
                 } else if (data.content && data.content.content) {
-                    // Direct content
                     content = data.content.content;
                 } else if (data.content) {
                     content = data.content;
@@ -515,10 +570,16 @@
                 }
                 
                 console.log('Extracted content:', content);
-                const duration = Date.now() - startTime;
 
-                addLog('Agent', `Generated ${contentType} successfully`, 'success');
-                addLog('Coordinator', `Workflow completed in ${duration}ms`, 'success');
+                // Check for empty/insufficient content
+                const contentWarning = checkContentQuality(contentType, content);
+
+                if (contentWarning) {
+                    addLog('Agent', `Generation completed with issues: ${contentWarning}`, 'warning');
+                } else {
+                    addLog('Agent', `Generated ${contentType} successfully`, 'success');
+                }
+                addLog('Coordinator', `Workflow completed in ${duration}ms`, contentWarning ? 'warning' : 'success');
                 addLog('System', `Ready to display`, 'success');
 
                 await new Promise(resolve => setTimeout(resolve, 500));
@@ -534,21 +595,48 @@
 
             } catch (error) {
                 addLog('System', `Error: ${error.message}`, 'error');
+                addLog('System', `Make sure the backend server is running at ${API_BASE}`, 'info');
                 output.innerHTML = `
                     <div class="container">
                         <h2>🔄 Generation Process</h2>
                         <div class="logs-container" id="logs"></div>
-                        <div class="error">
-                            <strong>Error:</strong> ${error.message}
-                            <br><br>
-                            Make sure the backend server is running at ${API_BASE}
-                        </div>
                     </div>
                 `;
                 updateLogsDisplay();
             } finally {
                 btn.disabled = false;
             }
+        }
+
+        // =====================================================================
+        // Content quality helper
+        // =====================================================================
+
+        function checkContentQuality(contentType, content) {
+            if (!content || typeof content !== 'object') {
+                return 'No content was returned by the model.';
+            }
+            const category = getContentCategory(contentType);
+            if (category === 'quiz') {
+                const qs = content.questions || [];
+                if (qs.length === 0) {
+                    return 'The model returned 0 questions. This usually means the topic was declined by the model\'s safety filters or the response could not be parsed. Try a different topic.';
+                }
+            } else if (category === 'story') {
+                const nodes = content.nodes || {};
+                if (Object.keys(nodes).length === 0) {
+                    return 'The model returned 0 story nodes. The topic may have been declined or the response was empty. Try a different topic.';
+                }
+            } else if (category === 'simulation') {
+                const vars = content.variables || [];
+                if (vars.length === 0) {
+                    return 'The model returned 0 variables. The topic may have been declined. Try a different topic.';
+                }
+            }
+            if (Object.keys(content).length === 0) {
+                return 'Empty response from model. The topic may have been declined by safety filters. Try a different topic.';
+            }
+            return null; // no issues
         }
 
         function renderContent(contentType, content, topic, team, fullData) {
@@ -574,20 +662,32 @@
             html += '</div>';
             
             html += '<h2>📄 Generated Content</h2>';
-            
-            // Debug: show what we received
-            if (!content || Object.keys(content).length === 0) {
-                html += '<div class="error">No content received. Check console for details.</div>';
-                html += '<pre style="font-size: 11px; background: #f5f5f5; padding: 10px;">' + JSON.stringify(fullData, null, 2) + '</pre>';
-            }
 
             if (category === 'quiz') {
                 html += `<h3>${content.title || 'Quiz'}</h3>`;
+                if (content.description) {
+                    html += `<p style="font-style: italic; color: #666; margin-bottom: 15px;">${content.description}</p>`;
+                }
+
+                // Quiz metadata bar
+                const totalScore = (content.questions || []).reduce((sum, q) => sum + (q.score || 1), 0);
+                const passingPct = totalScore > 0 && content.passing_score ? Math.round(content.passing_score / totalScore * 100) : '?';
+                html += `<div class="summary" style="margin-bottom: 20px;">`;
+                html += `<div class="summary-item"><span class="summary-label">Questions:</span> ${(content.questions || []).length}</div>`;
+                html += `<div class="summary-item"><span class="summary-label">Total Points:</span> ${totalScore}</div>`;
+                html += `<div class="summary-item"><span class="summary-label">Passing:</span> ${content.passing_score || 'N/A'}/${totalScore} pts (${passingPct}%)</div>`;
+                html += `<div class="summary-item"><span class="summary-label">Time Limit:</span> ${content.time_limit ? content.time_limit + ' min' : 'None'}</div>`;
+                html += `</div>`;
 
                 (content.questions || []).forEach((q, i) => {
+                    const scoreLabel = q.score ? ` <span style="background: #e0e7ff; color: #4338ca; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">${q.score} pt${q.score > 1 ? 's' : ''}</span>` : '';
+                    const tierColors = { low: '#059669', mid: '#d97706', high: '#dc2626' };
+                    const tierBg = { low: '#d1fae5', mid: '#fef3c7', high: '#fee2e2' };
+                    const tier = q.tier || q.difficulty || 'mid';
+                    const tierLabel = ` <span style="background: ${tierBg[tier] || '#f3f4f6'}; color: ${tierColors[tier] || '#6b7280'}; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">${tier}</span>`;
                     html += `
                         <div class="card">
-                            <div class="question">Q${i + 1}. ${q.question}</div>
+                            <div class="question">Q${i + 1}. ${q.question}${tierLabel}${scoreLabel}</div>
                     `;
                     (q.options || []).forEach((opt, j) => {
                         const isCorrect = j === q.correct_answer;
@@ -595,6 +695,9 @@
                         const checkmark = isCorrect ? '✓ ' : '';
                         html += `<div class="${cssClass}">${checkmark}${opt}</div>`;
                     });
+                    if (q.explanation) {
+                        html += `<div style="margin-top: 8px; padding: 8px; background: #f0f9ff; border-radius: 4px; font-size: 13px; color: #1e40af;"><strong>Explanation:</strong> ${q.explanation}</div>`;
+                    }
                     html += `</div>`;
                 });
 
@@ -836,9 +939,13 @@
             if (branches.length > 0) {
                 html += '<div style="display: flex; flex-direction: column; gap: 10px;">';
                 branches.forEach((branch, i) => {
+                    // Resilient field lookup: LLM may use varying key names
+                    const target = branch.next_node_id || branch.next_node || branch.target_node || branch.target || branch.target_node_id || branch.next || '';
+                    const label = branch.text || branch.label || branch.choice || 'Continue';
+                    if (!target) return; // skip branches without a valid target
                     html += `
                         <button 
-                            onclick="navigateToNode('${branch.next_node_id}')" 
+                            onclick="navigateToNode('${target}')" 
                             class="story-choice-btn"
                             style="
                                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -854,7 +961,7 @@
                             onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.4)'"
                             onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'"
                         >
-                            → ${branch.text}
+                            → ${label}
                         </button>
                     `;
                 });

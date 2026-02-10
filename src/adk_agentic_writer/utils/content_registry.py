@@ -57,15 +57,24 @@ Output JSON Schema:
   "questions": [
     {
       "question": "string - The question text",
-      "options": ["string", "string", "string", "string"],
-      "correct_answer": 0-3,
+      "options": ["string", "string", ...],
+      "correct_answer": 0,
       "explanation": "string - Why this answer is correct",
-      "difficulty": "easy|medium|hard"
+      "tier": "low|mid|high",
+      "score": 1
     }
   ],
-  "passing_score": 70,
-  "time_limit": null
-}"""
+  "passing_score": 6,
+  "time_limit": 10
+}
+
+CRITICAL scoring rules:
+- tier MUST be one of exactly: "low", "mid", "high" (NOT the overall difficulty name)
+- score MUST match the tier: low=1, mid=2, high=3
+- The quiz MUST contain at least one question at EACH tier (low, mid, high)
+- passing_score = integer, 60-70% of total points
+- time_limit = integer minutes
+- Vary correct_answer index across questions"""
 
 STORY_SCHEMA_DESCRIPTION = """
 Output JSON Schema:
@@ -103,20 +112,37 @@ SAMPLE_QUIZ_OUTPUT = {
     "description": "Test your knowledge of Python basics",
     "questions": [
         {
-            "question": "What is the correct way to define a function in Python?",
-            "options": [
-                "function myFunc():",
-                "def myFunc():",
-                "func myFunc():",
-                "define myFunc():",
-            ],
+            "question": "What keyword is used to define a function in Python?",
+            "options": ["function", "def", "func", "define"],
             "correct_answer": 1,
             "explanation": "In Python, functions are defined using the 'def' keyword.",
-            "difficulty": "easy",
-        }
+            "tier": "low",
+            "score": 1,
+        },
+        {
+            "question": "What does 'list comprehension' do in Python?",
+            "options": [
+                "Creates a list from a loop expression",
+                "Sorts a list in place",
+                "Converts a tuple to a list",
+                "Removes duplicates from a list",
+            ],
+            "correct_answer": 0,
+            "explanation": "List comprehension creates a new list by applying an expression to each item in an iterable.",
+            "tier": "mid",
+            "score": 2,
+        },
+        {
+            "question": "What is the output of: print(type(lambda x: x))?",
+            "options": ["<class 'function'>", "<class 'lambda'>", "function", "SyntaxError"],
+            "correct_answer": 0,
+            "explanation": "Lambda expressions create function objects, so type() returns <class 'function'>.",
+            "tier": "high",
+            "score": 3,
+        },
     ],
-    "passing_score": 70,
-    "time_limit": None,
+    "passing_score": 4,
+    "time_limit": 5,
 }
 
 SAMPLE_STORY_OUTPUT = {
@@ -217,6 +243,7 @@ CONTENT_REGISTRY.register(
         default_params={
             "num_questions": 5,
             "difficulty": "medium",
+            "num_options": 4,
             "passing_score": 70,
         },
         title_template="{topic} Quiz",

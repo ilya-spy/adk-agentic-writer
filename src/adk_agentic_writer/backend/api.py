@@ -1,8 +1,13 @@
 """FastAPI backend server for the ADK Agentic Writer system."""
 
+# Clear proxy FIRST before any network imports
+from ..utils.proxy_utils import clear_proxy_env
+
+clear_proxy_env()
+
 import asyncio
-import logging
 import os
+import logging
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional
@@ -70,6 +75,10 @@ async def lifespan(app: FastAPI):
     """Initialize and cleanup the agent systems."""
     logger.info("Initializing ADK multi-agent systems...")
 
+    # Ensure keys exist (may have been cleared by a previous lifespan cycle)
+    agent_systems.setdefault("static", {"initialized": False, "coordinator": None})
+    agent_systems.setdefault("gemini", {"initialized": False, "coordinator": None})
+
     # Initialize Static Team
     try:
         # New coordinator auto-registers agents via runtime
@@ -82,11 +91,17 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to initialize static team: {e}")
         agent_systems["static"]["initialized"] = False
 
-    # Initialize Gemini Team (disabled for now - ADK integration pending)
-    # Gemini team uses stubs that inherit from static team
-    # Will be enabled when ADK integration is complete
-    logger.info("Gemini team disabled (ADK integration pending)")
-    agent_systems["gemini"]["initialized"] = False
+    # Initialize Gemini Team
+    try:
+        gemini_coordinator = GeminiCoordinatorAgent(agent_id="gemini_coordinator")
+        agent_systems["gemini"]["coordinator"] = gemini_coordinator
+        agent_systems["gemini"]["initialized"] = True
+        logger.info(
+            "Gemini team initialized (requires GOOGLE_API_KEY for LLM generation)"
+        )
+    except Exception as e:
+        logger.warning(f"Gemini team initialization failed: {e}")
+        agent_systems["gemini"]["initialized"] = False
 
     yield
 
