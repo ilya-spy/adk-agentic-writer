@@ -1,13 +1,15 @@
 # Architecture
 
-> Task-based multi-agent content generation system
+> Task-based multi-agent content generation system with Google ADK integration
 
 ## Overview
 
-ADK Agentic Writer generates interactive content using coordinated agents. Content types (quiz, story, game, simulation) are aliases that map to tasks published by agents.
+ADK Agentic Writer generates interactive content using coordinated agents. Content types (quiz, story, game, simulation) are aliases that map to tasks published by agents. Two agent teams are available: a fast static/template team and an AI-powered Gemini team.
 
 ```
-Frontend (showcase.html) → FastAPI (:8000) → CoordinatorAgent → WriterAgent/DesignerAgent
+Frontend (showcase.html) → FastAPI (:8000) → CoordinatorAgent → WriterAgent / DesignerAgent
+                                                                       ↓ (Gemini team)
+                                                                 ADKAgentWrapper → Gemini LLM
 ```
 
 ## Directory Structure
@@ -22,17 +24,28 @@ src/adk_agentic_writer/
 │   │   ├── coordinator.py    # Routes content_type → task → agent
 │   │   ├── writer.py         # WriterAgent (quiz, story)
 │   │   └── designer.py       # DesignerAgent (game, simulation)
-│   └── gemini/               # Gemini team (stubs)
+│   └── gemini/
+│       ├── coordinator.py    # Routes to Gemini agents
+│       ├── wrapper.py        # ADKAgentWrapper: LLM interaction, JSON parsing, refusal detection
+│       ├── writer.py         # GeminiWriterAgent: quiz/story with post-processing
+│       └── designer.py       # GeminiDesignerAgent: game/simulation
 ├── backend/
 │   └── api.py                # FastAPI endpoints
 ├── models/
 │   ├── agent_models.py       # AgentTask, AgentConfig, AgentRole
-│   └── content_models.py     # Quiz, Story, Game, Simulation models
+│   └── content_models.py     # Quiz, QuizQuestion, StoryNode, QuestGame, WebSimulation
 ├── protocols/
 │   ├── agent_protocol.py     # process_task interface
 │   └── content_protocol.py   # ContentProtocol (generate_block, etc.)
 ├── tasks/
 │   └── content_tasks.py      # GENERATE_QUIZ, GENERATE_STORY, etc.
+├── teams/
+│   ├── content_team.py       # Agent configs + prompt templates
+│   └── editorial_team.py     # Review/refine configs
+├── utils/
+│   ├── content_registry.py   # Content type configs, schemas, sample outputs
+│   ├── schema_helpers.py     # JSON schema extraction utilities
+│   └── text_provider.py      # Text generation providers (static, Gemini)
 └── workflows/                # Orchestration patterns
 ```
 
@@ -118,10 +131,19 @@ WriterAgent / DesignerAgent (content builders)
 
 | Model | Structure |
 |-------|-----------|
-| Quiz | `{title, questions: [{question, options, correct_answer}]}` |
+| Quiz | `{title, description, difficulty, questions, passing_score, time_limit}` |
+| QuizQuestion | `{question, options, correct_answer, explanation, tier, score}` |
 | BranchedNarrative | `{title, synopsis, start_node, nodes: {id: {content, branches}}}` |
+| StoryNode | `{node_id, content, branches: [{text, target_node_id}], is_ending}` |
 | QuestGame | `{title, description, nodes: {id: {title, choices, rewards}}}` |
 | WebSimulation | `{title, variables, controls, rules}` |
+
+### Quiz Scoring Model
+
+- **Quiz.difficulty**: Overall quiz difficulty (easy, medium, hard)
+- **QuizQuestion.tier**: Per-question scoring tier (low=1pt, mid=2pt, high=3pt)
+- Every quiz is enforced to contain all three tiers (low, mid, high)
+- Passing score is validated to be within 50-85% of total points
 
 ## Protocols
 
@@ -135,16 +157,32 @@ WriterAgent / DesignerAgent (content builders)
 - `update_status(status)` → None
 - `get_state()` → AgentState
 
+## Gemini Team Pipeline
+
+```
+1. Prompt assembled from content_team.py templates + content_registry.py schema/sample
+2. ADKAgentWrapper sends prompt to Gemini LLM via InMemoryRunner
+3. Response checked for refusal patterns (→ ValueError if detected)
+4. JSON extracted and parsed (resilient: strips markdown fences, fixes trailing commas)
+5. Post-processing in writer.py:
+   - Quiz: normalize tier/difficulty fields, enforce 3-tier distribution, validate passing_score
+   - Story: fuzzy key matching for branch text/target fields, normalize node structure
+6. Pydantic model validation (Quiz, BranchedNarrative, etc.)
+7. Response returned to API
+```
+
 ## Extension
 
 **Add new content type:**
 1. Add task in `tasks/content_tasks.py` with `content_types` aliases
-2. Import and publish in agent's `get_supported_tasks()`
-3. Add builder method in agent (e.g., `_build_newtype()`)
-4. Add model in `models/content_models.py`
-5. Add UI rendering in `showcase.html`
+2. Add config in `utils/content_registry.py` (schema, sample output, prompts)
+3. Import and publish in agent's `get_supported_tasks()`
+4. Add builder method in agent (e.g., `_build_newtype()`)
+5. Add model in `models/content_models.py`
+6. Add UI rendering in `showcase.html`
 
 **Add new agent:**
 1. Inherit from `ContentWriterAgent`
 2. Implement `generate_block()` and `_build_content()`
-3. Register in coordinator
+3. For Gemini: use `ADKAgentWrapper` for LLM interaction
+4. Register in coordinator

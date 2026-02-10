@@ -6,13 +6,12 @@
 
 ```bash
 # 1. Install dependencies
-pip install pytest pytest-asyncio
 pip install -r requirements.txt
 
-# 2. Run tests
+# 2. Run all tests
 pytest
 
-# 3. Set API key for integration tests (optional)
+# 3. Set API key for live LLM integration tests (optional)
 export GOOGLE_API_KEY="your-key"
 ```
 
@@ -20,79 +19,62 @@ export GOOGLE_API_KEY="your-key"
 
 ```
 tests/
-├── conftest.py              # Shared fixtures
-├── unit/                    # Fast tests (no API)
-│   ├── test_agent_models.py
-│   ├── test_base_agent.py
-│   ├── test_content_models.py
-│   └── test_quiz_writer.py
-└── integration/             # Slow tests (needs API key)
-    ├── test_adk.py         # ADK + Gemini (8 tests)
-    └── test_api.py         # API endpoints (5 tests)
+├── conftest.py                        # Shared fixtures
+├── unit/                              # Fast tests (no API)
+│   ├── test_agent_models.py           # AgentTask, AgentConfig, AgentRole
+│   ├── test_base_agent.py             # BaseAgent behavior
+│   ├── test_content_models.py         # Quiz, QuizQuestion (tier/score), StoryNode
+│   └── test_quiz_writer.py            # Static quiz writer, question generation
+└── integration/                       # Slower tests (some need API key)
+    ├── test_adk.py                    # ADK initialization + Gemini client
+    ├── test_all_content_types.py      # All 15 content type aliases
+    ├── test_demo_static.py            # Static team demo flows
+    ├── test_gemini_generation.py      # Live Gemini quiz/story (tier enforcement, passing score)
+    ├── test_gemini_writer.py          # Gemini writer prompts, post-processing, mocked generation
+    └── test_google_connectivity.py    # Google API connectivity checks
 ```
 
-**Total: 26 tests** (13 unit + 13 integration)
+**Total: 113 tests** (unit + integration, including parametrized variants)
+
+## What's Tested
+
+| Area | Coverage |
+|------|----------|
+| Content models | Quiz difficulty, QuizQuestion tier/score, StoryNode branches |
+| Quiz scoring | 3-tier enforcement (low/mid/high), passing score validation |
+| Story branches | Fuzzy key normalization, node navigation |
+| Gemini writer | Prompt templates, post-processing, field normalization |
+| Static writer | Template generation, all content types |
+| API endpoints | Generate, tasks, content-types, health |
+| LLM refusal | Refusal detection patterns |
+| Parameter variations | Difficulty levels, option counts (parametrized) |
 
 ## Running Tests
 
 ```bash
 # All tests
-pytest
+pytest -v
 
-# Fast tests only (no API calls)
-pytest tests/unit/
+# Unit tests only (fast, no API calls)
+pytest tests/unit/ -v
+
+# Integration tests
+pytest tests/integration/ -v
+
+# Skip slow LLM tests (no API key needed)
 pytest -m "not slow"
 
-# Integration tests (requires GOOGLE_API_KEY)
-pytest tests/integration/
-
-# Specific test
-pytest tests/integration/test_adk.py::test_gemini_client_initialization -v
+# Specific test file
+pytest tests/integration/test_gemini_generation.py -v
 
 # With coverage
-pytest --cov=src/adk_agentic_writer
+pytest --cov=src/adk_agentic_writer --cov-report=html
 ```
-
-## Test Explorer (VS Code/Cursor)
-
-### Setup (One-Time)
-
-1. **Select Python Interpreter**
-   - `Ctrl+Shift+P` → "Python: Select Interpreter"
-   - Choose: `./venv/Scripts/python.exe`
-
-2. **Open Test Explorer**
-   - Click beaker icon in sidebar
-   - Or `Ctrl+Shift+P` → "Test: Focus on Test Explorer View"
-
-3. **Discover Tests**
-   - Click refresh icon
-   - Or `Ctrl+Shift+P` → "Python: Discover Tests"
-
-### Troubleshooting
-
-**Tests not showing?**
-1. Reload window: `Ctrl+Shift+P` → "Developer: Reload Window"
-2. Check interpreter is selected
-3. Check output: View → Output → "Python Test Log"
-4. Verify: `python -m pytest --collect-only`
-
-**Import errors?**
-```bash
-pip install -e .
-```
-
-## Configuration Files
-
-All configured automatically:
-- `pytest.ini` - Pytest settings
-- `.vscode/settings.json` - Test Explorer config
-- `.vscode/launch.json` - Debug configs
 
 ## Test Markers
 
 ```python
-@pytest.mark.slow          # Slow test (API calls)
+@pytest.mark.slow          # Slow test (live API calls)
 @pytest.mark.unit          # Unit test
 @pytest.mark.integration   # Integration test
 @pytest.mark.asyncio       # Async test
@@ -104,47 +86,15 @@ pytest -m "not slow"       # Skip slow tests
 pytest -m integration      # Only integration tests
 ```
 
-## Writing Tests
-
-### Unit Test
-```python
-def test_quiz_creation():
-    quiz = Quiz(title="Test", description="Test", questions=[], passing_score=70)
-    assert quiz.title == "Test"
-```
-
-### Integration Test
-```python
-@pytest.mark.asyncio
-@pytest.mark.slow
-async def test_quiz_generation(workflow_manager):
-    result = await workflow_manager.process_task(
-        task_description="Create a quiz",
-        parameters={"content_type": ContentType.QUIZ, "topic": "Python"}
-    )
-    assert result is not None
-```
-
-## Fixtures
-
-**Shared** (`conftest.py`):
-- `sample_topic` - "Ancient Rome"
-- `sample_parameters` - Default test params
-
-**Integration** (`test_adk.py`):
-- `api_key` - Gets `GOOGLE_API_KEY` from env
-- `gemini_client` - Creates GeminiClient
-- `workflow_manager` - Creates GeminiWorkflowManager
-
 ## API Key Setup
 
-Integration tests require `GOOGLE_API_KEY`:
+Some integration tests require `GOOGLE_API_KEY` for live LLM generation:
 
 ```bash
-# Option 1: Environment variable
+# Environment variable
 export GOOGLE_API_KEY="your-key"
 
-# Option 2: .env file (root directory)
+# Or .env file (root directory)
 echo "GOOGLE_API_KEY=your-key" > .env
 
 # Get your key at: https://aistudio.google.com/apikey
@@ -152,74 +102,72 @@ echo "GOOGLE_API_KEY=your-key" > .env
 
 Tests will **skip** (not fail) if API key is missing.
 
-## CI/CD
+## Writing Tests
 
-```yaml
-# Run unit tests (always)
-pytest tests/unit/
+### Unit Test (content models)
+```python
+def test_quiz_question_tier():
+    q = QuizQuestion(question="Q?", options=["A", "B"], correct_answer=0, tier="high", score=3)
+    assert q.tier == "high"
+    assert q.score == 3
 
-# Run integration tests (if API key available)
-pytest tests/integration/
-env:
-  GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+def test_quiz_difficulty():
+    quiz = Quiz(title="T", description="D", difficulty="hard", questions=[], passing_score=8)
+    assert quiz.difficulty == "hard"
 ```
 
-## Debug Configurations
-
-Available in `.vscode/launch.json`:
-- **Python: Pytest Current File** - Debug open test file
-- **Python: Pytest All** - Debug all tests
-- **Python: FastAPI** - Debug API server
-
-Press `F5` to start debugging.
+### Integration Test (Gemini generation)
+```python
+@pytest.mark.asyncio
+@pytest.mark.slow
+async def test_quiz_has_all_tiers(gemini_writer):
+    result = await gemini_writer.generate_quiz("Science", difficulty="easy", num_questions=6)
+    tiers = {q.tier for q in result.questions}
+    assert tiers >= {"low", "mid", "high"}
+```
 
 ## Common Commands
 
 ```bash
-# Quick test run (fast tests only)
+# Quick unit tests
 pytest tests/unit/ -v
 
-# Full test run (with API key)
-export GOOGLE_API_KEY="key" && pytest -v
+# Full run with API key
+GOOGLE_API_KEY="key" pytest -v
 
-# Test with output
+# Verbose with stdout
 pytest -v -s
-
-# Test with coverage report
-pytest --cov=src/adk_agentic_writer --cov-report=html
 
 # Collect tests without running
 pytest --collect-only
 
-# Run last failed tests
+# Run last failed
 pytest --lf
 
 # Stop on first failure
 pytest -x
 ```
 
-## Best Practices
+## CI/CD
 
-✅ **DO:**
-- Write unit tests for all new code
-- Mark slow tests with `@pytest.mark.slow`
-- Use fixtures for common setup
-- Keep tests focused and simple
-- Run `pytest -m "not slow"` for quick feedback
+```yaml
+# Unit tests (always)
+pytest tests/unit/
 
-❌ **DON'T:**
-- Make API calls in unit tests
-- Commit API keys
-- Write tests that depend on each other
-- Test implementation details
+# Integration tests (if API key available)
+pytest tests/integration/
+env:
+  GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+```
 
-## Support
+## IDE Setup (VS Code / Cursor)
 
-- **Test not found?** Check `pytest --collect-only`
-- **Import error?** Run `pip install -e .`
-- **API error?** Set `GOOGLE_API_KEY`
-- **VS Code issues?** Reload window
+1. Select Python interpreter: `Ctrl+Shift+P` → "Python: Select Interpreter" → `./venv/Scripts/python.exe`
+2. Open Test Explorer: beaker icon in sidebar
+3. Discover tests: click refresh icon
+
+**Troubleshooting**: `pip install -e .` for import errors, `Ctrl+Shift+P` → "Developer: Reload Window" for stale state.
 
 ---
 
-**26 tests ready to run!** 🧪
+**113 tests across unit and integration suites.**

@@ -73,9 +73,11 @@ class MyAgent(ContentWriterAgent):
 
 Agents can implement multiple protocols:
 - **Basic**: `AgentProtocol` only
-- **Content**: `AgentProtocol` + `ContentProtocol`
+- **Content**: `AgentProtocol` + `ContentProtocol` (e.g., `WriterAgent`, `GeminiWriterAgent`)
 - **Editorial**: `AgentProtocol` + `EditorialProtocol`
 - **Full**: All protocols
+
+Both the static and Gemini teams implement the same protocol interfaces. The Gemini team additionally uses `ADKAgentWrapper` (in `gemini/wrapper.py`) for LLM interaction, but the protocol surface remains identical.
 
 ## Key Principles
 

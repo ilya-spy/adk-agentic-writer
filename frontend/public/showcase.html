@@ -552,8 +552,9 @@
                     const label = isRefusal ? 'Content Declined' : 'Generation Failed';
                     addLog('Agent', `${label}: ${errMsg}`, 'error');
                     addLog('Coordinator', `Workflow failed after ${duration}ms`, 'error');
-                    output.innerHTML = '<div class="container"><h2>🔄 Generation Process</h2><div class="logs-container" id="logs"></div></div>';
-                    updateLogsDisplay();
+                    // Remove the loading spinner, keep the logs container intact
+                    const loadingEl = output.querySelector('.loading');
+                    if (loadingEl) loadingEl.remove();
                     return;
                 }
 
@@ -586,6 +587,7 @@
 
                 // Render content
                 output.innerHTML = renderContent(contentType, content, topic, team, data);
+                updateLogsDisplay();
                 
                 // If it's a story, render the first node
                 if (getContentCategory(contentType) === 'story') {
@@ -596,13 +598,9 @@
             } catch (error) {
                 addLog('System', `Error: ${error.message}`, 'error');
                 addLog('System', `Make sure the backend server is running at ${API_BASE}`, 'info');
-                output.innerHTML = `
-                    <div class="container">
-                        <h2>🔄 Generation Process</h2>
-                        <div class="logs-container" id="logs"></div>
-                    </div>
-                `;
-                updateLogsDisplay();
+                // Remove the loading spinner, keep the logs container intact
+                const loadingEl = output.querySelector('.loading');
+                if (loadingEl) loadingEl.remove();
             } finally {
                 btn.disabled = false;
             }
