@@ -54,13 +54,20 @@ class AgentRole(str, Enum):
 
 | Model | Fields |
 |-------|--------|
-| `Quiz` | title, questions, passing_score |
-| `QuizQuestion` | question, options, correct_answer, explanation |
+| `Quiz` | title, description, **difficulty**, questions, passing_score, time_limit, metadata |
+| `QuizQuestion` | question, options, correct_answer, explanation, **tier**, **score** |
 | `BranchedNarrative` | title, synopsis, start_node, nodes |
 | `StoryNode` | node_id, content, branches, is_ending |
 | `QuestGame` | title, description, start_node, nodes |
 | `QuestNode` | node_id, title, choices, rewards, requirements |
 | `WebSimulation` | title, variables, controls, rules |
+
+### Quiz Scoring
+
+- **`Quiz.difficulty`**: Overall quiz difficulty — `easy`, `medium`, or `hard`
+- **`QuizQuestion.tier`**: Scoring tier — `low` (1pt), `mid` (2pt), or `high` (3pt)
+- **`QuizQuestion.score`**: Point value matching the tier (1, 2, or 3)
+- Every quiz must contain all three tiers; post-processing enforces this
 
 ### Block Types
 
@@ -104,8 +111,10 @@ task = AgentTask(
 # Content structure
 quiz = Quiz(
     title="Python Quiz",
+    description="Test your Python knowledge",
+    difficulty="medium",
     questions=[...],
-    passing_score=70
+    passing_score=8
 )
 ```
 

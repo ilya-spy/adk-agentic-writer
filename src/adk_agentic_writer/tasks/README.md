@@ -57,6 +57,14 @@ Refinement and quality:
 - `VALIDATE_CONTENT` - Check requirements
 - `REFINE_CONTENT` - Improve based on feedback
 
+## Quiz Task Parameters
+
+The `GENERATE_QUIZ` task supports:
+- `topic` — Subject of the quiz
+- `num_questions` — Number of questions (minimum 3)
+- `difficulty` — Overall quiz difficulty: easy, medium, hard
+- `num_options` — Answer options per question (3-6)
+
 ## Usage
 
 ```python
