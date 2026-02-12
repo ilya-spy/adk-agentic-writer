@@ -107,7 +107,7 @@ async def test_generate_question_directly() -> None:
     assert question.question is not None
     assert len(question.options) == 4
     assert 0 <= question.correct_answer <= 3
-    assert question.difficulty == "hard"
+    assert question.tier == "hard"
 
 
 # Task-based API tests

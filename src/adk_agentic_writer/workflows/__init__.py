@@ -22,7 +22,7 @@ from .editorial_workflows import (
     AdaptiveEditorialWorkflow,
     IterativeEditorialWorkflow,
     ParallelEditorialWorkflow,
-    SequentialEditorialWorkflow,
+    ValidationEditorialWorkflow,
 )
 
 __all__ = [
@@ -37,7 +37,7 @@ __all__ = [
     "AdaptiveContentWorkflow",
     "StreamingContentWorkflow",
     # Editorial workflows
-    "SequentialEditorialWorkflow",
+    "ValidationEditorialWorkflow",
     "ParallelEditorialWorkflow",
     "IterativeEditorialWorkflow",
     "AdaptiveEditorialWorkflow",

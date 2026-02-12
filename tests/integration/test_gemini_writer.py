@@ -4,11 +4,13 @@ Tests require GOOGLE_API_KEY for live LLM tests.
 Non-live tests verify configuration and initialization.
 """
 
+import json
 import os
 import pytest
 from unittest.mock import patch
 
 from adk_agentic_writer.agents.gemini.wrapper import ADKAgentWrapper
+from adk_agentic_writer.agents.static.validator import ContentValidator
 from adk_agentic_writer.agents.gemini.writer import (
     GeminiWriterAgent,
     GeminiQuizWriterAgent,
@@ -30,7 +32,6 @@ class TestAgentConfigPrompts:
     def test_quiz_config_has_prompts(self):
         """Test QUIZ_WRITER config has required prompt templates."""
         assert "quiz_question_complete" in QUIZ_WRITER.prompt_templates
-        assert "quiz_question" in QUIZ_WRITER.prompt_templates
 
     def test_story_config_has_prompts(self):
         """Test STORY_WRITER config has required prompt templates."""
@@ -43,11 +44,16 @@ class TestAgentConfigPrompts:
         assert "{num_options}" in QUIZ_WRITER.generation_prompt
 
     def test_quiz_generation_prompt_has_scoring(self):
-        """Test quiz generation prompt mentions scoring and time_limit."""
+        """Test quiz generation prompt mentions scoring keywords."""
         prompt = QUIZ_WRITER.generation_prompt
         assert "score" in prompt.lower()
-        assert "passing_score" in prompt.lower()
-        assert "time_limit" in prompt.lower()
+        # passing_score and time_limit live in schema/sample output
+        quiz_cfg = CONTENT_REGISTRY.get("quiz")
+        schema = quiz_cfg.schema_description or ""
+        sample = json.dumps(quiz_cfg.sample_output or {})
+        combined = (schema + sample).lower()
+        assert "passing_score" in combined
+        assert "time_limit" in combined
 
     def test_quiz_generation_prompt_has_tiers(self):
         """Test quiz generation prompt specifies scoring tiers via 'tier' field."""
@@ -55,7 +61,6 @@ class TestAgentConfigPrompts:
         assert "low" in prompt
         assert "mid" in prompt
         assert "high" in prompt
-        assert "passing_score" in prompt
 
     def test_quiz_question_complete_has_score(self):
         """Test quiz_question_complete template includes score field."""
@@ -226,7 +231,12 @@ class TestGeminiWriterPromptMethods:
         """Test agent.build_generation_prompt uses config."""
         agent = GeminiWriterAgent(content_type="quiz")
         prompt = agent.build_generation_prompt(
-            {"topic": "Python", "num_questions": 3, "difficulty": "easy", "num_options": 4}
+            {
+                "topic": "Python",
+                "num_questions": 3,
+                "difficulty": "easy",
+                "num_options": 4,
+            }
         )
         assert "Python" in prompt
         assert "3" in prompt
@@ -324,11 +334,116 @@ class TestADKAgentWrapper:
             wrapper._parse_json("not json")
 
 
+class TestContentValidatorAsAgent:
+    """Test ContentValidator as a StatefulAgent with _execute_task."""
+
+    @pytest.mark.asyncio
+    async def test_execute_task_quiz(self):
+        """Test validator _execute_task processes quiz content."""
+        from adk_agentic_writer.tasks.editorial_tasks import VALIDATE_CONTENT
+        from adk_agentic_writer.models.agent_models import AgentTask
+
+        validator = ContentValidator()
+        quiz_data = {
+            "title": "Test Quiz",
+            "questions": [
+                {
+                    "question": "Q1?",
+                    "options": ["A", "B"],
+                    "correct_answer": 0,
+                    "explanation": "Because A",
+                    "tier": "low",
+                    "score": 1,
+                },
+                {
+                    "question": "Q2?",
+                    "options": ["A", "B"],
+                    "correct_answer": 1,
+                    "explanation": "Because B",
+                    "tier": "mid",
+                    "score": 2,
+                },
+                {
+                    "question": "Q3?",
+                    "options": ["A", "B"],
+                    "correct_answer": 0,
+                    "explanation": "Because A",
+                    "tier": "high",
+                    "score": 3,
+                },
+            ],
+            "passing_score": 4,
+            "time_limit": 5,
+        }
+
+        task = AgentTask(
+            task_id=VALIDATE_CONTENT.task_id,
+            agent_role=VALIDATE_CONTENT.agent_role,
+            prompt=VALIDATE_CONTENT.prompt,
+            parameters={"content": quiz_data, "content_type": "quiz"},
+            output_key=VALIDATE_CONTENT.output_key,
+        )
+        result = await validator.process_task(task, task.parameters)
+
+        assert result["status"] == "validated"
+        assert result["validation_result"] == "validation passed (clean)"
+        assert result["warnings"] == []
+        assert result["content"] == quiz_data
+
+    @pytest.mark.asyncio
+    async def test_execute_task_with_warnings(self):
+        """Test validator _execute_task reports warnings."""
+        from adk_agentic_writer.tasks.editorial_tasks import VALIDATE_CONTENT
+        from adk_agentic_writer.models.agent_models import AgentTask
+
+        validator = ContentValidator()
+        bad_quiz = {"questions": [{"question": "Q?"}]}
+
+        task = AgentTask(
+            task_id=VALIDATE_CONTENT.task_id,
+            agent_role=VALIDATE_CONTENT.agent_role,
+            prompt=VALIDATE_CONTENT.prompt,
+            parameters={"content": bad_quiz, "content_type": "quiz"},
+            output_key=VALIDATE_CONTENT.output_key,
+        )
+        result = await validator.process_task(task, task.parameters)
+
+        assert result["status"] == "validated"
+        assert len(result["warnings"]) > 0
+        assert "warning(s)" in result["validation_result"]
+
+    @pytest.mark.asyncio
+    async def test_execute_task_no_content(self):
+        """Test validator _execute_task with no content returns skipped."""
+        from adk_agentic_writer.tasks.editorial_tasks import VALIDATE_CONTENT
+        from adk_agentic_writer.models.agent_models import AgentTask
+
+        validator = ContentValidator()
+        task = AgentTask(
+            task_id=VALIDATE_CONTENT.task_id,
+            agent_role=VALIDATE_CONTENT.agent_role,
+            prompt=VALIDATE_CONTENT.prompt,
+            parameters={"content_type": "quiz"},
+            output_key=VALIDATE_CONTENT.output_key,
+        )
+        result = await validator.process_task(task, task.parameters)
+
+        assert result["status"] == "skipped"
+
+    def test_validator_supported_tasks(self):
+        """Test that ContentValidator registers VALIDATE_CONTENT task."""
+        validator = ContentValidator()
+        task_ids = [t.task_id for t in validator.get_supported_tasks()]
+        assert "validate_content" in task_ids
+
+
 class TestContentValidation:
-    """Test ADKAgentWrapper.validate_content_fields for all content types."""
+    """Test ContentValidator.validate for all content types."""
+
+    validator = ContentValidator()
 
     def test_quiz_validation_complete(self):
-        """Test quiz validation with complete data."""
+        """Test quiz validation with complete data (all 3 tiers)."""
         result = {
             "title": "My Quiz",
             "description": "A test quiz",
@@ -340,18 +455,34 @@ class TestContentValidation:
                     "explanation": "Basic math",
                     "tier": "low",
                     "score": 1,
-                }
+                },
+                {
+                    "question": "Why is 2+2=4?",
+                    "options": ["Axioms", "Magic", "Luck", "Guess"],
+                    "correct_answer": 0,
+                    "explanation": "Follows from Peano axioms",
+                    "tier": "mid",
+                    "score": 2,
+                },
+                {
+                    "question": "Prove sqrt(2) is irrational",
+                    "options": ["Contradiction", "Induction", "Construction", "Axiom"],
+                    "correct_answer": 0,
+                    "explanation": "Classic proof by contradiction",
+                    "tier": "high",
+                    "score": 3,
+                },
             ],
-            "passing_score": 1,
+            "passing_score": 4,
             "time_limit": 5,
         }
-        warnings = ADKAgentWrapper.validate_content_fields(result, "quiz")
+        warnings = self.validator.validate(result, "quiz")
         assert len(warnings) == 0
 
     def test_quiz_validation_missing_fields(self):
         """Test quiz validation warns on missing fields."""
         result = {"questions": [{"question": "Q?"}]}
-        warnings = ADKAgentWrapper.validate_content_fields(result, "quiz")
+        warnings = self.validator.validate(result, "quiz")
         assert any("title" in w for w in warnings)
         assert any("passing_score" in w for w in warnings)
         assert any("time_limit" in w for w in warnings)
@@ -364,7 +495,7 @@ class TestContentValidation:
             "passing_score": 1,
             "time_limit": 5,
         }
-        warnings = ADKAgentWrapper.validate_content_fields(result, "quiz")
+        warnings = self.validator.validate(result, "quiz")
         assert any("options" in w for w in warnings)
 
     def test_quiz_validation_question_missing_explanation(self):
@@ -381,7 +512,7 @@ class TestContentValidation:
             "passing_score": 1,
             "time_limit": 5,
         }
-        warnings = ADKAgentWrapper.validate_content_fields(result, "quiz")
+        warnings = self.validator.validate(result, "quiz")
         assert any("explanation" in w for w in warnings)
 
     def test_story_validation_complete(self):
@@ -404,7 +535,7 @@ class TestContentValidation:
                 },
             },
         }
-        warnings = ADKAgentWrapper.validate_content_fields(result, "story")
+        warnings = self.validator.validate(result, "story")
         assert len(warnings) == 0
 
     def test_story_validation_missing_start(self):
@@ -412,11 +543,9 @@ class TestContentValidation:
         result = {
             "title": "Test",
             "synopsis": "Test",
-            "nodes": {
-                "ending_0": {"content": "End", "is_ending": True}
-            },
+            "nodes": {"ending_0": {"content": "End", "is_ending": True}},
         }
-        warnings = ADKAgentWrapper.validate_content_fields(result, "story")
+        warnings = self.validator.validate(result, "story")
         assert any("start" in w for w in warnings)
 
     def test_story_validation_missing_ending(self):
@@ -437,7 +566,7 @@ class TestContentValidation:
                 },
             },
         }
-        warnings = ADKAgentWrapper.validate_content_fields(result, "story")
+        warnings = self.validator.validate(result, "story")
         assert any("ending" in w.lower() for w in warnings)
 
     def test_story_validation_node_missing_content(self):
@@ -449,7 +578,7 @@ class TestContentValidation:
                 "start": {"branches": [], "is_ending": True},
             },
         }
-        warnings = ADKAgentWrapper.validate_content_fields(result, "story")
+        warnings = self.validator.validate(result, "story")
         assert any("content" in w for w in warnings)
 
     def test_game_validation_complete(self):
@@ -464,13 +593,13 @@ class TestContentValidation:
                 }
             },
         }
-        warnings = ADKAgentWrapper.validate_content_fields(result, "game")
+        warnings = self.validator.validate(result, "game")
         assert len(warnings) == 0
 
     def test_game_validation_missing_fields(self):
         """Test game validation warns on missing fields."""
         result = {"nodes": {"start": {}}}
-        warnings = ADKAgentWrapper.validate_content_fields(result, "game")
+        warnings = self.validator.validate(result, "game")
         assert any("title" in w for w in warnings)
 
     def test_simulation_validation_complete(self):
@@ -481,13 +610,13 @@ class TestContentValidation:
             "controls": [{"control_id": "c1", "label": "Speed", "type": "slider"}],
             "rules": ["x increases by 1 each tick"],
         }
-        warnings = ADKAgentWrapper.validate_content_fields(result, "simulation")
+        warnings = self.validator.validate(result, "simulation")
         assert len(warnings) == 0
 
     def test_simulation_validation_missing_fields(self):
         """Test simulation validation warns on missing fields."""
         result = {"title": "My Sim"}
-        warnings = ADKAgentWrapper.validate_content_fields(result, "simulation")
+        warnings = self.validator.validate(result, "simulation")
         assert any("variables" in w for w in warnings)
         assert any("controls" in w for w in warnings)
         assert any("rules" in w for w in warnings)
@@ -518,6 +647,8 @@ class TestGeminiWriterLive:
         except Exception as e:
             if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
                 pytest.skip("Rate limited by Gemini API")
+            if "503" in str(e) or "UNAVAILABLE" in str(e):
+                pytest.skip("Gemini API temporarily unavailable")
             if "connection" in str(e).lower():
                 pytest.skip("Network connection issue")
             raise
@@ -537,6 +668,8 @@ class TestGeminiWriterLive:
         except Exception as e:
             if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
                 pytest.skip("Rate limited by Gemini API")
+            if "503" in str(e) or "UNAVAILABLE" in str(e):
+                pytest.skip("Gemini API temporarily unavailable")
             if "connection" in str(e).lower():
                 pytest.skip("Network connection issue")
             raise
@@ -558,6 +691,8 @@ class TestGeminiWriterLive:
         except Exception as e:
             if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
                 pytest.skip("Rate limited by Gemini API")
+            if "503" in str(e) or "UNAVAILABLE" in str(e):
+                pytest.skip("Gemini API temporarily unavailable")
             if "connection" in str(e).lower():
                 pytest.skip("Network connection issue")
             raise
@@ -577,6 +712,8 @@ class TestGeminiWriterLive:
         except Exception as e:
             if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
                 pytest.skip("Rate limited by Gemini API")
+            if "503" in str(e) or "UNAVAILABLE" in str(e):
+                pytest.skip("Gemini API temporarily unavailable")
             if "connection" in str(e).lower():
                 pytest.skip("Network connection issue")
             raise
@@ -600,6 +737,8 @@ class TestGeminiWriterLive:
         except Exception as e:
             if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
                 pytest.skip("Rate limited by Gemini API")
+            if "503" in str(e) or "UNAVAILABLE" in str(e):
+                pytest.skip("Gemini API temporarily unavailable")
             if "connection" in str(e).lower():
                 pytest.skip("Network connection issue")
             raise

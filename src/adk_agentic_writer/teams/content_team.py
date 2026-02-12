@@ -28,6 +28,7 @@ class ContentRole(str, Enum):
     """Content team specific roles (compatible with AgentRole)."""
 
     CONTENT_WRITER = "content_writer"
+    CONTENT_VALIDATOR = "content_validator"
     STORY_WRITER = "story_writer"
     QUIZ_WRITER = "quiz_writer"
     GAME_WRITER = "game_writer"
@@ -72,18 +73,17 @@ IMPORTANT -- follow ALL of these rules precisely:
 
 1. Create exactly {num_questions} questions.
 2. Each question MUST have exactly {num_options} answer options (not more, not fewer).
-3. correct_answer = 0-based index of the correct option. Vary the index across questions.
-4. Include a brief explanation for each answer.
-5. SCORING TIERS (independent of topic difficulty):
+3. Include a brief explanation for each answer.
+4. SCORING TIERS (in addition as a modifier to overall topic difficulty):
    Every quiz MUST contain a MIX of three scoring tiers:
-     - "low"  → score = 1 point  (straightforward recall)
-     - "mid"  → score = 2 points (requires understanding)
-     - "high" → score = 3 points (requires analysis / synthesis)
-   You MUST include at least one question at EACH tier. Distribute as evenly as possible.
+     - "low"  tier = 1 point  (straightforward recall)
+     - "mid"  tier = 2 points (requires understanding)
+     - "high" tier = 3 points (requires analysis / synthesis)
+   You MUST include at least one question at EACH tier. Distribute evenly.
    Set each question's "tier" field to exactly "low", "mid", or "high".
    Set each question's "score" field to the matching value (1, 2, or 3).
-6. passing_score = integer in range 60-70% of total points (sum of all question scores).
-7. time_limit = integer minutes, reasonable for the question count and difficulty.""",
+5. Create questions wisely, according to global quiz difficulty and tiered adjustment witin the difficulty.
+6. Try creative question sequences, not simply round-robin from low to high tiers.""",
     prompt_templates={
         # Complete question generation (preferred - LLM decides correct answer)
         "quiz_question_complete": """Generate one quiz question about {topic} at {difficulty} difficulty.
@@ -397,7 +397,6 @@ SIMULATION_WRITERS_POOL = TeamMetadata(
     roles=[ContentRole.SIMULATION_WRITER.value],
 )
 
-
 __all__ = [
     # Roles
     "ContentRole",
@@ -410,7 +409,7 @@ __all__ = [
     # Registry
     "CONTENT_ROLE_CONFIGS",
     "get_config_for_role",
-    # Pools
+    # Pools / Teams
     "STORY_WRITERS_POOL",
     "QUIZ_WRITERS_POOL",
     "GAME_WRITERS_POOL",

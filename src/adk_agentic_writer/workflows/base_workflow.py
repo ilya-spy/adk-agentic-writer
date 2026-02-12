@@ -83,20 +83,36 @@ class Workflow(WorkflowMetadata):
             raise ValueError(f"Unknown workflow pattern: {self.pattern}")
 
     async def execute_sequential(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute agents sequentially."""
-        # Preserve original task and parameters throughout the workflow
-        task = input_data.get("task")
-        base_params = input_data.get("parameters", {})
+        """Execute agents sequentially, forwarding state between stages.
+
+        Each agent's task.output_key stores its result in
+        agent.state.variables (handled by StatefulAgent.process_task).
+        Before calling the next agent, the previous agent's
+        state.variables are forwarded as parameters so the next agent
+        can resolve them via prepare_task_context().
+
+        If ``self.tasks`` is set, ``tasks[i]`` overrides the input task
+        for stage *i* (when not None).  This lets the workflow assign
+        different tasks (with different output_keys) to each stage.
+        """
+        input_task = input_data.get("task")
+        params = input_data.get("parameters", {})
         result = None
+        prev_agent = None
 
         for i, agent in enumerate(self.agents):
-            params = {**base_params}
+            # Forward previous agent's state variables as params
+            if prev_agent and hasattr(prev_agent, "state"):
+                params = {**params, **prev_agent.state.variables}
 
-            # After first agent, pass previous result as content
-            if i > 0 and result is not None:
-                params["content"] = result
+            # Per-stage task override (if defined and not None)
+            task = input_task
+            if i < len(self.tasks) and self.tasks[i] is not None:
+                task = self.tasks[i]
 
             result = await agent.process_task(task, params)
+            prev_agent = agent
+
         return result
 
     async def execute_parallel(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
