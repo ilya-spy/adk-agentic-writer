@@ -33,12 +33,12 @@ GENERATE_STREAMING_BLOCK → STREAM_CONTENT_BLOCK
 
 ## Editorial Workflows
 
-### SequentialEditorialWorkflow
+### ValidationEditorialWorkflow
 
-Linear refinement:
+Writer → Validator sequential quality pipeline:
 
 ```
-REVIEW_DRAFT → REFINE_BASED_ON_REVIEW → FINALIZE_CONTENT
+[input task] → VALIDATE_CONTENT
 ```
 
 ### ParallelEditorialWorkflow

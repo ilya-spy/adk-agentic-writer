@@ -14,38 +14,39 @@ from ..tasks import editorial_tasks
 logger = logging.getLogger(__name__)
 
 
-class SequentialEditorialWorkflow(Workflow):
-    """
-    Sequential editorial workflow - edits content in stages.
+class ValidationEditorialWorkflow(Workflow):
+    """Writer → Validator sequential quality workflow.
 
-    Pattern: Draft → Refine → Review → Finalize
-    Each stage builds upon the previous stage's output.
+    Data flows implicitly via agent state:
+    - Writer stores result in ``state.variables["content"]``
+      (from task output_key)
+    - Validator receives writer's state as params, stores its
+      result in ``state.variables["validation_result"]``
 
-    Corresponds to EditorialProtocol operations.
+    The VALIDATE_CONTENT task is included by default.
     """
 
     def __init__(self, name: str, stages: List[Any]):
         """
-        Initialize sequential editorial workflow.
+        Initialize the validation editorial workflow.
 
         Args:
             name: Workflow name
-            stages: List of editorial stages (review, refine, finalize)
+            stages: [writer_agent, validator_agent]
         """
         super().__init__(
             name=name,
             pattern=WorkflowPattern.SEQUENTIAL,
             scope=WorkflowScope.EDITORIAL,
-            description="Review → Refine → Validate in sequence",
+            description="Writer → Validator sequential quality workflow",
             agents=stages,
-            tasks=[
-                editorial_tasks.REVIEW_DRAFT,
-                editorial_tasks.REFINE_BASED_ON_REVIEW,
-                editorial_tasks.FINALIZE_CONTENT,
-            ],
+            # Stage 0 (writer): uses caller's input task (output_key="content")
+            # Stage 1 (validator): uses VALIDATE_CONTENT (output_key="validation_result")
+            tasks=[None, editorial_tasks.VALIDATE_CONTENT],
         )
         logger.info(
-            f"Sequential editorial workflow '{name}' configured with {len(stages)} stages"
+            f"ValidationEditorialWorkflow '{name}' configured with "
+            f"{len(stages)} stages"
         )
 
 

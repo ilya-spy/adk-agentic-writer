@@ -21,6 +21,14 @@ from .proxy_utils import (
     get_proxy_diagnostics,
     PROXY_VARS,
 )
+from .log_config import (
+    configure_logging,
+    log_llm_prompt,
+    log_llm_response,
+    log_settings_summary,
+    LOG_LLM_IO,
+    LOG_LLM_IO_MAX,
+)
 
 __all__ = [
     # Variable/schema utilities
@@ -40,4 +48,11 @@ __all__ = [
     "clear_proxy_env",
     "get_proxy_diagnostics",
     "PROXY_VARS",
+    # Logging
+    "configure_logging",
+    "log_llm_prompt",
+    "log_llm_response",
+    "log_settings_summary",
+    "LOG_LLM_IO",
+    "LOG_LLM_IO_MAX",
 ]

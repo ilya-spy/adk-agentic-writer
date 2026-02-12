@@ -13,6 +13,9 @@ from ..utils.content_registry import (
     ContentRegistry,
 )
 
+# Validator
+from .static.validator import ContentValidator
+
 # Protocols
 from ..protocols import AgentProtocol
 
@@ -44,6 +47,8 @@ __all__ = [
     "BaseAgent",
     "StatefulAgent",
     "ContentWriterAgent",
+    # Validator
+    "ContentValidator",
     # Utilities
     "TextProvider",
     "TemplateTextProvider",

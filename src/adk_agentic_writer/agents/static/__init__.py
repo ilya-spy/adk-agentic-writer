@@ -9,6 +9,7 @@ Uses content registry for extensibility.
 """
 
 from .coordinator import CoordinatorAgent
+from .validator import ContentValidator
 
 # Unified agents
 from .writer import (
@@ -27,8 +28,9 @@ from .designer import (
 )
 
 __all__ = [
-    # Coordinator
+    # Coordinator & Validator
     "CoordinatorAgent",
+    "ContentValidator",
     # Unified agents
     "WriterAgent",
     "DesignerAgent",

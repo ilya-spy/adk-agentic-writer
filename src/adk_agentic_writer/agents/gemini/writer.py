@@ -149,14 +149,17 @@ class GeminiWriterAgent(ContentWriterAgent):
         if type_config.sample_output:
             prompt += f"\n\nExample output:\n{json.dumps(type_config.sample_output, indent=2)}"
 
+        logger.info(
+            "Assembled %s prompt for topic=%r (%d chars)",
+            prompt,
+            context.get("topic", "?"),
+            len(prompt),
+        )
+
         agent = await self._get_agent_for_type(content_type)
         await self.update_status(AgentStatus.WORKING)
         result = await agent.run(prompt)
         await self.update_status(AgentStatus.COMPLETED)
-
-        ADKAgentWrapper.validate_content_fields(
-            result, content_type, agent_name=agent.name
-        )
         return result
 
     # =========================================================================
@@ -219,53 +222,6 @@ class GeminiWriterAgent(ContentWriterAgent):
                     q["correct_answer"] = num_options - 1
                 q["options"] = opts
 
-        # ------------------------------------------------------------------
-        # Enforce 3-tier scoring: if LLM didn't produce all tiers, fix it
-        # ------------------------------------------------------------------
-        _TIER_SCORE = {"low": 1, "mid": 2, "high": 3}
-        _TIER_CYCLE = ["low", "mid", "high"]
-
-        dict_qs = [q for q in questions if isinstance(q, dict)]
-
-        # Normalise: LLM may return "difficulty" instead of "tier"
-        for q in dict_qs:
-            if "tier" not in q and "difficulty" in q:
-                q["tier"] = q.pop("difficulty")
-
-        tiers = {q.get("tier") for q in dict_qs}
-        if not tiers >= {"low", "mid", "high"}:
-            logger.warning(
-                f"LLM returned tiers {tiers}, forcing low/mid/high distribution"
-            )
-            for i, q in enumerate(dict_qs):
-                tier = _TIER_CYCLE[i % 3]
-                q["tier"] = tier
-                q["score"] = _TIER_SCORE[tier]
-
-        # Ensure every question has a valid score matching its tier
-        for q in dict_qs:
-            tier = q.get("tier")
-            if tier in _TIER_SCORE:
-                q["score"] = _TIER_SCORE[tier]
-            elif q.get("score") not in (1, 2, 3):
-                q["score"] = 1  # safe fallback
-
-        # Compute / validate passing_score
-        total_pts = sum(q.get("score", 1) for q in dict_qs)
-        passing = result.get("passing_score")
-        if not isinstance(passing, (int, float)) or total_pts == 0:
-            passing = max(1, round(total_pts * 0.65))
-            result["passing_score"] = passing
-        else:
-            pct = passing / total_pts
-            if not (0.50 <= pct <= 0.85):
-                logger.warning(
-                    f"LLM passing_score={passing}/{total_pts} ({pct:.0%}) "
-                    "outside acceptable range, recalculating"
-                )
-                passing = max(1, round(total_pts * 0.65))
-                result["passing_score"] = passing
-
         return Quiz(
             title=result.get(
                 "title", type_config.title_template.format(topic=topic.title())
@@ -275,7 +231,7 @@ class GeminiWriterAgent(ContentWriterAgent):
             ),
             difficulty=difficulty,
             questions=questions,
-            passing_score=passing,
+            passing_score=result.get("passing_score"),
             time_limit=result.get("time_limit"),
         )
 
@@ -298,7 +254,8 @@ class GeminiWriterAgent(ContentWriterAgent):
 
         if is_ending:
             prompt = config.prompt_templates.get("story_ending", "").format(
-                topic=topic, genre=genre,
+                topic=topic,
+                genre=genre,
                 ending_type=kwargs.get("ending_type", "neutral"),
             )
             result = await agent.run(prompt)
@@ -306,12 +263,17 @@ class GeminiWriterAgent(ContentWriterAgent):
             if isinstance(content, dict):
                 content = content.get("text", str(content))
             return StoryNode(
-                node_id=node_id, content=str(content)[:500],
-                branches=[], tags=kwargs.get("tags", ["ending"]), is_ending=True,
+                node_id=node_id,
+                content=str(content)[:500],
+                branches=[],
+                tags=kwargs.get("tags", ["ending"]),
+                is_ending=True,
             )
 
         prompt = config.prompt_templates.get("story_node_complete", "").format(
-            topic=topic, genre=genre, node_id=node_id,
+            topic=topic,
+            genre=genre,
+            node_id=node_id,
             node_type="opening" if node_id == "start" else "middle",
             available_nodes=", ".join(available_nodes or []),
         )
@@ -352,10 +314,6 @@ class GeminiWriterAgent(ContentWriterAgent):
             optional_fields={"title", "synopsis", "characters"},
         )
 
-        ADKAgentWrapper.validate_content_fields(
-            result, "story", agent_name=agent.name
-        )
-
         nodes = {}
         for nid, node_data in result.get("nodes", {}).items():
             if not isinstance(node_data, dict):
@@ -381,7 +339,9 @@ class GeminiWriterAgent(ContentWriterAgent):
                 if text and target:
                     branches.append({"text": text, "next_node_id": target})
                 elif b:
-                    logger.warning(f"Node '{nid}' branch dropped (unrecognized keys): {list(b.keys())}")
+                    logger.warning(
+                        f"Node '{nid}' branch dropped (unrecognized keys): {list(b.keys())}"
+                    )
             nodes[nid] = StoryNode(
                 node_id=node_data.get("node_id", nid),
                 content=node_data.get("content", ""),
@@ -429,7 +389,9 @@ class GeminiWriterAgent(ContentWriterAgent):
 
         result = await self._generate_content(content_type, context)
         return ContentBlock(
-            block_id=block_id, block_type=block_type, content=result,
+            block_id=block_id,
+            block_type=block_type,
+            content=result,
             pattern=context.get("pattern", ContentPattern.SEQUENTIAL),
             metadata=context.get("metadata", {}),
         )
@@ -437,12 +399,14 @@ class GeminiWriterAgent(ContentWriterAgent):
 
 class GeminiQuizWriterAgent(GeminiWriterAgent):
     """Quiz-specialized Gemini writer."""
+
     def __init__(self, agent_id: str = "gemini_quiz_writer"):
         super().__init__(agent_id=agent_id, content_type="quiz")
 
 
 class GeminiStoryWriterAgent(GeminiWriterAgent):
     """Story-specialized Gemini writer."""
+
     def __init__(self, agent_id: str = "gemini_story_writer"):
         super().__init__(agent_id=agent_id, content_type="story")
 

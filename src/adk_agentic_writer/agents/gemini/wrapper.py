@@ -15,6 +15,8 @@ import os
 import re
 from typing import Any, Dict, List, Optional, Set
 
+from ...utils.log_config import log_llm_prompt, log_llm_response
+
 logger = logging.getLogger(__name__)
 
 # ADK imports (optional dependency)
@@ -81,9 +83,13 @@ class ADKAgentWrapper:
             Parsed JSON dict from LLM response
         """
         await self._ensure_initialized()
+        log_llm_prompt(logger, self.name, prompt)
+
         response = await self._runner.run_debug(prompt, quiet=True)
         text = self._extract_text(response)
         result = self._parse_json(text)
+
+        log_llm_response(logger, self.name, result)
 
         if required_fields or optional_fields:
             self._validate_response(result, required_fields, optional_fields)
@@ -154,17 +160,30 @@ class ADKAgentWrapper:
         # e.g. \" inside a JSON string value that's already quoted
         # We do a targeted fix: replace \<invalid_char> with the char itself
         # Valid JSON escapes: \", \\, \/, \b, \f, \n, \r, \t, \uXXXX
-        text = re.sub(r'\\(?!["\\/bfnrtu])', '', text)
+        text = re.sub(r'\\(?!["\\/bfnrtu])', "", text)
         return text
 
     # Common refusal phrases LLMs use when declining a request
     _REFUSAL_PATTERNS = (
-        "i cannot", "i can't", "i'm unable", "i am unable",
-        "i'm not able", "i am not able", "i apologize",
-        "i'm sorry", "i am sorry", "as an ai",
-        "not appropriate", "cannot generate", "can't generate",
-        "against my guidelines", "safety", "harmful", "offensive",
-        "sensitive topic", "not comfortable",
+        "i cannot",
+        "i can't",
+        "i'm unable",
+        "i am unable",
+        "i'm not able",
+        "i am not able",
+        "i apologize",
+        "i'm sorry",
+        "i am sorry",
+        "as an ai",
+        "not appropriate",
+        "cannot generate",
+        "can't generate",
+        "against my guidelines",
+        "safety",
+        "harmful",
+        "offensive",
+        "sensitive topic",
+        "not comfortable",
     )
 
     def _detect_refusal(self, text: str) -> Optional[str]:
@@ -232,9 +251,7 @@ class ADKAgentWrapper:
                 f"[{self.name}] JSON parse failed: {e}\n"
                 f"Raw text (first 500 chars): {text[:500]}"
             )
-            raise ValueError(
-                f"Invalid JSON from {self.name}: {e}\nRaw: {text[:500]}"
-            )
+            raise ValueError(f"Invalid JSON from {self.name}: {e}\nRaw: {text[:500]}")
 
     # =========================================================================
     # Response Validation
@@ -267,105 +284,6 @@ class ADKAgentWrapper:
                 logger.debug(
                     f"[{self.name}] LLM response missing optional fields: {missing_opt}"
                 )
-
-    @staticmethod
-    def validate_content_fields(
-        result: Dict[str, Any],
-        content_type: str,
-        agent_name: str = "unknown",
-    ) -> List[str]:
-        """Validate content-type-specific fields in LLM response.
-
-        Returns list of warning messages for missing/invalid fields.
-        Caller can decide how to handle (log, raise, etc.).
-        """
-        warnings: List[str] = []
-
-        if content_type == "quiz":
-            if "title" not in result:
-                warnings.append("Quiz missing 'title'")
-            if "questions" not in result:
-                warnings.append("Quiz missing 'questions' array")
-            elif isinstance(result["questions"], list):
-                for i, q in enumerate(result["questions"]):
-                    if not isinstance(q, dict):
-                        warnings.append(f"Question {i} is not a dict")
-                        continue
-                    if "question" not in q:
-                        warnings.append(f"Question {i} missing 'question' text")
-                    if "options" not in q:
-                        warnings.append(f"Question {i} missing 'options'")
-                    elif not isinstance(q["options"], list) or len(q["options"]) < 2:
-                        warnings.append(
-                            f"Question {i} has invalid options (need >= 2)"
-                        )
-                    if "correct_answer" not in q:
-                        warnings.append(f"Question {i} missing 'correct_answer'")
-                    if "explanation" not in q:
-                        warnings.append(f"Question {i} missing 'explanation'")
-            if "passing_score" not in result:
-                warnings.append("Quiz missing 'passing_score'")
-            if "time_limit" not in result:
-                warnings.append("Quiz missing 'time_limit' (LLM should recommend one)")
-
-        elif content_type in ("story", "branched_narrative"):
-            if "title" not in result:
-                warnings.append("Story missing 'title'")
-            if "nodes" not in result:
-                warnings.append("Story missing 'nodes' dict")
-            elif isinstance(result["nodes"], dict):
-                if "start" not in result["nodes"]:
-                    warnings.append("Story missing 'start' node")
-                has_ending = any(
-                    n.get("is_ending", False)
-                    for n in result["nodes"].values()
-                    if isinstance(n, dict)
-                )
-                if not has_ending:
-                    warnings.append("Story has no ending nodes")
-                for nid, node in result["nodes"].items():
-                    if not isinstance(node, dict):
-                        warnings.append(f"Node '{nid}' is not a dict")
-                        continue
-                    if "content" not in node:
-                        warnings.append(f"Node '{nid}' missing 'content'")
-                    if not node.get("is_ending") and not node.get("branches"):
-                        warnings.append(
-                            f"Non-ending node '{nid}' has no branches"
-                        )
-            if "synopsis" not in result and "description" not in result:
-                warnings.append("Story missing 'synopsis'")
-
-        elif content_type in ("game", "quest_game"):
-            if "title" not in result:
-                warnings.append("Game missing 'title'")
-            if "nodes" not in result:
-                warnings.append("Game missing 'nodes'")
-            elif isinstance(result["nodes"], dict):
-                for nid, node in result["nodes"].items():
-                    if not isinstance(node, dict):
-                        warnings.append(f"Game node '{nid}' is not a dict")
-                        continue
-                    if "title" not in node and "description" not in node:
-                        warnings.append(
-                            f"Game node '{nid}' missing title/description"
-                        )
-
-        elif content_type in ("simulation", "web_simulation"):
-            if "title" not in result:
-                warnings.append("Simulation missing 'title'")
-            if "variables" not in result:
-                warnings.append("Simulation missing 'variables'")
-            if "controls" not in result:
-                warnings.append("Simulation missing 'controls'")
-            if "rules" not in result:
-                warnings.append("Simulation missing 'rules'")
-
-        if warnings:
-            for w in warnings:
-                logger.warning(f"[{agent_name}] {w}")
-
-        return warnings
 
 
 __all__ = ["ADKAgentWrapper", "ADK_AVAILABLE"]

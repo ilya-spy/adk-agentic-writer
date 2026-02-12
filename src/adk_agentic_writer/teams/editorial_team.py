@@ -1,4 +1,4 @@
-"""Editorial team configuration with reviewer and refiner roles."""
+"""Editorial team configuration with reviewer, refiner, and validator roles."""
 
 from enum import Enum
 
@@ -7,6 +7,7 @@ from ..models.agent_models import (
     TeamMetadata,
     WorkflowScope,
 )
+from .content_team import ContentRole
 
 
 class EditorialRole(str, Enum):
@@ -86,4 +87,36 @@ EDITORIAL_GROUP_POOL = TeamMetadata(
         EditorialRole.EDITORIAL_REVIEWER.value,
         EditorialRole.EDITORIAL_REFINER.value,
     ],  # Pool of 2
+)
+
+
+# =============================================================================
+# Content Validator Configuration (editorial quality gate)
+# =============================================================================
+
+CONTENT_VALIDATOR = AgentConfig(
+    role=ContentRole.CONTENT_VALIDATOR,
+    instruction=(
+        "You are a content quality validator. "
+        "Check structure, field presence, tier/score consistency, "
+        "and passing_score ranges. Report warnings for any issues found."
+    ),
+    temperature=0.0,
+    max_tokens=512,
+    generation_prompt="Validate the following content: {content}",
+)
+
+
+# =============================================================================
+# Validation Team (Writer → Validator sequential pipeline)
+# =============================================================================
+
+VALIDATION_TEAM = TeamMetadata(
+    name="validation_team",
+    scope=WorkflowScope.EDITORIAL,
+    description="Writer → Validator sequential content quality team",
+    roles=[
+        ContentRole.CONTENT_WRITER.value,
+        ContentRole.CONTENT_VALIDATOR.value,
+    ],
 )

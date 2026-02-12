@@ -8,6 +8,7 @@ Use get_config_for_role() to get AgentConfig with prompts for a role.
 """
 
 from .wrapper import ADKAgentWrapper
+from .validator import GeminiValidator
 from .coordinator import GeminiCoordinatorAgent, SupportedTask
 from .writer import (
     GeminiWriterAgent,
@@ -23,6 +24,8 @@ from .designer import (
 __all__ = [
     # ADK utilities
     "ADKAgentWrapper",
+    # Validator
+    "GeminiValidator",
     # Coordinator
     "GeminiCoordinatorAgent",
     "SupportedTask",

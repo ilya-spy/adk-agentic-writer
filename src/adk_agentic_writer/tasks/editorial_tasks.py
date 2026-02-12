@@ -39,7 +39,7 @@ Feedback: {feedback}""",
 )
 
 # ============================================================================
-# Tasks for SequentialEditorialWorkflow
+# Tasks for ValidationEditorialWorkflow
 # Pattern: Draft → Refine → Review → Finalize
 # ============================================================================
 
