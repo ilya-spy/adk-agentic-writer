@@ -13,8 +13,23 @@ from .content_team import ContentRole
 class EditorialRole(str, Enum):
     """Editorial team specific roles (compatible with AgentRole)."""
 
+    EDITORIAL_VALIDATOR = "editorial_validator"
     EDITORIAL_REVIEWER = "editorial_reviewer"
     EDITORIAL_REFINER = "editorial_refiner"
+
+
+# Editorial Validator Configuration
+CONTENT_VALIDATOR = AgentConfig(
+    role=EditorialRole.EDITORIAL_VALIDATOR,
+    instruction=(
+        "You are a content quality validator. "
+        "Check structure, field presence, tier/score consistency, "
+        "and passing_score ranges. Report warnings for any issues found."
+    ),
+    temperature=0.0,
+    max_tokens=512,
+    generation_prompt="Validate the following content: {content}",
+)
 
 
 # Editorial Reviewer Configuration
@@ -89,27 +104,7 @@ EDITORIAL_GROUP_POOL = TeamMetadata(
     ],  # Pool of 2
 )
 
-
-# =============================================================================
-# Content Validator Configuration (editorial quality gate)
-# =============================================================================
-
-CONTENT_VALIDATOR = AgentConfig(
-    role=ContentRole.CONTENT_VALIDATOR,
-    instruction=(
-        "You are a content quality validator. "
-        "Check structure, field presence, tier/score consistency, "
-        "and passing_score ranges. Report warnings for any issues found."
-    ),
-    temperature=0.0,
-    max_tokens=512,
-    generation_prompt="Validate the following content: {content}",
-)
-
-
-# =============================================================================
-# Validation Team (Writer → Validator sequential pipeline)
-# =============================================================================
+# Agent Teams
 
 VALIDATION_TEAM = TeamMetadata(
     name="validation_team",
@@ -117,6 +112,6 @@ VALIDATION_TEAM = TeamMetadata(
     description="Writer → Validator sequential content quality team",
     roles=[
         ContentRole.CONTENT_WRITER.value,
-        ContentRole.CONTENT_VALIDATOR.value,
+        EditorialRole.EDITORIAL_VALIDATOR.value,
     ],
 )

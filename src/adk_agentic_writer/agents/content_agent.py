@@ -8,23 +8,22 @@ from typing import Any, Dict, List, Optional
 
 from ..models.agent_models import AgentConfig, AgentModel, AgentTask
 from ..models.content_models import ContentBlock, ContentBlockType, ContentPattern
-from ..protocols.content_protocol import ContentProtocol
 from ..utils.text_provider import TextProvider, TemplateTextProvider
 from .stateful_agent import StatefulAgent
 
 logger = logging.getLogger(__name__)
 
 
-class ContentWriterAgent(StatefulAgent, ContentProtocol):
+class ContentWriterAgent(StatefulAgent):
     """Base class for content-generating agents.
 
-    Implements ContentProtocol with 3 methods:
+    Provides:
     - generate_text: Text generation via TextProvider
     - generate_block: Single content block (subclasses implement)
     - generate_patterned_blocks: Navigation patterns
 
     Subclasses implement:
-    - generate_block() - ContentProtocol
+    - generate_block()
     - _build_content() - Content type builder
     """
 
@@ -54,7 +53,7 @@ class ContentWriterAgent(StatefulAgent, ContentProtocol):
         """Build content. Subclasses must implement."""
         raise NotImplementedError("Subclasses must implement _build_content()")
 
-    # ContentProtocol implementation
+    # Text generation
     async def generate_text(
         self, prompt_key: str, context: Optional[Dict[str, Any]] = None
     ) -> str:
@@ -64,7 +63,7 @@ class ContentWriterAgent(StatefulAgent, ContentProtocol):
             full_context.update(context)
         return await self.text_provider.generate_text(prompt_key, full_context)
 
-    # ContentProtocol - subclasses implement generate_block()
+    # Block generation - subclasses implement generate_block()
     async def generate_block(
         self,
         block_type: ContentBlockType,

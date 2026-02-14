@@ -2,7 +2,7 @@
 
 These workflows implement patterns for generating structured content blocks
 that represent user experience and interaction patterns (scenes, cards, chapters, etc.).
-They correspond to the ContentProtocol.
+They use task-based execution via process_task(AgentTask).
 """
 
 import logging
@@ -78,7 +78,7 @@ class StreamingContentWorkflow(Workflow):
 
         Args:
             name: Workflow name
-            generator: Content generator implementing ContentProtocol
+            generator: Content generator agent
             streamer: Agent that handles streaming blocks to user
             buffer_size: Number of blocks to buffer ahead
         """

@@ -28,7 +28,6 @@ class ContentRole(str, Enum):
     """Content team specific roles (compatible with AgentRole)."""
 
     CONTENT_WRITER = "content_writer"
-    CONTENT_VALIDATOR = "content_validator"
     STORY_WRITER = "story_writer"
     QUIZ_WRITER = "quiz_writer"
     GAME_WRITER = "game_writer"

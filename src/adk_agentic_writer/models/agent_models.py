@@ -218,7 +218,11 @@ class AgentTask(BaseModel):
 
 
 class AgentState(BaseModel):
-    """Current state of an agent."""
+    """Runtime state of an agent.
+
+    Workflows and teams are stored in AgentModel (single source of truth),
+    not duplicated here.
+    """
 
     agent_id: str = Field(..., description="Agent identifier")
     status: AgentStatus = Field(AgentStatus.IDLE, description="Current status")
@@ -232,10 +236,4 @@ class AgentState(BaseModel):
     )
     output_key: Optional[str] = Field(
         None, description="Key to store output in session state"
-    )
-    workflows: Optional[List[WorkflowMetadata]] = Field(
-        None, description="Available workflows for this agent"
-    )
-    teams: Optional[List[TeamMetadata]] = Field(
-        None, description="Teams of agents that can execute workflows"
     )

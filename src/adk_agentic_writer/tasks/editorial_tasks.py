@@ -1,4 +1,4 @@
-"""Task definitions for EditorialProtocol methods."""
+"""Task definitions for editorial workflows (validate, refine, review)."""
 
 from ..models.agent_models import AgentRole, AgentTask
 

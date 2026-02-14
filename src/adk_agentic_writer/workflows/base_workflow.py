@@ -27,6 +27,7 @@ class Workflow(WorkflowMetadata):
         max_iterations: Optional[int] = None,
         merge_strategy: Optional[str] = None,
         tasks: Optional[List[Any]] = None,
+        stage_labels: Optional[List[str]] = None,
     ):
         """
         Initialize workflow with metadata.
@@ -41,6 +42,7 @@ class Workflow(WorkflowMetadata):
             max_iterations: Maximum iterations for loop workflows
             merge_strategy: Strategy for parallel workflows
             tasks: List of AgentTask instances that agents can take on
+            stage_labels: Human-readable labels per stage (e.g. ["Generating content", "Validating content"])
         """
         # Initialize parent WorkflowMetadata
         super().__init__(
@@ -56,10 +58,23 @@ class Workflow(WorkflowMetadata):
         self.agents = agents or []
         self.condition = condition
         self.tasks = tasks or []
+        self.stage_labels = stage_labels or []
 
         logger.info(
             f"Initialized {pattern.value} workflow '{name}' for {scope.value} scope with {len(self.tasks)} tasks"
         )
+
+    def _stage_label(self, index: int, task: Any = None) -> str:
+        """Get a human-readable label for a stage.
+
+        Priority: explicit stage_labels[i] > task.task_id > "Stage {i}".
+        Subclasses can override for richer labels.
+        """
+        if index < len(self.stage_labels):
+            return self.stage_labels[index]
+        if task and hasattr(task, "task_id"):
+            return task.task_id.replace("_", " ").title()
+        return f"Stage {index}"
 
     async def execute(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -85,33 +100,56 @@ class Workflow(WorkflowMetadata):
     async def execute_sequential(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """Execute agents sequentially, forwarding state between stages.
 
-        Each agent's task.output_key stores its result in
-        agent.state.variables (handled by StatefulAgent.process_task).
-        Before calling the next agent, the previous agent's
-        state.variables are forwarded as parameters so the next agent
-        can resolve them via prepare_task_context().
+        Task resolution per stage (priority order):
+        1. ``input_data["tasks"][i]`` -- caller override for stage *i*
+        2. ``self.tasks[i]``          -- workflow default for stage *i*
 
-        If ``self.tasks`` is set, ``tasks[i]`` overrides the input task
-        for stage *i* (when not None).  This lets the workflow assign
-        different tasks (with different output_keys) to each stage.
+        Either list may be shorter than the number of agents; missing
+        slots are treated as ``None``.  At least one source must provide
+        a non-None task for each stage.
+
+        State forwarding: each agent's ``state.variables`` are merged
+        into ``params`` before calling the next stage so downstream
+        agents can read upstream output_keys via ``prepare_task_context``.
+
+        Stage labels are logged and collected in ``result["_workflow_log"]``.
         """
-        input_task = input_data.get("task")
+        input_tasks = input_data.get("tasks") or []
         params = input_data.get("parameters", {})
         result = None
         prev_agent = None
+        workflow_log: List[str] = []
 
+        total = len(self.agents)
         for i, agent in enumerate(self.agents):
             # Forward previous agent's state variables as params
             if prev_agent and hasattr(prev_agent, "state"):
                 params = {**params, **prev_agent.state.variables}
 
-            # Per-stage task override (if defined and not None)
-            task = input_task
-            if i < len(self.tasks) and self.tasks[i] is not None:
-                task = self.tasks[i]
+            # Merge: caller override → workflow default
+            input_task = input_tasks[i] if i < len(input_tasks) else None
+            wf_task = self.tasks[i] if i < len(self.tasks) else None
+            task = input_task or wf_task
+
+            if task is None:
+                raise ValueError(
+                    f"No task for stage {i} ({agent.agent_id}): "
+                    f"provide it in input_data['tasks'] or workflow.tasks"
+                )
+
+            label = self._stage_label(i, task)
+            logger.info(
+                "[%s] Stage %d/%d: %s (agent=%s)",
+                self.name, i + 1, total, label, agent.agent_id,
+            )
+            workflow_log.append(label)
 
             result = await agent.process_task(task, params)
             prev_agent = agent
+
+        # Attach stage log to result for UI consumption
+        if isinstance(result, dict):
+            result["_workflow_log"] = workflow_log
 
         return result
 

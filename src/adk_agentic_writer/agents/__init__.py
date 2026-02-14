@@ -16,9 +16,6 @@ from ..utils.content_registry import (
 # Validator
 from .static.validator import ContentValidator
 
-# Protocols
-from ..protocols import AgentProtocol
-
 # Static agents (primary implementation)
 from .static import (
     CoordinatorAgent,
@@ -39,7 +36,6 @@ from .gemini import (
     GeminiStoryWriterAgent,
     GeminiGameDesignerAgent,
     GeminiSimulationDesignerAgent,
-    SupportedTask,
 )
 
 __all__ = [
@@ -56,8 +52,6 @@ __all__ = [
     "CONTENT_REGISTRY",
     "ContentTypeConfig",
     "ContentRegistry",
-    # Protocols
-    "AgentProtocol",
     # Static agents
     "CoordinatorAgent",
     "WriterAgent",
@@ -74,5 +68,4 @@ __all__ = [
     "GeminiStoryWriterAgent",
     "GeminiGameDesignerAgent",
     "GeminiSimulationDesignerAgent",
-    "SupportedTask",
 ]
