@@ -262,10 +262,16 @@ class TestGenerateWithValidation:
         assert content["status"] == "validated"
 
     @pytest.mark.asyncio
-    async def test_direct_generate_with_validation(self, coordinator):
-        """Test generate_with_validation directly on coordinator."""
-        result = await coordinator.generate_with_validation(
-            "quiz", topic="Math", num_questions=3
+    async def test_direct_workflow_execution(self, coordinator):
+        """Test validation workflow discovered via resolve_workflow."""
+        task = coordinator.get_task_for_content_type("quiz")
+
+        # Resolve workflow by editorial task_id
+        workflow = coordinator.resolve_workflow(task_id="validate_content")
+        assert workflow is not None
+
+        result = await workflow.execute(
+            {"tasks": [task], "parameters": {"topic": "Math", "num_questions": 3}}
         )
 
         assert result["status"] == "validated"
@@ -273,37 +279,40 @@ class TestGenerateWithValidation:
         assert "content" in result
 
     @pytest.mark.asyncio
-    async def test_state_variables_after_validation(self, coordinator):
-        """Test coordinator.state.variables populated after validation workflow."""
-        await coordinator.generate_with_validation(
-            "quiz", topic="Science", num_questions=3
+    async def test_workflow_agent_state_after_validation(self, coordinator):
+        """Test workflow agents have state populated after execution."""
+        task = coordinator.get_task_for_content_type("quiz")
+        workflow = coordinator.resolve_workflow(task_id="validate_content")
+        assert workflow is not None
+        await workflow.execute(
+            {"tasks": [task], "parameters": {"topic": "Science", "num_questions": 3}}
         )
 
-        # Coordinator state should have the named output_key results
-        assert "content" in coordinator.state.variables
-        assert "validation_result" in coordinator.state.variables
-        assert coordinator.state.variables["content"] is not None
-        assert coordinator.state.variables["validation_result"] is not None
+        # Writer agent (stage 0) should have content in state
+        writer = workflow.agents[0]
+        assert "content" in writer.state.variables
+        assert writer.state.variables["content"] is not None
+
+        # Validator agent (stage 1) should have validation_result
+        validator = workflow.agents[1]
+        assert "validation_result" in validator.state.variables
+        assert validator.state.variables["validation_result"] is not None
 
     def test_coordinator_has_team_and_workflow(self):
-        """Test coordinator registers validation team and workflow in state."""
+        """Test coordinator registers validation team and workflow in model."""
         coord = CoordinatorAgent()
 
-        # Team registered
-        assert len(coord.state.teams) >= 1
-        team = coord.state.teams[0]
+        # Team registered in model (single source of truth)
+        assert len(coord.model.teams) >= 1
+        team = coord.model.teams[0]
         assert team.name == "validation_team"
         assert len(team.agent_ids) == 2
 
-        # Workflow registered
-        assert len(coord.state.workflows) >= 1
-        wf = coord.state.workflows[0]
+        # Workflow registered in model
+        assert len(coord.model.workflows) >= 1
+        wf = coord.model.workflows[0]
         assert wf.name == "generate_validate"
         assert wf.pattern.value == "sequential"
-
-        # Also in model
-        assert len(coord.model.teams) >= 1
-        assert len(coord.model.workflows) >= 1
 
     def test_invalid_content_type_with_validation(self, client: TestClient):
         """Test validation endpoint with invalid content type."""
@@ -317,10 +326,10 @@ class TestGenerateWithValidation:
             },
         )
 
-        assert response.status_code == 200
+        # Unknown content type now returns 400
+        assert response.status_code == 400
         data = response.json()
-        # Should return error in content
-        assert "error" in str(data["content"]).lower()
+        assert "unknown" in data["detail"].lower()
 
 
 class TestErrorHandling:
@@ -338,22 +347,20 @@ class TestErrorHandling:
             },
         )
 
-        # System handles gracefully - coordinator returns error in content
-        assert response.status_code == 200
+        # Unknown content type now returns 400
+        assert response.status_code == 400
         data = response.json()
-        # Check if error is reported in content
-        assert "error" in str(data).lower() or "content" in data
+        assert "unknown" in data["detail"].lower()
 
-    def test_missing_parameters(self, client: TestClient):
-        """Test handling of missing parameters."""
+    def test_missing_topic_still_works(self, client: TestClient):
+        """Test that missing topic defaults gracefully (topic is optional now)."""
         response = client.post(
             "/generate",
             json={
                 "team": "static",
                 "content_type": "quiz",
-                # Missing topic
             },
         )
 
-        # Should return validation error
-        assert response.status_code == 422
+        # Should succeed -- topic defaults to empty string from task template
+        assert response.status_code == 200

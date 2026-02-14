@@ -5,19 +5,21 @@ from ..utils.proxy_utils import clear_proxy_env
 
 clear_proxy_env()
 
-import asyncio
 import logging
+import pathlib
+import time
 import uuid
 from contextlib import asynccontextmanager
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from ..agents.static import CoordinatorAgent as StaticCoordinator
+from ..tasks.editorial_tasks import VALIDATE_CONTENT
 
 # Load environment variables
 load_dotenv()
@@ -40,11 +42,16 @@ agent_systems: Dict[str, Any] = {
 
 
 class GenerateRequest(BaseModel):
-    """Request model for content generation."""
+    """Request model for content generation.
+
+    Callers can specify either task_id or content_type (alias).
+    task_id takes priority over content_type when both are provided.
+    """
 
     team: str = "static"  # "static" or "gemini"
-    content_type: str
-    topic: str
+    task_id: str = ""  # e.g. "generate_quiz" -- preferred
+    content_type: str = ""  # e.g. "quiz" -- alias, backward compat
+    topic: str = ""
     parameters: Dict[str, Any] = {}
 
 
@@ -116,37 +123,103 @@ app.add_middleware(
 )
 
 
+# ---------------------------------------------------------------------------
+# Request / response trace (single source of truth for access logs)
+# ---------------------------------------------------------------------------
+@app.middleware("http")
+async def request_trace(request: Request, call_next):
+    """Log every request with method, path, status and duration."""
+    start = time.perf_counter()
+    response = await call_next(request)
+    ms = (time.perf_counter() - start) * 1000
+    logger.info("%s %s -> %s (%.0fms)", request.method, request.url.path, response.status_code, ms)
+    return response
+
+
+# ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
+_PROJECT_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
+
+
+def _serve_html(filename: str) -> HTMLResponse:
+    """Serve an HTML file from frontend/public/ or return a 404 fallback."""
+    path = _PROJECT_ROOT / "frontend" / "public" / filename
+    if path.exists():
+        return HTMLResponse(path.read_text(encoding="utf-8"))
+    return HTMLResponse(
+        f"<html><body><h1>{filename} not found</h1></body></html>",
+        status_code=404,
+    )
+
+
+def _get_coordinator(team: str):
+    """Validate team name and return its coordinator, or raise HTTPException."""
+    if team not in ("static", "gemini"):
+        raise HTTPException(status_code=400, detail=f"Invalid team: {team}")
+    if not agent_systems[team].get("initialized"):
+        raise HTTPException(status_code=503, detail=f"{team} team not available")
+    return agent_systems[team]["coordinator"]
+
+
+def _resolve_task(coordinator, request: "GenerateRequest"):
+    """Resolve an AgentTask from the request, or raise HTTPException(400)."""
+    task = coordinator.resolve_task(
+        task_id=request.task_id or None,
+        content_type=request.content_type or None,
+    )
+    if not task:
+        label = request.task_id or request.content_type or "(empty)"
+        raise HTTPException(
+            status_code=400, detail=f"Unknown task or content type: {label}"
+        )
+    return task
+
+
+def _build_params(request: "GenerateRequest", task) -> Tuple[Dict[str, Any], str]:
+    """Merge request parameters with topic and content_type.
+
+    Uses ``task.content_types[0]`` as the canonical base type
+    (the one registered in CONTENT_REGISTRY).  The raw alias from the
+    request is passed separately so the Gemini writer can add a style hint.
+
+    Returns (params_dict, content_type_label).
+    """
+    params = {**(request.parameters or {})}
+    if request.topic:
+        params["topic"] = request.topic
+    # Canonical base type from the resolved task (single source of truth)
+    base_type = task.content_types[0] if task.content_types else ""
+    if base_type:
+        params["content_type"] = base_type
+    # Always set alias key so it overwrites any stale value from prior requests
+    params["content_type_alias"] = (
+        request.content_type
+        if request.content_type and request.content_type != base_type
+        else ""
+    )
+    content_type_label = request.content_type or base_type
+    return params, content_type_label
+
+
+def _error_response(request_id: str, request: "GenerateRequest", error) -> GenerateResponse:
+    """Build a standardised error GenerateResponse."""
+    return GenerateResponse(
+        request_id=request_id,
+        team=request.team,
+        content_type=request.content_type or "",
+        content={"error": str(error), "status": "failed"},
+        status="error",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Static pages
+# ---------------------------------------------------------------------------
 @app.get("/", response_class=HTMLResponse)
 async def root():
     """Serve the server directory page."""
-    import pathlib
-
-    # Get the path to the frontend/public/index.html
-    current_file = pathlib.Path(__file__)
-    project_root = current_file.parent.parent.parent.parent
-    index_path = project_root / "frontend" / "public" / "index.html"
-
-    if index_path.exists():
-        return index_path.read_text(encoding="utf-8")
-    else:
-        # Fallback to JSON response if file not found
-        return HTMLResponse(
-            content="""
-            <html>
-                <head><title>ADK Agentic Writer</title></head>
-                <body>
-                    <h1>ADK Agentic Writer API</h1>
-                    <p>Server is running!</p>
-                    <ul>
-                        <li><a href="/health">Health Check</a></li>
-                        <li><a href="/teams">Available Teams</a></li>
-                        <li><a href="/docs">API Documentation</a></li>
-                    </ul>
-                </body>
-            </html>
-            """,
-            status_code=200,
-        )
+    return _serve_html("index.html")
 
 
 @app.get("/api")
@@ -172,229 +245,16 @@ async def health():
     }
 
 
-@app.post("/generate", response_model=GenerateResponse)
-async def generate_content(request: GenerateRequest):
-    """Generate content using coordinator.generate_content()."""
-    request_id = str(uuid.uuid4())
-
-    if request.team not in ["static", "gemini"]:
-        raise HTTPException(status_code=400, detail=f"Invalid team: {request.team}")
-
-    if not agent_systems[request.team].get("initialized"):
-        raise HTTPException(
-            status_code=503, detail=f"{request.team} team not available"
-        )
-
-    coordinator = agent_systems[request.team]["coordinator"]
-
-    try:
-        # Use coordinator's generate_content convenience method
-        result = await coordinator.generate_content(
-            content_type=request.content_type,
-            topic=request.topic,
-            **(request.parameters or {}),
-        )
-
-        return GenerateResponse(
-            request_id=request_id,
-            team=request.team,
-            content_type=request.content_type,
-            content=result,
-            status="completed",
-        )
-
-    except Exception as e:
-        logger.error(f"Error: {e}")
-        return GenerateResponse(
-            request_id=request_id,
-            team=request.team,
-            content_type=request.content_type,
-            content={"error": str(e), "status": "failed"},
-            status="error",
-        )
-
-
-@app.post("/generate/with-validation", response_model=GenerateResponse)
-async def generate_with_validation(request: GenerateRequest):
-    """Generate content with ValidationEditorialWorkflow (writer → validator).
-
-    Returns a JSON response with:
-      - content: generated content (writer output)
-      - validation_result: validation summary (validator output)
-      - status: "validated"
-
-    Supports both static and gemini teams.
-    """
-    request_id = str(uuid.uuid4())
-
-    if request.team not in ["static", "gemini"]:
-        raise HTTPException(status_code=400, detail=f"Invalid team: {request.team}")
-
-    if not agent_systems[request.team].get("initialized"):
-        raise HTTPException(
-            status_code=503, detail=f"{request.team} team not available"
-        )
-
-    coordinator = agent_systems[request.team]["coordinator"]
-
-    try:
-        result = await coordinator.generate_with_validation(
-            content_type=request.content_type,
-            topic=request.topic,
-            **(request.parameters or {}),
-        )
-
-        # result already has {"content": ..., "validation_result": ..., "status": "validated"}
-        return GenerateResponse(
-            request_id=request_id,
-            team=request.team,
-            content_type=request.content_type,
-            content=result,
-            status="completed",
-        )
-
-    except Exception as e:
-        logger.error(f"Error in validation workflow: {e}")
-        return GenerateResponse(
-            request_id=request_id,
-            team=request.team,
-            content_type=request.content_type,
-            content={"error": str(e), "status": "failed"},
-            status="error",
-        )
-
-
-@app.post("/generate/multimodal-story")
-async def generate_multimodal_story(request: GenerateRequest):
-    """Generate complex multimodal story with embedded games and quizzes."""
-    request_id = str(uuid.uuid4())
-
-    if request.team != "static":
-        raise HTTPException(
-            status_code=400,
-            detail="Multimodal stories only available for static team",
-        )
-
-    if not agent_systems["static"].get("initialized"):
-        raise HTTPException(status_code=503, detail="Static team not available")
-
-    coordinator = agent_systems["static"]["coordinator"]
-
-    try:
-        params = request.parameters.copy() if request.parameters else {}
-        num_story_nodes = params.get("num_story_nodes", 8)
-        num_mini_games = params.get("num_mini_games", 2)
-        num_mini_quizzes = params.get("num_mini_quizzes", 2)
-        genre = params.get("genre", "adventure")
-
-        # Parallel generation
-        results = await asyncio.gather(
-            coordinator.generate_content(
-                "branched_narrative",
-                request.topic,
-                num_nodes=num_story_nodes,
-                genre=genre,
-            ),
-            *[
-                coordinator.generate_content(
-                    "quest_game", f"{request.topic} Mini-Game {i+1}", num_nodes=4
-                )
-                for i in range(num_mini_games)
-            ],
-            *[
-                coordinator.generate_content(
-                    "quiz", f"{request.topic} Quiz {i+1}", num_questions=3
-                )
-                for i in range(num_mini_quizzes)
-            ],
-            return_exceptions=True,
-        )
-
-        # Extract and integrate
-        story_result = results[0] if not isinstance(results[0], Exception) else None
-        if not story_result:
-            raise ValueError("Story generation failed")
-
-        story_content = story_result["content"]
-        nodes = story_content.get("nodes", {})
-
-        # Inject games and quizzes
-        game_results = results[1 : 1 + num_mini_games]
-        quiz_results = results[1 + num_mini_games :]
-
-        for i, result in enumerate(game_results):
-            if not isinstance(result, Exception) and i + 1 < len(nodes):
-                node_id = list(nodes.keys())[i + 1]
-                nodes[node_id]["embedded_game"] = result["content"]
-
-        for i, result in enumerate(quiz_results):
-            if not isinstance(result, Exception) and num_mini_games + i + 1 < len(
-                nodes
-            ):
-                node_id = list(nodes.keys())[num_mini_games + i + 1]
-                nodes[node_id]["embedded_quiz"] = result["content"]
-
-        multimodal_result = {
-            "content_type": "multimodal_story",
-            "content": story_content,
-            "embedded_games": sum(
-                1 for r in game_results if not isinstance(r, Exception)
-            ),
-            "embedded_quizzes": sum(
-                1 for r in quiz_results if not isinstance(r, Exception)
-            ),
-            "total_nodes": len(nodes),
-            "generation_method": "parallel_mixed_team",
-        }
-
-        return GenerateResponse(
-            request_id=request_id,
-            team=request.team,
-            content_type="multimodal_story",
-            content=multimodal_result,
-            status="completed",
-        )
-
-    except Exception as e:
-        logger.error(f"Error generating multimodal story: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.get("/showcase", response_class=HTMLResponse)
 async def showcase():
     """Serve the showcase page."""
-    import pathlib
-
-    # Get the path to the frontend/public/showcase.html
-    current_file = pathlib.Path(__file__)
-    project_root = current_file.parent.parent.parent.parent
-    showcase_path = project_root / "frontend" / "public" / "showcase.html"
-
-    if showcase_path.exists():
-        return showcase_path.read_text(encoding="utf-8")
-    else:
-        return HTMLResponse(
-            content="<html><body><h1>Showcase page not found</h1></body></html>",
-            status_code=404,
-        )
+    return _serve_html("showcase.html")
 
 
 @app.get("/frontend", response_class=HTMLResponse)
 async def frontend():
     """Serve the legacy frontend page."""
-    import pathlib
-
-    current_file = pathlib.Path(__file__)
-    project_root = current_file.parent.parent.parent.parent
-    frontend_path = project_root / "frontend" / "public" / "frontend.html"
-
-    if frontend_path.exists():
-        return frontend_path.read_text(encoding="utf-8")
-    else:
-        return HTMLResponse(
-            content="<html><body><h1>Frontend page not found</h1></body></html>",
-            status_code=404,
-        )
+    return _serve_html("frontend.html")
 
 
 @app.get("/teams")
@@ -440,6 +300,24 @@ async def get_tasks():
     }
 
 
+@app.get("/workflows")
+async def get_workflows():
+    """Get available workflows."""
+    if not agent_systems["static"].get("initialized"):
+        return {"workflows": []}
+
+    coordinator = agent_systems["static"]["coordinator"]
+    return {
+        "workflows": [
+            {
+                "name": wf.name,
+                "tasks": [t.task_id if t else None for t in wf.tasks],
+            }
+            for wf in coordinator.get_supported_workflows()
+        ]
+    }
+
+
 @app.get("/content-types")
 async def get_content_types():
     """Get all content type aliases from tasks."""
@@ -462,6 +340,104 @@ async def get_content_types():
             )
 
     return {"content_types": content_types, "grouped": grouped}
+
+
+@app.post("/generate", response_model=GenerateResponse)
+async def generate_content(request: GenerateRequest):
+    """Generate content by resolving a task and calling process_task."""
+    request_id = str(uuid.uuid4())
+    coordinator = _get_coordinator(request.team)
+    task = _resolve_task(coordinator, request)
+    params, content_type_label = _build_params(request, task)
+
+    try:
+        result = await coordinator.process_task(task, params)
+        return GenerateResponse(
+            request_id=request_id,
+            team=request.team,
+            content_type=content_type_label,
+            content=result,
+            status="completed",
+        )
+    except Exception as e:
+        logger.error("Error: %s", e)
+        return _error_response(request_id, request, e)
+
+
+@app.post("/generate/with-validation", response_model=GenerateResponse)
+async def generate_with_validation(request: GenerateRequest):
+    """Generate content then validate via editorial workflow.
+
+    1. Resolves the content generation task (e.g. generate_quiz)
+    2. Finds a workflow whose tasks include VALIDATE_CONTENT
+    3. Executes that workflow -- writer -> validator sequentially
+    4. Returns the combined result (content + validation_result)
+    """
+    request_id = str(uuid.uuid4())
+    coordinator = _get_coordinator(request.team)
+    task = _resolve_task(coordinator, request)
+
+    workflow = coordinator.resolve_workflow(task_id=VALIDATE_CONTENT.task_id)
+    if not workflow:
+        raise HTTPException(status_code=500, detail="No validation workflow available")
+
+    params, content_type_label = _build_params(request, task)
+
+    try:
+        result = await workflow.execute({"tasks": [task], "parameters": params})
+        return GenerateResponse(
+            request_id=request_id,
+            team=request.team,
+            content_type=content_type_label,
+            content=result,
+            status="completed",
+        )
+    except Exception as e:
+        logger.error("Error in validation workflow: %s", e)
+        return _error_response(request_id, request, e)
+
+
+@app.post("/generate/multimodal-story")
+async def generate_multimodal_story(request: GenerateRequest):
+    """Generate complex multimodal story with embedded games and quizzes."""
+    request_id = str(uuid.uuid4())
+
+    if request.team != "static":
+        raise HTTPException(
+            status_code=400,
+            detail="Multimodal stories only available for static team",
+        )
+
+    if not agent_systems["static"].get("initialized"):
+        raise HTTPException(status_code=503, detail="Static team not available")
+
+    coordinator = agent_systems["static"]["coordinator"]
+
+    story_content = "This is a test story content."
+    game_content = "This is a test game content."
+    quiz_content = "This is a test quiz content."
+    game_results = [game_content]
+    quiz_results = [quiz_content]
+    nodes = 10
+
+    multimodal_result = {
+        "content_type": "multimodal_story",
+        "content": story_content,
+        "embedded_games": sum(1 for r in game_results if not isinstance(r, Exception)),
+        "embedded_quizzes": sum(
+            1 for r in quiz_results if not isinstance(r, Exception)
+        ),
+        "total_nodes": len(nodes),
+        "generation_method": "parallel_mixed_team",
+    }
+
+    return GenerateResponse(
+        request_id=request_id,
+        team=request.team,
+        content_type="multimodal_story",
+        content=multimodal_result,
+        status="completed",
+    )
 
 
 if __name__ == "__main__":

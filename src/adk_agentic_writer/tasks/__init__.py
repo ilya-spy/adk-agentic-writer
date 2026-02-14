@@ -1,4 +1,4 @@
-"""Task definitions for protocol methods."""
+"""Task definitions for content generation and editorial workflows."""
 
 from .content_tasks import (
     # Primary content tasks (with content_types aliases)

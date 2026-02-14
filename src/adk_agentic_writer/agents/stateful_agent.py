@@ -119,13 +119,113 @@ class StatefulAgent(BaseAgent):
         self.state.status = status
         logger.debug(f"Agent {self.agent_id} status: {status}")
 
+    # ------------------------------------------------------------------
+    # Task & workflow discovery
+    # ------------------------------------------------------------------
+
+    def get_supported_tasks(self) -> List[AgentTask]:
+        """Get tasks from model.tasks plus tasks referenced by workflows.
+
+        Subclasses may override to add tasks from child agents, but
+        should call super() to include workflow-sourced tasks.
+        """
+        seen: set[str] = set()
+        tasks: List[AgentTask] = []
+        # Tasks explicitly registered on the agent
+        for t in super().get_supported_tasks():
+            if t.task_id not in seen:
+                tasks.append(t)
+                seen.add(t.task_id)
+        # Tasks referenced by registered workflows
+        for wf in self.model.workflows:
+            for t in getattr(wf, "tasks", []):
+                if t is not None and t.task_id not in seen:
+                    tasks.append(t)
+                    seen.add(t.task_id)
+        return tasks
+
+    def get_task_for_content_type(self, content_type: str) -> Optional[AgentTask]:
+        """Find task that handles a content_type alias."""
+        for task in self.get_supported_tasks():
+            if content_type in (task.content_types or []):
+                return task
+        return None
+
+    def get_all_content_types(self) -> Dict[str, List[str]]:
+        """Get all content types grouped by task_id."""
+        result: Dict[str, List[str]] = {}
+        for task in self.get_supported_tasks():
+            if task.content_types:
+                result[task.task_id] = task.content_types
+        return result
+
+    def resolve_task(
+        self,
+        task_id: Optional[str] = None,
+        content_type: Optional[str] = None,
+    ) -> Optional[AgentTask]:
+        """Resolve a task by task_id or content_type alias.
+
+        task_id takes priority over content_type.
+        Returns the task template or None.
+        """
+        if task_id:
+            return self.get_task_by_id(task_id)
+        if content_type:
+            return self.get_task_for_content_type(content_type)
+        return None
+
+    def get_supported_workflows(self) -> List[Any]:
+        """Get all workflows registered in model.workflows."""
+        return list(self.model.workflows)
+
+    def resolve_workflow(
+        self,
+        task_id: Optional[str] = None,
+        content_type: Optional[str] = None,
+    ) -> Optional[Any]:
+        """Resolve a single workflow by task_id or content_type.
+
+        Searches model.workflows for the first workflow whose tasks
+        list contains a matching task.
+
+        Args:
+            task_id: Match workflow containing a task with this task_id.
+            content_type: Match workflow containing a task whose
+                          content_types includes this alias.
+
+        Returns:
+            First matching Workflow, or None.
+        """
+        for wf in self.model.workflows:
+            for t in getattr(wf, "tasks", []):
+                if t is None:
+                    continue
+                if task_id and t.task_id == task_id:
+                    return wf
+                if content_type and content_type in (t.content_types or []):
+                    return wf
+        return None
+
+    # ------------------------------------------------------------------
+    # Task context and execution
+    # ------------------------------------------------------------------
+
     def prepare_task_context(self, task: AgentTask) -> Dict[str, Any]:
-        """Prepare context for task execution. Includes task_id for routing."""
-        context = {**(self.state.variables)}
-        context.update(self.model.parameters)
+        """Prepare context for task execution.
+
+        Merge order (last wins):
+        1. state.variables  – inter-task data flow (lowest priority)
+        2. task.parameters  – template defaults
+        3. model.parameters – runtime params from caller (highest priority)
+        4. task_id injected for content-type routing
+        """
+        context: Dict[str, Any] = {}
+        context.update(self.state.variables)
         if task.parameters:
             context.update(task.parameters)
-        context["task_id"] = task.task_id  # For content type routing
+        context.update(self.model.parameters)
+        context["task_id"] = task.task_id
         return context
 
     def substitute_task_prompt(self, task: AgentTask) -> str:
@@ -157,7 +257,7 @@ class StatefulAgent(BaseAgent):
     ) -> Dict[str, Any]:
         """Process a task with variable substitution and state management.
 
-        Implements AgentProtocol.
+        Core task execution entry point.
 
         Args:
             task: Task to process

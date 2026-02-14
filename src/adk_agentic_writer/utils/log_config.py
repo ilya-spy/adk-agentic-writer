@@ -126,6 +126,8 @@ def configure_logging(
         "httpx":                        _env_level("LOG_LEVEL_HTTPX", "WARNING"),
         "google_adk":                   _env_level("LOG_LEVEL_ADK", "WARNING"),
         "google_genai":                 _env_level("LOG_LEVEL_ADK", "WARNING"),
+        # Suppress uvicorn's access log; our request_trace middleware covers it
+        "uvicorn.access":               logging.WARNING,
     }
     for ns, lvl in _namespace_levels.items():
         logging.getLogger(ns).setLevel(lvl)

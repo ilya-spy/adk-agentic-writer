@@ -348,6 +348,7 @@
             </select>
         </div>
         <button onclick="generateContent()" id="generateBtn">Generate & Display</button>
+        <button onclick="generateContent(true)" id="validateBtn" style="background: linear-gradient(135deg, #059669 0%, #047857 100%); margin-left: 10px;">Generate & Validate</button>
     </div>
 
     <div id="output"></div>
@@ -480,12 +481,16 @@
             logsContainer.scrollTop = logsContainer.scrollHeight;
         }
 
-        async function generateContent() {
+        async function generateContent(withValidation = false) {
             const team = document.getElementById('team').value;
             const contentType = document.getElementById('contentType').value;
             const topic = document.getElementById('topic').value;
             const output = document.getElementById('output');
-            const btn = document.getElementById('generateBtn');
+            const genBtn = document.getElementById('generateBtn');
+            const valBtn = document.getElementById('validateBtn');
+
+            const mode = withValidation ? 'Generate & Validate' : 'Generate';
+            const endpoint = withValidation ? '/generate/with-validation' : '/generate';
 
             // Reset logs
             logs = [];
@@ -493,17 +498,21 @@
             // Show loading with logs
             output.innerHTML = `
                 <div class="container">
-                    <h2>🔄 Generation Process</h2>
+                    <h2>🔄 ${mode} Process</h2>
                     <div class="logs-container" id="logs"></div>
-                    <div class="loading">⏳ Generating content...</div>
+                    <div class="loading">⏳ ${withValidation ? 'Generating & validating' : 'Generating'} content...</div>
                 </div>
             `;
-            btn.disabled = true;
+            genBtn.disabled = true;
+            valBtn.disabled = true;
 
             try {
                 // Simulate agent logs
                 addLog('System', `Starting ${team} team`, 'info');
                 addLog('Coordinator', `Received request: ${contentType} about "${topic}"`, 'info');
+                if (withValidation) {
+                    addLog('Coordinator', `Using validation workflow`, 'info');
+                }
                 
                 await new Promise(resolve => setTimeout(resolve, 300));
                 addLog('Coordinator', `Routing to ${contentType} agent`, 'info');
@@ -516,7 +525,7 @@
                 addLog('Agent', `Using parameters: ${JSON.stringify(params)}`, 'info');
                 
                 const startTime = Date.now();
-                const response = await fetch(`${API_BASE}/generate`, {
+                const response = await fetch(`${API_BASE}${endpoint}`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -540,27 +549,51 @@
                 // Check for API-level error (200 OK but status=error)
                 if (data.status === 'error') {
                     let errMsg = data.content?.error || 'Unknown error';
-                    // Extract clean refusal message if present
                     const isRefusal = errMsg.includes('LLM refused to generate content:');
                     if (isRefusal) {
                         errMsg = errMsg.replace(/.*LLM refused to generate content:\s*/, '');
                     } else if (errMsg.includes('Invalid JSON from')) {
-                        // Extract the "Raw:" portion which often contains the LLM's actual message
                         const rawMatch = errMsg.match(/Raw:\s*(.*)/s);
                         if (rawMatch) errMsg = rawMatch[1];
                     }
                     const label = isRefusal ? 'Content Declined' : 'Generation Failed';
                     addLog('Agent', `${label}: ${errMsg}`, 'error');
                     addLog('Coordinator', `Workflow failed after ${duration}ms`, 'error');
-                    // Remove the loading spinner, keep the logs container intact
                     const loadingEl = output.querySelector('.loading');
                     if (loadingEl) loadingEl.remove();
                     return;
                 }
 
-                // Extract content - API returns nested structure with reviewer wrapping
+                // Show workflow stage logs if present
+                const wfLog = data.content && data.content._workflow_log;
+                if (Array.isArray(wfLog)) {
+                    wfLog.forEach(label => addLog('Workflow', `Stage: ${label}`, 'info'));
+                }
+
+                // Extract content -- with-validation wraps it deeper
                 let content;
-                if (data.content && data.content.content && data.content.content.original_content) {
+                let validationResult = null;
+                if (withValidation && data.content) {
+                    content = data.content.content;
+                    // Build structured validation object from flat fields
+                    validationResult = {
+                        status: data.content.status || 'validated',
+                        validation_result: data.content.validation_result || '',
+                        warnings: data.content.warnings || [],
+                        content_type: data.content_type || contentType,
+                    };
+                    const valStatus = validationResult.status;
+                    const warnCount = validationResult.warnings.length;
+                    if (warnCount > 0) {
+                        addLog('Validator', `Validation complete with ${warnCount} warning(s)`, 'warning');
+                        validationResult.warnings.forEach(w => addLog('Validator', w, 'warning'));
+                    } else {
+                        addLog('Validator', `Validation passed`, 'success');
+                    }
+                    if (validationResult.validation_result) {
+                        addLog('Validator', validationResult.validation_result, 'info');
+                    }
+                } else if (data.content && data.content.content && data.content.content.original_content) {
                     content = data.content.content.original_content;
                 } else if (data.content && data.content.content) {
                     content = data.content.content;
@@ -585,8 +618,8 @@
 
                 await new Promise(resolve => setTimeout(resolve, 500));
 
-                // Render content
-                output.innerHTML = renderContent(contentType, content, topic, team, data);
+                // Render content + optional validation panel
+                output.innerHTML = renderContent(contentType, content, topic, team, data, validationResult);
                 updateLogsDisplay();
                 
                 // If it's a story, render the first node
@@ -598,11 +631,11 @@
             } catch (error) {
                 addLog('System', `Error: ${error.message}`, 'error');
                 addLog('System', `Make sure the backend server is running at ${API_BASE}`, 'info');
-                // Remove the loading spinner, keep the logs container intact
                 const loadingEl = output.querySelector('.loading');
                 if (loadingEl) loadingEl.remove();
             } finally {
-                btn.disabled = false;
+                genBtn.disabled = false;
+                valBtn.disabled = false;
             }
         }
 
@@ -637,8 +670,8 @@
             return null; // no issues
         }
 
-        function renderContent(contentType, content, topic, team, fullData) {
-            console.log('renderContent called with:', {contentType, content, topic, team, fullData});
+        function renderContent(contentType, content, topic, team, fullData, validationResult) {
+            console.log('renderContent called with:', {contentType, content, topic, team, fullData, validationResult});
             
             const category = getContentCategory(contentType);
             console.log('Rendering category:', category);
@@ -649,11 +682,52 @@
             html += '<h2>🔄 Generation Process</h2>';
             html += '<div class="logs-container" id="logs"></div>';
             
+            // Validation result panel (if present)
+            if (validationResult) {
+                const warnings = validationResult.warnings || [];
+                const hasWarnings = warnings.length > 0;
+                const borderColor = hasWarnings ? '#f59e0b' : '#059669';
+                const bgGrad = hasWarnings
+                    ? 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)'
+                    : 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)';
+                const icon = hasWarnings ? '⚠️' : '✅';
+
+                html += `
+                    <div style="border: 2px solid ${borderColor}; border-radius: 10px; padding: 16px; margin-bottom: 20px; background: ${bgGrad};">
+                        <h3 style="margin: 0 0 10px; font-size: 16px; color: #1e293b;">${icon} Validation Result</h3>
+                        <div style="font-size: 13px; color: #334155; margin-bottom: 6px;">
+                            <strong>Status:</strong> ${validationResult.status || 'validated'}
+                        </div>`;
+                if (validationResult.content_type) {
+                    html += `<div style="font-size: 13px; color: #334155; margin-bottom: 6px;">
+                            <strong>Content type:</strong> ${validationResult.content_type}
+                        </div>`;
+                }
+                if (validationResult.validation_result) {
+                    html += `<div style="font-size: 13px; color: #334155; margin-bottom: 6px;">
+                            <strong>Summary:</strong> ${validationResult.validation_result}
+                        </div>`;
+                }
+                if (hasWarnings) {
+                    html += `<div style="margin-top: 8px;">`;
+                    warnings.forEach(w => {
+                        html += `<div style="font-size: 12px; color: #92400e; padding: 4px 0;">⚠ ${w}</div>`;
+                    });
+                    html += `</div>`;
+                } else {
+                    html += `<div style="font-size: 13px; color: #065f46; margin-top: 4px;">All checks passed.</div>`;
+                }
+                html += `</div>`;
+            }
+            
             // Summary
             html += '<div class="summary">';
             html += '<div class="summary-item"><span class="summary-label">Team:</span> ' + team.toUpperCase() + '</div>';
             html += '<div class="summary-item"><span class="summary-label">Type:</span> ' + contentType.replace('_', ' ').toUpperCase() + '</div>';
             html += '<div class="summary-item"><span class="summary-label">Topic:</span> ' + topic + '</div>';
+            if (validationResult) {
+                html += '<div class="summary-item"><span class="summary-label">Validated:</span> ✓</div>';
+            }
             if (fullData?.content?.agents_involved) {
                 html += '<div class="summary-item"><span class="summary-label">Agents:</span> ' + fullData.content.agents_involved.length + '</div>';
             }

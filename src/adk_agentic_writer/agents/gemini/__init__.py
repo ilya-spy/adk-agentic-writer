@@ -9,7 +9,7 @@ Use get_config_for_role() to get AgentConfig with prompts for a role.
 
 from .wrapper import ADKAgentWrapper
 from .validator import GeminiValidator
-from .coordinator import GeminiCoordinatorAgent, SupportedTask
+from .coordinator import GeminiCoordinatorAgent
 from .writer import (
     GeminiWriterAgent,
     GeminiQuizWriterAgent,
@@ -28,7 +28,6 @@ __all__ = [
     "GeminiValidator",
     # Coordinator
     "GeminiCoordinatorAgent",
-    "SupportedTask",
     # Unified agents
     "GeminiWriterAgent",
     "GeminiDesignerAgent",

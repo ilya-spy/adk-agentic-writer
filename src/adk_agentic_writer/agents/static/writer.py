@@ -49,7 +49,7 @@ class WriterAgent(ContentWriterAgent):
     def content_type(self) -> str:
         return self._content_type
 
-    # ContentProtocol
+    # Block generation
     async def generate_block(
         self,
         block_type: ContentBlockType,

@@ -78,18 +78,24 @@ class GeminiWriterAgent(ContentWriterAgent):
         return self._content_type
 
     def _get_effective_content_type(self, task: Optional[AgentTask] = None) -> str:
-        """Get content type from init or task parameters."""
-        if self._content_type:
-            return self._content_type
-        if task:
+        """Get content type from runtime params, task, or init default.
+
+        Priority: model.parameters > task.parameters > task_id heuristic.
+        The API always passes the canonical base type (e.g. "quiz", not
+        "trivia") via ``params["content_type"]``, so the result is always
+        a key registered in CONTENT_REGISTRY.
+        """
+        ct = self.model.parameters.get("content_type")
+        if not ct and self._content_type:
+            ct = self._content_type
+        if not ct and task:
             ct = task.parameters.get("content_type") if task.parameters else None
-            if ct:
-                return ct
+        if not ct and task:
             if "quiz" in task.task_id:
-                return "quiz"
-            if "story" in task.task_id:
-                return "story"
-        return "quiz"
+                ct = "quiz"
+            elif "story" in task.task_id:
+                ct = "story"
+        return ct or "quiz"
 
     async def _get_agent_for_type(self, content_type: str) -> ADKAgentWrapper:
         """Get or create ADK agent for specific content type."""
@@ -113,12 +119,18 @@ class GeminiWriterAgent(ContentWriterAgent):
         context = self.prepare_task_context(task)
         content_type = self._get_effective_content_type(task)
 
+        # Forward content_type_alias so _generate_content can add style hint
+        alias_kw = {}
+        if context.get("content_type_alias"):
+            alias_kw["content_type_alias"] = context["content_type_alias"]
+
         if content_type == "quiz":
             quiz = await self.generate_quiz(
                 topic=context.get("topic", "general"),
                 num_questions=int(context.get("num_questions", 5)),
                 difficulty=context.get("difficulty", "medium"),
                 num_options=int(context.get("num_options", 4)),
+                **alias_kw,
             )
             return quiz.model_dump()
 
@@ -126,6 +138,7 @@ class GeminiWriterAgent(ContentWriterAgent):
             story = await self.generate_story(
                 topic=context.get("topic", "general"),
                 num_nodes=int(context.get("num_nodes", 5)),
+                **alias_kw,
             )
             return story.model_dump()
 
@@ -149,12 +162,20 @@ class GeminiWriterAgent(ContentWriterAgent):
         if type_config.sample_output:
             prompt += f"\n\nExample output:\n{json.dumps(type_config.sample_output, indent=2)}"
 
+        # Style hint: if the caller used an alias (e.g. "trivia" for "quiz"),
+        # nudge the LLM toward that flavour.
+        alias = context.get("content_type_alias", "")
+        if alias:
+            label = alias.replace("_", " ")
+            prompt += f"\n\nStyle hint: make the output feel more like a {label}."
+
         logger.info(
             "Assembled %s prompt for topic=%r (%d chars)",
             prompt,
             context.get("topic", "?"),
             len(prompt),
         )
+        logger.debug("Full prompt:\n%s", prompt)
 
         agent = await self._get_agent_for_type(content_type)
         await self.update_status(AgentStatus.WORKING)

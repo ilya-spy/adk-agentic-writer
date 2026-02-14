@@ -1,15 +1,15 @@
 """Editorial workflow patterns and predefined instances.
 
 These workflows implement patterns for editing, validating, and refining content.
-They correspond to the EditorialProtocol.
+They use task-based execution via process_task(AgentTask).
 """
 
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List
 
 from ..models.agent_models import AgentConfig, WorkflowPattern, WorkflowScope
 from .base_workflow import Workflow
-from ..tasks import editorial_tasks
+from ..tasks import content_tasks, editorial_tasks
 
 logger = logging.getLogger(__name__)
 
@@ -23,30 +23,32 @@ class ValidationEditorialWorkflow(Workflow):
     - Validator receives writer's state as params, stores its
       result in ``state.variables["validation_result"]``
 
-    The VALIDATE_CONTENT task is included by default.
+    Default tasks are GENERATE_CONTENT → VALIDATE_CONTENT.
+    Callers can override any stage via ``input_data["tasks"]``;
+    e.g. passing ``[GENERATE_QUIZ]`` replaces the first stage
+    while the validator keeps its default.
     """
 
-    def __init__(self, name: str, stages: List[Any]):
+    def __init__(self, name: str, agents: List[Any]):
         """
         Initialize the validation editorial workflow.
 
         Args:
             name: Workflow name
-            stages: [writer_agent, validator_agent]
+            agents: [writer_agent, validator_agent]
         """
         super().__init__(
             name=name,
             pattern=WorkflowPattern.SEQUENTIAL,
             scope=WorkflowScope.EDITORIAL,
             description="Writer → Validator sequential quality workflow",
-            agents=stages,
-            # Stage 0 (writer): uses caller's input task (output_key="content")
-            # Stage 1 (validator): uses VALIDATE_CONTENT (output_key="validation_result")
-            tasks=[None, editorial_tasks.VALIDATE_CONTENT],
+            agents=agents,
+            tasks=[content_tasks.GENERATE_CONTENT, editorial_tasks.VALIDATE_CONTENT],
+            stage_labels=["Generating content", "Validating content"],
         )
         logger.info(
             f"ValidationEditorialWorkflow '{name}' configured with "
-            f"{len(stages)} stages"
+            f"{len(agents)} stages"
         )
 
 
@@ -57,7 +59,7 @@ class ParallelEditorialWorkflow(Workflow):
     Pattern: [Variant 1, Variant 2, Variant 3] → Select Best
     All variants are generated simultaneously and the best is selected.
 
-    Corresponds to EditorialProtocol operations.
+    Uses task-based execution for parallel generation and selection.
     """
 
     def __init__(
@@ -97,7 +99,7 @@ class IterativeEditorialWorkflow(Workflow):
     Pattern: Generate → Validate → Refine → Validate → ... → Done
     Useful for achieving high-quality content through iterative improvement.
 
-    Corresponds to EditorialProtocol operations (generate, validate, refine).
+    Uses task-based execution for iterative generate/evaluate/refine cycles.
     """
 
     def __init__(

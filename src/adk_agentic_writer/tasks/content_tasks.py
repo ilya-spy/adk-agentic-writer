@@ -10,6 +10,15 @@ from ..models.agent_models import AgentRole, AgentTask
 # Primary Content Tasks - each with content_types aliases
 # ============================================================================
 
+GENERATE_CONTENT = AgentTask(
+    task_id="generate_content",
+    agent_role=AgentRole.WRITER,
+    prompt="Generate content about {topic}.",
+    parameters={"topic": ""},
+    content_types=[],
+    output_key="content",
+)
+
 GENERATE_QUIZ = AgentTask(
     task_id="generate_quiz",
     agent_role=AgentRole.WRITER,
@@ -45,6 +54,10 @@ GENERATE_SIMULATION = AgentTask(
     content_types=["simulation", "web_simulation", "interactive", "simulator"],
     output_key="content",
 )
+
+# ============================================================================
+# Block-level tasks for granular generation control
+# ============================================================================
 
 # Block-level task (internal use)
 GENERATE_BLOCK = AgentTask(

@@ -5,7 +5,6 @@ Requires GOOGLE_API_KEY for LLM generation.
 """
 
 import logging
-from enum import Enum
 from typing import Any, Dict
 
 from ..static.coordinator import CoordinatorAgent
@@ -14,15 +13,6 @@ from .writer import GeminiWriterAgent
 from .designer import GeminiDesignerAgent
 
 logger = logging.getLogger(__name__)
-
-
-class SupportedTask(str, Enum):
-    """Tasks supported by the Gemini coordinator."""
-
-    GENERATE_QUIZ = "generate_quiz"
-    GENERATE_STORY = "generate_story"
-    GENERATE_GAME = "generate_game"
-    GENERATE_SIMULATION = "generate_simulation"
 
 
 class GeminiCoordinatorAgent(CoordinatorAgent):
@@ -47,11 +37,6 @@ class GeminiCoordinatorAgent(CoordinatorAgent):
             for task in agent.get_supported_tasks():
                 self._task_to_agent[task.task_id] = agent
 
-        self._content_type_to_task = {}
-        for task in self.get_supported_tasks():
-            for ct in task.content_types:
-                self._content_type_to_task[ct] = task
-
         # Rebuild validation workflow with Gemini agents (inherited helper)
         self._build_validation_workflow()
 
@@ -60,4 +45,4 @@ class GeminiCoordinatorAgent(CoordinatorAgent):
         )
 
 
-__all__ = ["GeminiCoordinatorAgent", "SupportedTask"]
+__all__ = ["GeminiCoordinatorAgent"]
