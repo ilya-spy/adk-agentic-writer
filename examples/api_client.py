@@ -198,14 +198,6 @@ def ask_choice(options: List[str], prompt: str = "Choose") -> int:
         print(f"    Enter 0-{len(options)}")
 
 
-def choose_team() -> Optional[str]:
-    idx = ask_choice(["static  – fast, template-based (no API key)",
-                       "gemini  – AI-powered via Google ADK"], "Team")
-    if idx < 0:
-        return None
-    return ["static", "gemini"][idx]
-
-
 def choose_content_type() -> Optional[str]:
     types = [
         "quiz             (quiz, trivia, test)",
@@ -242,16 +234,6 @@ def build_parameters(content_type: str) -> Dict[str, Any]:
     return params
 
 
-def build_multimodal_parameters() -> Dict[str, Any]:
-    """Prompt for multimodal story parameters."""
-    params: Dict[str, Any] = {}
-    params["num_story_nodes"] = ask_int("Story nodes", 8, 3, 20)
-    params["num_mini_games"] = ask_int("Embedded mini-games", 2, 0, 5)
-    params["num_mini_quizzes"] = ask_int("Embedded mini-quizzes", 2, 0, 5)
-    params["genre"] = ask("Genre", "adventure")
-    return params
-
-
 # ─── Menu actions ────────────────────────────────────────────────────────────
 def action_health(client: APIClient) -> None:
     print_header("Health Check")
@@ -261,11 +243,6 @@ def action_health(client: APIClient) -> None:
 def action_api_info(client: APIClient) -> None:
     print_header("API Info")
     client.get("/api")
-
-
-def action_teams(client: APIClient) -> None:
-    print_header("Available Teams")
-    client.get("/teams")
 
 
 def action_tasks(client: APIClient) -> None:
@@ -281,9 +258,6 @@ def action_content_types(client: APIClient) -> None:
 def action_generate(client: APIClient) -> None:
     print_header("Generate Content  (POST /generate)")
 
-    team = choose_team()
-    if not team:
-        return
     ct = choose_content_type()
     if ct is None:
         return
@@ -291,7 +265,6 @@ def action_generate(client: APIClient) -> None:
     params = build_parameters(ct)
 
     body = {
-        "team": team,
         "content_type": ct,
         "topic": topic,
         "parameters": params,
@@ -302,9 +275,6 @@ def action_generate(client: APIClient) -> None:
 def action_generate_with_validation(client: APIClient) -> None:
     print_header("Generate with Validation  (POST /generate/with-validation)")
 
-    team = choose_team()
-    if not team:
-        return
     ct = choose_content_type()
     if ct is None:
         return
@@ -312,28 +282,11 @@ def action_generate_with_validation(client: APIClient) -> None:
     params = build_parameters(ct)
 
     body = {
-        "team": team,
         "content_type": ct,
         "topic": topic,
         "parameters": params,
     }
     client.post("/generate/with-validation", body)
-
-
-def action_multimodal_story(client: APIClient) -> None:
-    print_header("Multimodal Story  (POST /generate/multimodal-story)")
-    print(_c("  Note: only available for static team", _DIM))
-
-    topic = ask("Topic", "Ocean Adventure")
-    params = build_multimodal_parameters()
-
-    body = {
-        "team": "static",
-        "content_type": "branched_narrative",
-        "topic": topic,
-        "parameters": params,
-    }
-    client.post("/generate/multimodal-story", body)
 
 
 def action_custom_request(client: APIClient) -> None:
@@ -362,12 +315,10 @@ def action_custom_request(client: APIClient) -> None:
 MENU_ITEMS = [
     ("Health Check",                   "GET  /health",                   action_health),
     ("API Info",                       "GET  /api",                      action_api_info),
-    ("List Teams",                     "GET  /teams",                    action_teams),
     ("List Tasks",                     "GET  /tasks",                    action_tasks),
     ("List Content Types",             "GET  /content-types",            action_content_types),
     ("Generate Content",               "POST /generate",                 action_generate),
     ("Generate with Validation",       "POST /generate/with-validation", action_generate_with_validation),
-    ("Generate Multimodal Story",      "POST /generate/multimodal-story",action_multimodal_story),
     ("Custom Request",                 "any  path",                      action_custom_request),
 ]
 

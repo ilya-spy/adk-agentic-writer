@@ -132,10 +132,8 @@ def configure_logging(
     for ns, lvl in _namespace_levels.items():
         logging.getLogger(ns).setLevel(lvl)
 
-    # If LLM I/O logging is on, make sure the wrapper logger can emit DEBUG
     if LOG_LLM_IO:
-        logging.getLogger("adk_agentic_writer.agents.gemini.wrapper").setLevel(logging.DEBUG)
-        logging.getLogger("adk_agentic_writer.agents.gemini.writer").setLevel(logging.DEBUG)
+        logging.getLogger("adk_agentic_writer.agents").setLevel(logging.DEBUG)
 
 
 # ---------------------------------------------------------------------------
