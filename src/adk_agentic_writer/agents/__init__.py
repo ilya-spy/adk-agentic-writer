@@ -1,71 +1,14 @@
-"""Agent modules for the ADK Agentic Writer system."""
+"""Agent modules for the ADK Agentic Writer system.
 
-# Base agent classes
-from .base_agent import BaseAgent
-from .stateful_agent import StatefulAgent
-from .content_agent import ContentWriterAgent
+Three pure ADK agents: Coordinator, WriterAgent, ValidatorAgent.
+"""
 
-# Utilities (from utils)
-from ..utils.text_provider import TextProvider, TemplateTextProvider, GeminiTextProvider
-from ..utils.content_registry import (
-    CONTENT_REGISTRY,
-    ContentTypeConfig,
-    ContentRegistry,
-)
-
-# Validator
-from .static.validator import ContentValidator
-
-# Static agents (primary implementation)
-from .static import (
-    CoordinatorAgent,
-    WriterAgent,
-    DesignerAgent,
-    StaticQuizWriterAgent,
-    StoryWriterAgent,
-    GameDesignerAgent,
-    SimulationDesignerAgent,
-)
-
-# Gemini agents (stubs - ADK integration pending)
-from .gemini import (
-    GeminiCoordinatorAgent,
-    GeminiWriterAgent,
-    GeminiDesignerAgent,
-    GeminiQuizWriterAgent,
-    GeminiStoryWriterAgent,
-    GeminiGameDesignerAgent,
-    GeminiSimulationDesignerAgent,
-)
+from .coordinator import Coordinator
+from .writer import WriterAgent
+from .validator import ValidatorAgent
 
 __all__ = [
-    # Base classes
-    "BaseAgent",
-    "StatefulAgent",
-    "ContentWriterAgent",
-    # Validator
-    "ContentValidator",
-    # Utilities
-    "TextProvider",
-    "TemplateTextProvider",
-    "GeminiTextProvider",
-    "CONTENT_REGISTRY",
-    "ContentTypeConfig",
-    "ContentRegistry",
-    # Static agents
-    "CoordinatorAgent",
+    "Coordinator",
     "WriterAgent",
-    "DesignerAgent",
-    "StaticQuizWriterAgent",
-    "StoryWriterAgent",
-    "GameDesignerAgent",
-    "SimulationDesignerAgent",
-    # Gemini agents (stubs)
-    "GeminiCoordinatorAgent",
-    "GeminiWriterAgent",
-    "GeminiDesignerAgent",
-    "GeminiQuizWriterAgent",
-    "GeminiStoryWriterAgent",
-    "GeminiGameDesignerAgent",
-    "GeminiSimulationDesignerAgent",
+    "ValidatorAgent",
 ]
