@@ -299,13 +299,7 @@
                 <a href="/showcase" class="card">
                     <div class="card-title">🎨 Interactive Showcase</div>
                     <div class="card-description">
-                        Generate content with real-time agent logs. Test all 4 content types with both Static and Gemini teams.
-                    </div>
-                </a>
-                <a href="/frontend" class="card">
-                    <div class="card-title">⚙️ Legacy Frontend</div>
-                    <div class="card-description">
-                        Original test interface with workflow pattern selection and API key input.
+                        Generate content with real-time agent logs. Test all content types with ADK-powered agents.
                     </div>
                 </a>
                 <a href="/docs" class="card" target="_blank">
@@ -324,13 +318,6 @@
                     <div class="endpoint" onclick="testEndpoint('GET', '/health', this)">
                         <span class="method get">GET</span>
                         <span class="endpoint-path">/health</span>
-                    </div>
-                    <div class="response-container"></div>
-                </div>
-                <div class="endpoint-wrapper">
-                    <div class="endpoint" onclick="testEndpoint('GET', '/teams', this)">
-                        <span class="method get">GET</span>
-                        <span class="endpoint-path">/teams</span>
                     </div>
                     <div class="response-container"></div>
                 </div>
@@ -366,8 +353,7 @@
                 statusDiv.innerHTML = `
                     <div class="status-text">✅ Server Online</div>
                     <div class="status-detail">
-                        Static Team: ${data.static_team ? '✓ Available' : '✗ Unavailable'} | 
-                        Gemini Team: ${data.gemini_team ? '✓ Available' : '✗ Unavailable'}
+                        Coordinator: ${data.coordinator ? '✓ Ready' : '✗ Unavailable'}
                     </div>
                 `;
             } catch (error) {
@@ -449,9 +435,6 @@
                     <div style="display: flex; gap: 10px;">
                         <a href="/showcase" style="display: inline-block; background: #667eea; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 13px;">
                             🎨 Showcase
-                        </a>
-                        <a href="/frontend" style="display: inline-block; background: #764ba2; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 13px;">
-                            ⚙️ Frontend
                         </a>
                     </div>
                 </div>

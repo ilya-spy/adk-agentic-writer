@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 # Text extraction
 # ---------------------------------------------------------------------------
 
+
 def extract_text(response: Any) -> str:
     """Extract text from an ADK runner response.
 
@@ -47,6 +48,7 @@ def extract_text(response: Any) -> str:
 # Code-fence stripping
 # ---------------------------------------------------------------------------
 
+
 def strip_code_fences(text: str) -> str:
     """Strip markdown code fences (```json ... ```)."""
     cleaned = text.strip()
@@ -63,6 +65,7 @@ def strip_code_fences(text: str) -> str:
 # JSON escape repair
 # ---------------------------------------------------------------------------
 
+
 def _fix_json_escapes(text: str) -> str:
     r"""Fix common LLM JSON escape issues (invalid \' etc.)."""
     text = text.replace("\\'", "'")
@@ -70,17 +73,80 @@ def _fix_json_escapes(text: str) -> str:
     return text
 
 
+def _repair_truncated_json(text: str) -> Optional[str]:
+    """Attempt to close a truncated JSON object/array.
+    Returns the repaired string, or None if repair seems impossible.
+    """
+    depth_stack: list[str] = []
+    in_string = False
+    escape_next = False
+    last_structural_pos = 0
+
+    for i, ch in enumerate(text):
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == "\\":
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch in ("{", "["):
+            depth_stack.append("}" if ch == "{" else "]")
+            last_structural_pos = i
+        elif ch in ("}", "]"):
+            if depth_stack:
+                depth_stack.pop()
+            last_structural_pos = i
+
+    if not depth_stack:
+        return None
+
+    # Cut back to the last cleanly-closed element
+    candidate = text
+    if in_string:
+        # Close the dangling string
+        candidate += '"'
+
+    # Remove trailing partial tokens (comma, colon, whitespace, partial key)
+    candidate = re.sub(r"[,:\s]+$", "", candidate)
+    # If we ended inside a string that we just closed, the above won't help
+    # much — try stripping the last incomplete key-value pair
+    candidate = re.sub(r',\s*"[^"]*"?\s*:?\s*"?[^"]*$', "", candidate)
+    candidate = re.sub(r"[,\s]+$", "", candidate)
+
+    # Append closers in reverse order
+    candidate += "".join(reversed(depth_stack))
+    return candidate
+
+
 # ---------------------------------------------------------------------------
 # Refusal detection
 # ---------------------------------------------------------------------------
 
 _REFUSAL_PATTERNS = (
-    "i cannot", "i can't", "i'm unable", "i am unable",
-    "i'm not able", "i am not able", "i apologize",
-    "i'm sorry", "i am sorry", "as an ai",
-    "not appropriate", "cannot generate", "can't generate",
-    "against my guidelines", "safety", "harmful", "offensive",
-    "sensitive topic", "not comfortable",
+    "i cannot",
+    "i can't",
+    "i'm unable",
+    "i am unable",
+    "i'm not able",
+    "i am not able",
+    "i apologize",
+    "i'm sorry",
+    "i am sorry",
+    "as an ai",
+    "not appropriate",
+    "cannot generate",
+    "can't generate",
+    "against my guidelines",
+    "safety",
+    "harmful",
+    "offensive",
+    "sensitive topic",
+    "not comfortable",
 )
 
 
@@ -99,6 +165,7 @@ def detect_refusal(text: str) -> Optional[str]:
 # JSON parsing (progressive fallback)
 # ---------------------------------------------------------------------------
 
+
 def parse_json(text: str, agent_name: str = "agent") -> Dict[str, Any]:
     """Parse JSON from LLM response with progressive fallbacks.
 
@@ -107,6 +174,7 @@ def parse_json(text: str, agent_name: str = "agent") -> Dict[str, Any]:
     3. Strict parse
     4. Fix escape sequences and retry
     5. Allow control characters (strict=False)
+    6. Repair truncated JSON (LLM hit token limit)
     """
     refusal = detect_refusal(text)
     if refusal:
@@ -115,11 +183,13 @@ def parse_json(text: str, agent_name: str = "agent") -> Dict[str, Any]:
 
     cleaned = strip_code_fences(text)
 
+    # --- 1. Strict parse ---
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
         pass
 
+    # --- 2. Escape repair ---
     fixed = _fix_json_escapes(cleaned)
     try:
         result = json.loads(fixed)
@@ -128,18 +198,37 @@ def parse_json(text: str, agent_name: str = "agent") -> Dict[str, Any]:
     except json.JSONDecodeError:
         pass
 
+    # --- 3. Lenient parse (allow control chars) ---
     try:
         result = json.loads(fixed, strict=False)
         logger.warning("[%s] JSON required strict=False", agent_name)
         return result
-    except json.JSONDecodeError as exc:
-        logger.error(
-            "[%s] JSON parse failed: %s\nRaw (first 500): %s",
-            agent_name, exc, text[:500],
-        )
-        raise ValueError(
-            f"Invalid JSON from {agent_name}: {exc}\nRaw: {text[:500]}"
-        ) from exc
+    except json.JSONDecodeError:
+        pass
+
+    # --- 4. Truncated JSON repair ---
+    repaired = _repair_truncated_json(fixed)
+    if repaired:
+        try:
+            result = json.loads(repaired, strict=False)
+            logger.warning(
+                "[%s] JSON was truncated – repaired by closing open structures",
+                agent_name,
+            )
+            return result
+        except json.JSONDecodeError:
+            pass
+
+    # --- 5. Give up ---
+    logger.error(
+        "[%s] JSON parse failed after all recovery attempts.\nRaw (first 500): %s",
+        agent_name,
+        text[:500],
+    )
+    raise ValueError(
+        f"Invalid JSON from {agent_name}. "
+        f"Response may be truncated (token limit). Raw: {text[:500]}"
+    )
 
 
 __all__ = [

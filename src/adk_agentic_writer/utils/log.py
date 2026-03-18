@@ -13,7 +13,7 @@ Environment knobs (all optional, sensible defaults):
     LOG_FORMAT         – "text" (human) or "json"         (default: text)
 
 Usage:
-    from adk_agentic_writer.utils.log_config import configure_logging
+    from adk_agentic_writer.utils.log import configure_logging
     configure_logging()                 # reads env vars
     configure_logging(log_level="DEBUG", log_llm_io=True)  # explicit
 """
@@ -131,6 +131,14 @@ def configure_logging(
     }
     for ns, lvl in _namespace_levels.items():
         logging.getLogger(ns).setLevel(lvl)
+
+    # Suppress false-positive "App name mismatch" from ADK runners.
+    # The heuristic fires because google.adk.agents lives under the venv
+    # inside the project root, making the ADK think "agents" is the app name.
+    _adk_runner_log = logging.getLogger("google_adk.google.adk.runners")
+    _adk_runner_log.addFilter(
+        lambda r: "App name mismatch" not in r.getMessage()
+    )
 
     if LOG_LLM_IO:
         logging.getLogger("adk_agentic_writer.agents").setLevel(logging.DEBUG)

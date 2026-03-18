@@ -1,7 +1,8 @@
-"""Minimal tests proving the new 3-agent system wiring works.
+"""Tests for the ADK Agentic Writer system.
 
 All tests run offline (no GOOGLE_API_KEY, no LLM calls).
-They verify: adk_utils, task resolution, prompt building, schema validation.
+Covers: response parsing, format registry, prompt building,
+schema validation, and workflow construction.
 """
 
 import json
@@ -9,13 +10,14 @@ import os
 import pytest
 
 # ---------------------------------------------------------------------------
-# 1. adk_utils — pure logic, no dependencies
+# 1. Response utilities (pure logic)
 # ---------------------------------------------------------------------------
-from adk_agentic_writer.agents.adk_utils import (
+from adk_agentic_writer.utils.response import (
     strip_code_fences,
     parse_json,
     detect_refusal,
     extract_text,
+    _repair_truncated_json,
 )
 
 
@@ -51,6 +53,45 @@ class TestParseJson:
         assert result["msg"] == "it's fine"
 
 
+class TestRepairTruncatedJson:
+    def test_truncated_object(self):
+        raw = '{"title": "Quiz", "questions": [{"q": "What?"'
+        repaired = _repair_truncated_json(raw)
+        assert repaired is not None
+        result = json.loads(repaired)
+        assert result["title"] == "Quiz"
+
+    def test_truncated_array_element(self):
+        raw = '{"items": [1, 2, 3'
+        repaired = _repair_truncated_json(raw)
+        assert repaired is not None
+        result = json.loads(repaired)
+        assert result["items"] == [1, 2, 3]
+
+    def test_truncated_mid_string(self):
+        raw = '{"name": "hello wor'
+        repaired = _repair_truncated_json(raw)
+        assert repaired is not None
+        result = json.loads(repaired)
+        assert "hello" in result["name"]
+
+    def test_complete_json_returns_none(self):
+        assert _repair_truncated_json('{"a": 1}') is None
+
+    def test_truncated_nested(self):
+        raw = '{"outer": {"inner": [1, 2'
+        repaired = _repair_truncated_json(raw)
+        assert repaired is not None
+        result = json.loads(repaired)
+        assert result["outer"]["inner"] == [1, 2]
+
+    def test_parse_json_uses_repair(self):
+        raw = '{"title": "Test", "items": [{"x": 1}, {"x": 2'
+        result = parse_json(raw, agent_name="test")
+        assert result["title"] == "Test"
+        assert len(result["items"]) >= 1
+
+
 class TestDetectRefusal:
     def test_json_not_refused(self):
         assert detect_refusal('{"valid": true}') is None
@@ -73,7 +114,60 @@ class TestExtractText:
 
 
 # ---------------------------------------------------------------------------
-# 2. Coordinator — task resolution (no LLM, no API key)
+# 2. Format registry
+# ---------------------------------------------------------------------------
+from adk_agentic_writer.formats import (
+    FORMAT_REGISTRY,
+    get_format,
+    list_formats,
+    QUIZ_FORMAT,
+    STORY_FORMAT,
+    GAME_FORMAT,
+    SIMULATION_FORMAT,
+)
+
+
+class TestFormatRegistry:
+    def test_four_base_formats(self):
+        fmts = list_formats()
+        names = {f.name for f in fmts}
+        assert names == {"quiz", "story", "game", "simulation"}
+
+    def test_lookup_by_name(self):
+        assert get_format("quiz") is QUIZ_FORMAT
+        assert get_format("story") is STORY_FORMAT
+        assert get_format("game") is GAME_FORMAT
+        assert get_format("simulation") is SIMULATION_FORMAT
+
+    def test_lookup_by_alias(self):
+        assert get_format("trivia") is QUIZ_FORMAT
+        assert get_format("narrative") is STORY_FORMAT
+        assert get_format("quest_game") is GAME_FORMAT
+        assert get_format("web_simulation") is SIMULATION_FORMAT
+
+    def test_unknown_returns_none(self):
+        assert get_format("nonexistent") is None
+
+    def test_format_has_prompts(self):
+        for fmt in list_formats():
+            assert fmt.writer_instruction, f"{fmt.name} missing writer_instruction"
+            assert fmt.writer_prompt, f"{fmt.name} missing writer_prompt"
+            assert fmt.reviewer_prompt, f"{fmt.name} missing reviewer_prompt"
+            assert fmt.refiner_prompt, f"{fmt.name} missing refiner_prompt"
+
+    def test_format_has_parameter_specs(self):
+        for fmt in list_formats():
+            assert len(fmt.parameter_specs) > 0, f"{fmt.name} missing parameter_specs"
+
+    def test_quiz_params(self):
+        assert QUIZ_FORMAT.default_params["num_questions"] == 5
+        names = [p.name for p in QUIZ_FORMAT.parameter_specs]
+        assert "num_questions" in names
+        assert "difficulty" in names
+
+
+# ---------------------------------------------------------------------------
+# 3. Task resolution
 # ---------------------------------------------------------------------------
 from adk_agentic_writer.tasks.content_tasks import (
     GENERATE_QUIZ,
@@ -81,46 +175,35 @@ from adk_agentic_writer.tasks.content_tasks import (
     GENERATE_GAME,
     GENERATE_SIMULATION,
 )
-from adk_agentic_writer.agents.coordinator import Coordinator, _PRIMARY_TASKS
+from adk_agentic_writer.agents.coordinator import Coordinator
 
 
 class TestTaskResolution:
-    """Test task resolution without instantiating Coordinator (avoids API key)."""
+    """Test task resolution without instantiating Coordinator."""
 
     def setup_method(self):
-        self.task_by_id = {t.task_id: t for t in _PRIMARY_TASKS}
+        tasks = [GENERATE_QUIZ, GENERATE_STORY, GENERATE_GAME, GENERATE_SIMULATION]
+        self.task_by_id = {t.task_id: t for t in tasks}
         self.type_to_task = {}
-        for t in _PRIMARY_TASKS:
+        for t in tasks:
             for ct in t.content_types:
                 self.type_to_task[ct] = t
 
     def test_resolve_by_task_id(self):
         assert self.task_by_id["generate_quiz"] is GENERATE_QUIZ
         assert self.task_by_id["generate_story"] is GENERATE_STORY
-        assert self.task_by_id["generate_game"] is GENERATE_GAME
-        assert self.task_by_id["generate_simulation"] is GENERATE_SIMULATION
 
     def test_resolve_by_content_type(self):
         assert self.type_to_task["quiz"] is GENERATE_QUIZ
         assert self.type_to_task["trivia"] is GENERATE_QUIZ
         assert self.type_to_task["story"] is GENERATE_STORY
-        assert self.type_to_task["quest_game"] is GENERATE_GAME
-        assert self.type_to_task["web_simulation"] is GENERATE_SIMULATION
 
     def test_all_primary_tasks_present(self):
-        assert len(_PRIMARY_TASKS) == 4
-        ids = {t.task_id for t in _PRIMARY_TASKS}
-        assert ids == {
-            "generate_quiz",
-            "generate_story",
-            "generate_game",
-            "generate_simulation",
-        }
+        ids = {t.task_id for t in [GENERATE_QUIZ, GENERATE_STORY, GENERATE_GAME, GENERATE_SIMULATION]}
+        assert ids == {"generate_quiz", "generate_story", "generate_game", "generate_simulation"}
 
     def test_effective_content_type_from_params(self):
-        ct = Coordinator._effective_content_type(
-            GENERATE_QUIZ, {"content_type": "trivia"}
-        )
+        ct = Coordinator._effective_content_type(GENERATE_QUIZ, {"content_type": "trivia"})
         assert ct == "trivia"
 
     def test_effective_content_type_from_task(self):
@@ -129,73 +212,44 @@ class TestTaskResolution:
 
     def test_effective_content_type_default(self):
         from adk_agentic_writer.models.agent_models import AgentTask, AgentRole
-        empty_task = AgentTask(
-            task_id="empty", agent_role=AgentRole.WRITER, prompt="x",
-            content_types=[],
-        )
-        ct = Coordinator._effective_content_type(empty_task, {})
+        empty = AgentTask(task_id="empty", agent_role=AgentRole.WRITER, prompt="x", content_types=[])
+        ct = Coordinator._effective_content_type(empty, {})
         assert ct == "quiz"
 
 
 # ---------------------------------------------------------------------------
-# 3. Prompt building — WriterAgent._build_prompt (no LLM, patched init)
+# 4. Prompt building from format specs
 # ---------------------------------------------------------------------------
-from adk_agentic_writer.agents.writer import WriterAgent
-
 
 class TestPromptBuilding:
-    """Test prompt construction without an API key by calling _build_prompt
-    on a partially-initialised WriterAgent (skip __init__ entirely)."""
-
-    def setup_method(self):
-        self.writer = object.__new__(WriterAgent)
-        self.writer._model_name = "test-model"
-        self.writer._agents = {}
-        self.writer._runners = {}
-
     def test_quiz_prompt_contains_topic(self):
-        prompt = self.writer._build_prompt("quiz", {
-            "topic": "Python",
-            "num_questions": 5,
-            "difficulty": "medium",
-            "num_options": 4,
-        })
+        prompt = QUIZ_FORMAT.writer_prompt.format(
+            topic="Python", num_questions=5, difficulty="medium", num_options=4,
+        )
         assert "Python" in prompt
-        assert "5" in prompt  # num_questions
+        assert "5" in prompt
 
     def test_quiz_prompt_has_schema(self):
-        prompt = self.writer._build_prompt("quiz", {
-            "topic": "Math",
-            "num_questions": 3,
-            "difficulty": "easy",
-            "num_options": 4,
-        })
-        assert "correct_answer" in prompt  # from schema description
-        assert "tier" in prompt
+        assert "correct_answer" in QUIZ_FORMAT.schema_description
+        assert "tier" in QUIZ_FORMAT.schema_description
 
     def test_story_prompt(self):
-        prompt = self.writer._build_prompt("story", {
-            "topic": "Dragons",
-            "num_nodes": 7,
-            "genre": "fantasy",
-        })
+        prompt = STORY_FORMAT.writer_prompt.format(
+            topic="Dragons", num_nodes=7, genre="fantasy",
+        )
         assert "Dragons" in prompt
         assert "fantasy" in prompt
 
-    def test_unknown_type_uses_fallback(self):
-        prompt = self.writer._build_prompt("unknown_type", {"topic": "X"})
-        assert "X" in prompt  # at minimum, topic is used
-
 
 # ---------------------------------------------------------------------------
-# 4. ValidatorAgent._schema_validate — static method, no LLM
+# 5. Schema validation (from reviewer module)
 # ---------------------------------------------------------------------------
-from adk_agentic_writer.agents.validator import ValidatorAgent
+from adk_agentic_writer.agents.reviewer import schema_validate
 
 
 class TestSchemaValidation:
     def test_empty_content(self):
-        result = ValidatorAgent._schema_validate({}, "quiz")
+        result = schema_validate({}, "quiz")
         assert result["valid"] is False
         assert any("empty" in e.lower() for e in result["errors"])
 
@@ -216,7 +270,7 @@ class TestSchemaValidation:
             ],
             "passing_score": 70,
         }
-        result = ValidatorAgent._schema_validate(quiz, "quiz")
+        result = schema_validate(quiz, "quiz")
         assert result["valid"] is True
         assert result["score"] == 100
 
@@ -236,7 +290,7 @@ class TestSchemaValidation:
             ],
             "passing_score": 70,
         }
-        result = ValidatorAgent._schema_validate(quiz, "quiz")
+        result = schema_validate(quiz, "quiz")
         assert result["valid"] is False
         assert any("out of bounds" in e for e in result["errors"])
 
@@ -249,10 +303,34 @@ class TestSchemaValidation:
             "nodes": {"node_1": {"node_id": "node_1", "content": "...", "branches": []}},
             "characters": [],
         }
-        result = ValidatorAgent._schema_validate(story, "story")
+        result = schema_validate(story, "story")
         assert result["valid"] is False
         assert any("start" in e.lower() for e in result["errors"])
 
     def test_unknown_type_still_works(self):
-        result = ValidatorAgent._schema_validate({"some": "data"}, "unknown")
+        result = schema_validate({"some": "data"}, "unknown")
         assert result["valid"] is True
+
+
+# ---------------------------------------------------------------------------
+# 6. Workflow construction (verifies factories return correct types)
+# ---------------------------------------------------------------------------
+
+class TestWorkflowConstruction:
+    def test_write_review_creates_sequential(self):
+        from adk_agentic_writer.workflows import create_write_review_pipeline
+        pipeline = create_write_review_pipeline(QUIZ_FORMAT)
+        assert pipeline.name == "WriteReview_quiz"
+        assert len(pipeline.sub_agents) == 2
+
+    def test_refinement_creates_sequential_with_loop(self):
+        from adk_agentic_writer.workflows import create_refinement_pipeline
+        pipeline = create_refinement_pipeline(STORY_FORMAT, max_iterations=2)
+        assert pipeline.name == "WriteAndRefine_story"
+        assert len(pipeline.sub_agents) == 2
+
+    def test_publish_creates_full_pipeline(self):
+        from adk_agentic_writer.workflows import create_publish_pipeline
+        pipeline = create_publish_pipeline(GAME_FORMAT)
+        assert pipeline.name == "PublishPipeline_game"
+        assert len(pipeline.sub_agents) == 3
