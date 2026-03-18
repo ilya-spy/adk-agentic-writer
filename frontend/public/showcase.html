@@ -5,1071 +5,470 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Content Showcase - ADK Agentic Writer</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
+            min-height: 100vh; padding: 20px;
         }
-
-        .controls {
-            max-width: 900px;
-            margin: 0 auto 20px;
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-        }
-
-        .controls h1 {
-            color: #667eea;
-            margin-bottom: 20px;
-        }
-
         .home-link {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: white;
-            padding: 10px 20px;
-            border-radius: 8px;
-            text-decoration: none;
-            color: #667eea;
-            font-weight: 600;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            transition: all 0.3s;
+            position: fixed; top: 20px; right: 20px; background: white;
+            padding: 10px 20px; border-radius: 8px; text-decoration: none;
+            color: #667eea; font-weight: 600; box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            z-index: 100;
         }
-
-        .home-link:hover {
-            background: #667eea;
-            color: white;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
+        .home-link:hover { background: #667eea; color: white; }
+        .panel {
+            max-width: 960px; margin: 0 auto 20px; background: white;
+            border-radius: 12px; padding: 20px; box-shadow: 0 8px 30px rgba(0,0,0,0.15);
         }
-
-        .form-group {
-            margin-bottom: 15px;
+        .panel h2 { color: #667eea; margin-bottom: 15px; font-size: 1.2rem; }
+        /* Format chips */
+        .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
+        .chip {
+            padding: 8px 16px; border-radius: 20px; border: 2px solid #667eea;
+            background: white; color: #667eea; cursor: pointer; font-size: 0.9rem;
+            transition: all 0.2s; user-select: none;
         }
-
-        .form-group label {
-            display: block;
-            font-weight: bold;
-            margin-bottom: 5px;
-            color: #2c3e50;
+        .chip.selected { background: #667eea; color: white; }
+        .chip:hover { box-shadow: 0 2px 8px rgba(102,126,234,0.3); }
+        /* Inputs */
+        .form-row { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+        .form-row > .form-group > label { display: block; font-size: 0.85rem; color: #444; font-weight: 500; margin-bottom: 4px; }
+        .form-group { flex: 1; min-width: 200px; }
+        input, textarea, select {
+            width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;
+            font-size: 0.95rem; font-family: inherit;
         }
-
-        .form-group select,
-        .form-group input {
-            width: 100%;
-            padding: 10px;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            font-size: 16px;
+        textarea { min-height: 80px; resize: vertical; }
+        input:focus, textarea:focus { outline: none; border-color: #667eea; }
+        /* Buttons */
+        .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px; }
+        .btn {
+            padding: 10px 24px; border: none; border-radius: 8px; cursor: pointer;
+            font-size: 0.95rem; font-weight: 600; transition: all 0.2s;
         }
-
-        .form-group select:focus,
-        .form-group input:focus {
-            outline: none;
-            border-color: #667eea;
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-ideate { background: #f0ad4e; color: white; }
+        .btn-generate { background: #667eea; color: white; }
+        .btn-review { background: #5bc0de; color: white; }
+        .btn-refine { background: #5cb85c; color: white; }
+        .btn-publish { background: #764ba2; color: white; }
+        .btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+        /* Parameters */
+        .params-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+        /* Log / stages */
+        .log-panel {
+            max-height: 300px; overflow-y: auto; background: #1a1a2e; color: #0f0;
+            border-radius: 8px; padding: 15px; font-family: 'Consolas', monospace;
+            font-size: 0.85rem; line-height: 1.5;
         }
-
-        button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 12px 30px;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: transform 0.2s;
+        .log-entry { margin-bottom: 4px; }
+        .log-time { color: #888; }
+        .log-agent { color: #f0ad4e; }
+        .log-stage { color: #5bc0de; }
+        .log-error { color: #ff6b6b; }
+        .log-success { color: #5cb85c; }
+        /* Result */
+        .result-content {
+            background: #f8f9fa; border-radius: 8px; padding: 15px; margin-top: 10px;
+            max-height: 500px; overflow-y: auto;
         }
-
-        button:hover {
-            transform: translateY(-2px);
+        .result-content pre {
+            white-space: pre-wrap; word-break: break-word; font-size: 0.85rem;
         }
-
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
+        /* Validation badge */
+        .badge {
+            display: inline-block; padding: 4px 12px; border-radius: 12px;
+            font-size: 0.8rem; font-weight: 600; margin-right: 8px;
         }
-
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 15px;
-            padding: 30px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        .badge-success { background: #d4edda; color: #155724; }
+        .badge-warning { background: #fff3cd; color: #856404; }
+        .badge-error { background: #f8d7da; color: #721c24; }
+        /* Review panel */
+        .review-summary { margin: 10px 0; padding: 12px; border-radius: 8px; background: #f8f9fa; }
+        .review-score { font-size: 1.5rem; font-weight: 700; }
+        /* External content */
+        .external-input { display: none; }
+        .external-input.visible { display: block; }
+        .toggle-row { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+        .toggle-label { font-size: 0.85rem; color: #444; font-weight: 500; }
+        /* Tabs */
+        .tabs { display: flex; gap: 4px; margin-bottom: 10px; }
+        .tab {
+            padding: 8px 16px; border: none; border-radius: 8px 8px 0 0;
+            cursor: pointer; background: #e9ecef; font-size: 0.85rem;
         }
-
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #667eea;
-            font-size: 18px;
+        .tab.active { background: #f8f9fa; font-weight: 600; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        /* Spinner */
+        .spinner {
+            display: inline-block; width: 16px; height: 16px;
+            border: 2px solid rgba(255,255,255,0.3); border-top-color: white;
+            border-radius: 50%; animation: spin 0.6s linear infinite;
+            margin-right: 6px; vertical-align: middle;
         }
-
-        .error {
-            background: #f8d7da;
-            border: 2px solid #f5c6cb;
-            color: #721c24;
-            padding: 20px;
-            border-radius: 8px;
-            margin: 20px 0;
-        }
-
-        .logs-container {
-            background: #1e1e1e;
-            border-radius: 10px;
-            padding: 20px;
-            margin: 20px 0;
-            max-height: 400px;
-            overflow-y: auto;
-            font-family: 'Consolas', 'Monaco', monospace;
-            font-size: 13px;
-        }
-
-        .log-entry {
-            padding: 8px 12px;
-            margin: 4px 0;
-            border-left: 3px solid #667eea;
-            background: rgba(102, 126, 234, 0.1);
-            border-radius: 4px;
-            animation: slideIn 0.3s ease-out;
-        }
-
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateX(-10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-
-        .log-timestamp {
-            color: #888;
-            font-size: 11px;
-            margin-right: 8px;
-        }
-
-        .log-agent {
-            color: #667eea;
-            font-weight: bold;
-            margin-right: 8px;
-        }
-
-        .log-message {
-            color: #e0e0e0;
-        }
-
-        .log-success {
-            border-left-color: #28a745;
-            background: rgba(40, 167, 69, 0.1);
-        }
-
-        .log-error {
-            border-left-color: #dc3545;
-            background: rgba(220, 53, 69, 0.1);
-        }
-
-        .log-warning {
-            border-left-color: #f59e0b;
-            background: rgba(245, 158, 11, 0.15);
-        }
-
-        .log-info {
-            border-left-color: #17a2b8;
-            background: rgba(23, 162, 184, 0.1);
-        }
-
-        h1 {
-            color: #667eea;
-            border-bottom: 3px solid #667eea;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
-            font-size: 24px;
-        }
-
-        h2 {
-            color: #667eea;
-            font-size: 18px;
-            margin: 20px 0 10px;
-        }
-
-        .card {
-            background: #f8f9fa;
-            border-left: 3px solid #667eea;
-            padding: 15px;
-            margin: 10px 0;
-            border-radius: 6px;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-        }
-
-        .question {
-            font-weight: 600;
-            color: #2c3e50;
-            margin-bottom: 8px;
-            font-size: 15px;
-        }
-
-        .option {
-            padding: 8px 12px;
-            margin: 4px 0;
-            background: white;
-            border-radius: 4px;
-            border: 1px solid #e0e0e0;
-            font-size: 14px;
-        }
-
-        .correct {
-            background: #d4edda !important;
-            border-color: #28a745 !important;
-            font-weight: 600;
-        }
-
-        .summary {
-            background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
-            padding: 15px;
-            border-radius: 8px;
-            margin: 15px 0;
-            border: 2px solid #667eea;
-        }
-
-        .summary-item {
-            display: inline-block;
-            margin-right: 20px;
-            font-size: 14px;
-        }
-
-        .summary-label {
-            font-weight: bold;
-            color: #667eea;
-        }
-
-        .node {
-            background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
-            padding: 20px;
-            margin: 15px 0;
-            border-radius: 10px;
-            border: 2px solid #667eea;
-        }
-
-        .branches {
-            margin-top: 15px;
-        }
-
-        .branch {
-            display: inline-block;
-            padding: 8px 16px;
-            margin: 5px;
-            background: #667eea;
-            color: white;
-            border-radius: 20px;
-            font-size: 14px;
-        }
-
-        .meta {
-            color: #6c757d;
-            font-size: 0.9em;
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #dee2e6;
-        }
-
-        .meta strong {
-            color: #2c3e50;
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
-    <a href="/" class="home-link">🏠 Home</a>
-    <div class="controls">
-        <h1>📺 Content Showcase</h1>
-        <div class="form-group">
-            <label for="team">Team:</label>
-            <select id="team">
-                <option value="static">Static Team (Fast, Template-based)</option>
-                <option value="gemini">Gemini Team (AI-Powered via ADK)</option>
-            </select>
+    <a href="/" class="home-link">Home</a>
+
+    <!-- Controls Panel -->
+    <div class="panel">
+        <h2>Content Formats</h2>
+        <div class="chips" id="formatChips">Loading...</div>
+
+        <div class="form-row">
+            <div class="form-group" style="flex:1.5">
+                <label>Prompt</label>
+                <textarea id="promptInput" placeholder="Describe what you want to create..."></textarea>
+            </div>
+            <div class="form-group" style="flex:1">
+                <label>Topic (shortcut)</label>
+                <input id="topicInput" placeholder="e.g. Python Programming">
+                <div style="margin-top:8px;display:flex;align-items:center;gap:6px;cursor:pointer" onclick="document.getElementById('externalToggle').click()">
+                    <input type="checkbox" id="externalToggle" style="width:auto;margin:0" onclick="event.stopPropagation()">
+                    <span style="font-size:0.85rem;color:#444;font-weight:500">External content (review/refine)</span>
+                </div>
+            </div>
         </div>
-        <div class="form-group">
-            <label for="contentType">Content Type:</label>
-            <select id="contentType">
-                <option value="">Loading...</option>
-            </select>
+
+        <div id="paramsPanel" class="hidden">
+            <label style="font-size:0.85rem;color:#555;margin-bottom:6px;display:block">Format Parameters</label>
+            <div class="params-grid" id="paramsGrid"></div>
         </div>
-        <div class="form-group">
-            <label for="topic">Topic:</label>
-            <input type="text" id="topic" value="Python Programming" placeholder="Enter a topic...">
+
+        <div class="external-input" id="externalSection">
+            <label style="font-size:0.85rem;color:#555">Paste content JSON</label>
+            <textarea id="externalContent" placeholder='{"title": "...", "questions": [...]}' style="min-height:120px;font-family:Consolas,monospace;font-size:0.8rem"></textarea>
         </div>
-        <div class="form-group" id="blockCountGroup">
-            <label for="blockCount">Number of Blocks:</label>
-            <input type="number" id="blockCount" value="5" min="1" max="20">
-            <small id="blockCountHint" style="color: #666; font-size: 12px; display: block; margin-top: 4px;">
-                Questions for Quiz, Nodes for Story/Game, Variables based on complexity for Simulation
-            </small>
+
+        <div class="actions">
+            <button class="btn btn-ideate" onclick="runAction('ideate')">Ideate</button>
+            <button class="btn btn-generate" onclick="runAction('generate')">Generate</button>
+            <button class="btn btn-review" onclick="runAction('review')">Review</button>
+            <button class="btn btn-refine" onclick="runAction('refine')">Refine</button>
+            <button class="btn btn-publish" onclick="runAction('publish')">Publish</button>
         </div>
-        <div class="form-group" id="difficultyGroup" style="display: none;">
-            <label for="difficulty">Difficulty:</label>
-            <select id="difficulty">
-                <option value="easy">Easy</option>
-                <option value="medium" selected>Medium</option>
-                <option value="hard">Hard</option>
-            </select>
-            <small style="color: #666; font-size: 12px; display: block; margin-top: 4px;">
-                Questions are split into 3 tiers within this level (low/mid/high = 1/2/3 pts)
-            </small>
-        </div>
-        <div class="form-group" id="numOptionsGroup" style="display: none;">
-            <label for="numOptions">Answer Options per Question:</label>
-            <select id="numOptions">
-                <option value="3">3 options</option>
-                <option value="4" selected>4 options</option>
-                <option value="5">5 options</option>
-                <option value="6">6 options</option>
-            </select>
-        </div>
-        <div class="form-group" id="complexityGroup" style="display: none;">
-            <label for="complexity">Complexity:</label>
-            <select id="complexity">
-                <option value="simple">Simple (2 variables)</option>
-                <option value="medium" selected>Medium (3 variables)</option>
-                <option value="complex">Complex (4 variables)</option>
-            </select>
-        </div>
-        <button onclick="generateContent()" id="generateBtn">Generate & Display</button>
-        <button onclick="generateContent(true)" id="validateBtn" style="background: linear-gradient(135deg, #059669 0%, #047857 100%); margin-left: 10px;">Generate & Validate</button>
     </div>
 
-    <div id="output"></div>
+    <!-- Log Panel -->
+    <div class="panel">
+        <h2>Agent Activity</h2>
+        <div class="log-panel" id="logPanel">
+            <div class="log-entry"><span class="log-time">--:--:--</span> Ready. Select a format and enter a prompt.</div>
+        </div>
+    </div>
 
-    <script>
-        const API_BASE = window.location.origin;
-        let logs = [];
+    <!-- Results Panel -->
+    <div class="panel" id="resultPanel" class="hidden">
+        <h2>Result</h2>
+        <div class="tabs" id="resultTabs"></div>
+        <div id="resultBody"></div>
+    </div>
 
-        // Content type category mappings (single source of truth)
-        const CONTENT_CATEGORIES = {
-            quiz: ['quiz', 'trivia', 'test'],
-            story: ['story', 'narrative', 'branched_narrative', 'adventure'],
-            game: ['game', 'quest_game', 'quest', 'rpg'],
-            simulation: ['simulation', 'web_simulation', 'interactive', 'simulator']
-        };
+<script>
+const API_BASE = window.location.origin;
+let formats = [];
+let selectedFormats = new Set();
+let lastContent = null;
+let lastReview = null;
 
-        // Get category for a content type
-        function getContentCategory(contentType) {
-            for (const [category, types] of Object.entries(CONTENT_CATEGORIES)) {
-                if (types.includes(contentType)) return category;
-            }
-            return 'unknown';
-        }
+// --- Init ---
+async function init() {
+    try {
+        const resp = await fetch(`${API_BASE}/content-types`);
+        const data = await resp.json();
+        formats = data.content_types || [];
+        renderChips();
+    } catch (e) {
+        log('error', 'Failed to load content types: ' + e.message);
+    }
+}
 
-        // Fetch content types from API (grouped by task)
-        async function loadContentTypes() {
-            const select = document.getElementById('contentType');
-            try {
-                const response = await fetch(`${API_BASE}/content-types`);
-                const data = await response.json();
-                select.innerHTML = '';
-                
-                // Group by task_id for optgroups
-                const grouped = data.grouped || {};
-                for (const [taskId, types] of Object.entries(grouped)) {
-                    const group = document.createElement('optgroup');
-                    group.label = taskId.replace('generate_', '').replace('_', ' ').toUpperCase();
-                    types.forEach(ct => {
-                        const option = document.createElement('option');
-                        option.value = ct;
-                        option.textContent = ct.replace('_', ' ').charAt(0).toUpperCase() + ct.replace('_', ' ').slice(1);
-                        group.appendChild(option);
-                    });
-                    select.appendChild(group);
-                }
-                // Trigger UI update for initial content type
-                select.dispatchEvent(new Event('change'));
-                generateContent();
-            } catch (error) {
-                console.error('Failed to load content types:', error);
-                select.innerHTML = '<option value="quiz">Quiz</option>';
-            }
-        }
-        loadContentTypes();
+function renderChips() {
+    const container = document.getElementById('formatChips');
+    container.innerHTML = '';
+    formats.forEach(fmt => {
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+        chip.textContent = fmt.label;
+        chip.dataset.value = fmt.value;
+        chip.onclick = () => toggleChip(chip, fmt);
+        container.appendChild(chip);
+    });
+}
 
-        // Update UI hints based on content type
-        document.getElementById('contentType').addEventListener('change', function() {
-            const type = this.value;
-            const category = getContentCategory(type);
-            const blockCountGroup = document.getElementById('blockCountGroup');
-            const complexityGroup = document.getElementById('complexityGroup');
-            const numOptionsGroup = document.getElementById('numOptionsGroup');
-            const blockCountInput = document.getElementById('blockCount');
-            const blockCountHint = document.getElementById('blockCountHint');
+function toggleChip(chip, fmt) {
+    if (selectedFormats.has(fmt.value)) {
+        selectedFormats.delete(fmt.value);
+        chip.classList.remove('selected');
+    } else {
+        selectedFormats.add(fmt.value);
+        chip.classList.add('selected');
+    }
+    updateParams();
+}
 
-            const difficultyGroup = document.getElementById('difficultyGroup');
+function updateParams() {
+    const grid = document.getElementById('paramsGrid');
+    const panel = document.getElementById('paramsPanel');
+    grid.innerHTML = '';
+    const sel = [...selectedFormats];
+    if (sel.length === 0) { panel.classList.add('hidden'); return; }
+    const fmt = formats.find(f => f.value === sel[0]);
+    if (!fmt || !fmt.parameters || fmt.parameters.length === 0) { panel.classList.add('hidden'); return; }
+    panel.classList.remove('hidden');
+    fmt.parameters.forEach(p => {
+        const div = document.createElement('div');
+        div.innerHTML = `<label>${p.description || p.name}</label>
+            <input id="param_${p.name}" value="${p.default}" placeholder="${p.name}">`;
+        grid.appendChild(div);
+    });
+}
 
-            // Reset visibility
-            numOptionsGroup.style.display = 'none';
-            difficultyGroup.style.display = 'none';
-            complexityGroup.style.display = 'none';
-            blockCountGroup.style.display = 'block';
+// --- External toggle ---
+document.getElementById('externalToggle').addEventListener('change', function() {
+    document.getElementById('externalSection').classList.toggle('visible', this.checked);
+});
 
-            if (category === 'simulation') {
-                blockCountGroup.style.display = 'none';
-                complexityGroup.style.display = 'block';
-            } else if (category === 'quiz') {
-                blockCountInput.value = 5;
-                blockCountInput.min = 3;
-                blockCountHint.textContent = 'Number of quiz questions (min 3 for low/mid/high tiers)';
-                difficultyGroup.style.display = 'block';
-                numOptionsGroup.style.display = 'block';
-            } else if (category === 'story') {
-                blockCountInput.value = 7;
-                blockCountHint.textContent = 'Number of story nodes/scenes';
-            } else if (category === 'game') {
-                blockCountInput.value = 5;
-                blockCountHint.textContent = 'Number of game nodes/quests';
+// --- Logging ---
+function log(type, msg) {
+    const panel = document.getElementById('logPanel');
+    const now = new Date().toLocaleTimeString();
+    const cls = type === 'error' ? 'log-error' : type === 'success' ? 'log-success' :
+                type === 'agent' ? 'log-agent' : type === 'stage' ? 'log-stage' : '';
+    panel.innerHTML += `<div class="log-entry"><span class="log-time">${now}</span> <span class="${cls}">${msg}</span></div>`;
+    panel.scrollTop = panel.scrollHeight;
+}
+
+function clearLog() {
+    document.getElementById('logPanel').innerHTML = '';
+}
+
+// --- Build request ---
+function buildRequest() {
+    const prompt = document.getElementById('promptInput').value;
+    const topic = document.getElementById('topicInput').value;
+    const types = [...selectedFormats];
+    const params = {};
+
+    // Collect parameter inputs
+    const fmt = types.length > 0 ? formats.find(f => f.value === types[0]) : null;
+    if (fmt && fmt.parameters) {
+        fmt.parameters.forEach(p => {
+            const el = document.getElementById(`param_${p.name}`);
+            if (el) {
+                let val = el.value;
+                if (p.type === 'int') val = parseInt(val) || p.default;
+                else if (p.type === 'float') val = parseFloat(val) || p.default;
+                params[p.name] = val;
             }
         });
+    }
 
-        // Build parameters based on content type
-        function buildParameters(contentType) {
-            const blockCount = parseInt(document.getElementById('blockCount').value) || 5;
-            const complexity = document.getElementById('complexity').value;
-            const numOptions = parseInt(document.getElementById('numOptions').value) || 4;
-            const difficulty = document.getElementById('difficulty').value;
-            const category = getContentCategory(contentType);
+    let content = {};
+    if (document.getElementById('externalToggle').checked) {
+        try { content = JSON.parse(document.getElementById('externalContent').value || '{}'); }
+        catch (e) { log('error', 'Invalid JSON in external content'); }
+    } else if (lastContent) {
+        content = lastContent;
+    }
 
-            if (category === 'quiz') {
-                return { num_questions: Math.max(blockCount, 3), num_options: numOptions, difficulty: difficulty };
-            } else if (category === 'story' || category === 'game') {
-                return { num_nodes: blockCount };
-            } else if (category === 'simulation') {
-                return { complexity: complexity };
-            } else {
-                return { num_blocks: blockCount };
-            }
-        }
+    return {
+        prompt, topic,
+        content_types: types,
+        content_type: types[0] || '',
+        content,
+        parameters: params,
+    };
+}
 
-        function addLog(agent, message, type = 'info') {
-            const timestamp = new Date().toLocaleTimeString();
-            logs.push({ timestamp, agent, message, type });
-            updateLogsDisplay();
-        }
+// --- Run actions ---
+async function runAction(action) {
+    const btns = document.querySelectorAll('.btn');
+    btns.forEach(b => b.disabled = true);
 
-        function updateLogsDisplay() {
-            const logsContainer = document.getElementById('logs');
-            if (!logsContainer) return;
+    clearLog();
+    log('agent', `[Coordinator] Starting ${action} action...`);
 
-            logsContainer.innerHTML = logs.map(log => `
-                <div class="log-entry log-${log.type}">
-                    <span class="log-timestamp">${log.timestamp}</span>
-                    <span class="log-agent">[${log.agent}]</span>
-                    <span class="log-message">${log.message}</span>
-                </div>
-            `).join('');
-            
-            // Auto-scroll to bottom
-            logsContainer.scrollTop = logsContainer.scrollHeight;
-        }
+    const req = buildRequest();
+    if (action === 'review' && req.content_type) {
+        log('stage', `[Review] Reviewing ${req.content_type} content`);
+    }
+    if (action === 'refine' && lastReview) {
+        req.parameters.review_result = lastReview;
+        log('stage', `[Refine] Using previous review feedback`);
+    }
 
-        async function generateContent(withValidation = false) {
-            const team = document.getElementById('team').value;
-            const contentType = document.getElementById('contentType').value;
-            const topic = document.getElementById('topic').value;
-            const output = document.getElementById('output');
-            const genBtn = document.getElementById('generateBtn');
-            const valBtn = document.getElementById('validateBtn');
+    const endpoint = `${API_BASE}/${action}`;
+    log('stage', `[API] POST ${endpoint}`);
 
-            const mode = withValidation ? 'Generate & Validate' : 'Generate';
-            const endpoint = withValidation ? '/generate/with-validation' : '/generate';
+    try {
+        const resp = await fetch(endpoint, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(req),
+        });
+        const data = await resp.json();
 
-            // Reset logs
-            logs = [];
+        if (data.status === 'error') {
+            log('error', `[Error] ${data.content?.error || 'Unknown error'}`);
+        } else {
+            log('success', `[${action.toUpperCase()}] Completed successfully`);
 
-            // Show loading with logs
-            output.innerHTML = `
-                <div class="container">
-                    <h2>🔄 ${mode} Process</h2>
-                    <div class="logs-container" id="logs"></div>
-                    <div class="loading">⏳ ${withValidation ? 'Generating & validating' : 'Generating'} content...</div>
-                </div>
-            `;
-            genBtn.disabled = true;
-            valBtn.disabled = true;
-
-            try {
-                // Simulate agent logs
-                addLog('System', `Starting ${team} team`, 'info');
-                addLog('Coordinator', `Received request: ${contentType} about "${topic}"`, 'info');
-                if (withValidation) {
-                    addLog('Coordinator', `Using validation workflow`, 'info');
-                }
-                
-                await new Promise(resolve => setTimeout(resolve, 300));
-                addLog('Coordinator', `Routing to ${contentType} agent`, 'info');
-                
-                await new Promise(resolve => setTimeout(resolve, 200));
-                addLog('Agent', `Initializing ${contentType} generation`, 'info');
-
-                // Generate content with dynamic parameters
-                const params = buildParameters(contentType);
-                addLog('Agent', `Using parameters: ${JSON.stringify(params)}`, 'info');
-                
-                const startTime = Date.now();
-                const response = await fetch(`${API_BASE}${endpoint}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        team: team,
-                        content_type: contentType,
-                        topic: topic,
-                        parameters: params
-                    })
+            if (data.stages && data.stages.length > 0) {
+                data.stages.forEach(s => {
+                    log('stage', `[${s.stage}] Done`);
                 });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const data = await response.json();
-                console.log('API Response:', data);
-                const duration = Date.now() - startTime;
-
-                // Check for API-level error (200 OK but status=error)
-                if (data.status === 'error') {
-                    let errMsg = data.content?.error || 'Unknown error';
-                    const isRefusal = errMsg.includes('LLM refused to generate content:');
-                    if (isRefusal) {
-                        errMsg = errMsg.replace(/.*LLM refused to generate content:\s*/, '');
-                    } else if (errMsg.includes('Invalid JSON from')) {
-                        const rawMatch = errMsg.match(/Raw:\s*(.*)/s);
-                        if (rawMatch) errMsg = rawMatch[1];
-                    }
-                    const label = isRefusal ? 'Content Declined' : 'Generation Failed';
-                    addLog('Agent', `${label}: ${errMsg}`, 'error');
-                    addLog('Coordinator', `Workflow failed after ${duration}ms`, 'error');
-                    const loadingEl = output.querySelector('.loading');
-                    if (loadingEl) loadingEl.remove();
-                    return;
-                }
-
-                // Show workflow stage logs if present
-                const wfLog = data.content && data.content._workflow_log;
-                if (Array.isArray(wfLog)) {
-                    wfLog.forEach(label => addLog('Workflow', `Stage: ${label}`, 'info'));
-                }
-
-                // Extract content -- with-validation wraps it deeper
-                let content;
-                let validationResult = null;
-                if (withValidation && data.content) {
-                    content = data.content.content;
-                    // Build structured validation object from flat fields
-                    validationResult = {
-                        status: data.content.status || 'validated',
-                        validation_result: data.content.validation_result || '',
-                        warnings: data.content.warnings || [],
-                        content_type: data.content_type || contentType,
-                    };
-                    const valStatus = validationResult.status;
-                    const warnCount = validationResult.warnings.length;
-                    if (warnCount > 0) {
-                        addLog('Validator', `Validation complete with ${warnCount} warning(s)`, 'warning');
-                        validationResult.warnings.forEach(w => addLog('Validator', w, 'warning'));
-                    } else {
-                        addLog('Validator', `Validation passed`, 'success');
-                    }
-                    if (validationResult.validation_result) {
-                        addLog('Validator', validationResult.validation_result, 'info');
-                    }
-                } else if (data.content && data.content.content && data.content.content.original_content) {
-                    content = data.content.content.original_content;
-                } else if (data.content && data.content.content) {
-                    content = data.content.content;
-                } else if (data.content) {
-                    content = data.content;
-                } else {
-                    content = data;
-                }
-                
-                console.log('Extracted content:', content);
-
-                // Check for empty/insufficient content
-                const contentWarning = checkContentQuality(contentType, content);
-
-                if (contentWarning) {
-                    addLog('Agent', `Generation completed with issues: ${contentWarning}`, 'warning');
-                } else {
-                    addLog('Agent', `Generated ${contentType} successfully`, 'success');
-                }
-                addLog('Coordinator', `Workflow completed in ${duration}ms`, contentWarning ? 'warning' : 'success');
-                addLog('System', `Ready to display`, 'success');
-
-                await new Promise(resolve => setTimeout(resolve, 500));
-
-                // Render content + optional validation panel
-                output.innerHTML = renderContent(contentType, content, topic, team, data, validationResult);
-                updateLogsDisplay();
-                
-                // If it's a story, render the first node
-                if (getContentCategory(contentType) === 'story') {
-                    window.storyPath = [];
-                    renderStoryNode(window.currentNode);
-                }
-
-            } catch (error) {
-                addLog('System', `Error: ${error.message}`, 'error');
-                addLog('System', `Make sure the backend server is running at ${API_BASE}`, 'info');
-                const loadingEl = output.querySelector('.loading');
-                if (loadingEl) loadingEl.remove();
-            } finally {
-                genBtn.disabled = false;
-                valBtn.disabled = false;
             }
-        }
 
-        // =====================================================================
-        // Content quality helper
-        // =====================================================================
-
-        function checkContentQuality(contentType, content) {
-            if (!content || typeof content !== 'object') {
-                return 'No content was returned by the model.';
-            }
-            const category = getContentCategory(contentType);
-            if (category === 'quiz') {
-                const qs = content.questions || [];
-                if (qs.length === 0) {
-                    return 'The model returned 0 questions. This usually means the topic was declined by the model\'s safety filters or the response could not be parsed. Try a different topic.';
-                }
-            } else if (category === 'story') {
-                const nodes = content.nodes || {};
-                if (Object.keys(nodes).length === 0) {
-                    return 'The model returned 0 story nodes. The topic may have been declined or the response was empty. Try a different topic.';
-                }
-            } else if (category === 'simulation') {
-                const vars = content.variables || [];
-                if (vars.length === 0) {
-                    return 'The model returned 0 variables. The topic may have been declined. Try a different topic.';
-                }
-            }
-            if (Object.keys(content).length === 0) {
-                return 'Empty response from model. The topic may have been declined by safety filters. Try a different topic.';
-            }
-            return null; // no issues
-        }
-
-        function renderContent(contentType, content, topic, team, fullData, validationResult) {
-            console.log('renderContent called with:', {contentType, content, topic, team, fullData, validationResult});
-            
-            const category = getContentCategory(contentType);
-            console.log('Rendering category:', category);
-            
-            let html = '<div class="container">';
-            
-            // Show logs first
-            html += '<h2>🔄 Generation Process</h2>';
-            html += '<div class="logs-container" id="logs"></div>';
-            
-            // Validation result panel (if present)
-            if (validationResult) {
-                const warnings = validationResult.warnings || [];
-                const hasWarnings = warnings.length > 0;
-                const borderColor = hasWarnings ? '#f59e0b' : '#059669';
-                const bgGrad = hasWarnings
-                    ? 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)'
-                    : 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)';
-                const icon = hasWarnings ? '⚠️' : '✅';
-
-                html += `
-                    <div style="border: 2px solid ${borderColor}; border-radius: 10px; padding: 16px; margin-bottom: 20px; background: ${bgGrad};">
-                        <h3 style="margin: 0 0 10px; font-size: 16px; color: #1e293b;">${icon} Validation Result</h3>
-                        <div style="font-size: 13px; color: #334155; margin-bottom: 6px;">
-                            <strong>Status:</strong> ${validationResult.status || 'validated'}
-                        </div>`;
-                if (validationResult.content_type) {
-                    html += `<div style="font-size: 13px; color: #334155; margin-bottom: 6px;">
-                            <strong>Content type:</strong> ${validationResult.content_type}
-                        </div>`;
-                }
-                if (validationResult.validation_result) {
-                    html += `<div style="font-size: 13px; color: #334155; margin-bottom: 6px;">
-                            <strong>Summary:</strong> ${validationResult.validation_result}
-                        </div>`;
-                }
-                if (hasWarnings) {
-                    html += `<div style="margin-top: 8px;">`;
-                    warnings.forEach(w => {
-                        html += `<div style="font-size: 12px; color: #92400e; padding: 4px 0;">⚠ ${w}</div>`;
-                    });
-                    html += `</div>`;
-                } else {
-                    html += `<div style="font-size: 13px; color: #065f46; margin-top: 4px;">All checks passed.</div>`;
-                }
-                html += `</div>`;
-            }
-            
-            // Summary
-            html += '<div class="summary">';
-            html += '<div class="summary-item"><span class="summary-label">Team:</span> ' + team.toUpperCase() + '</div>';
-            html += '<div class="summary-item"><span class="summary-label">Type:</span> ' + contentType.replace('_', ' ').toUpperCase() + '</div>';
-            html += '<div class="summary-item"><span class="summary-label">Topic:</span> ' + topic + '</div>';
-            if (validationResult) {
-                html += '<div class="summary-item"><span class="summary-label">Validated:</span> ✓</div>';
-            }
-            if (fullData?.content?.agents_involved) {
-                html += '<div class="summary-item"><span class="summary-label">Agents:</span> ' + fullData.content.agents_involved.length + '</div>';
-            }
-            html += '</div>';
-            
-            html += '<h2>📄 Generated Content</h2>';
-
-            if (category === 'quiz') {
-                html += `<h3>${content.title || 'Quiz'}</h3>`;
-                if (content.description) {
-                    html += `<p style="font-style: italic; color: #666; margin-bottom: 15px;">${content.description}</p>`;
-                }
-
-                // Quiz metadata bar
-                const totalScore = (content.questions || []).reduce((sum, q) => sum + (q.score || 1), 0);
-                const passingPct = totalScore > 0 && content.passing_score ? Math.round(content.passing_score / totalScore * 100) : '?';
-                html += `<div class="summary" style="margin-bottom: 20px;">`;
-                html += `<div class="summary-item"><span class="summary-label">Questions:</span> ${(content.questions || []).length}</div>`;
-                html += `<div class="summary-item"><span class="summary-label">Total Points:</span> ${totalScore}</div>`;
-                html += `<div class="summary-item"><span class="summary-label">Passing:</span> ${content.passing_score || 'N/A'}/${totalScore} pts (${passingPct}%)</div>`;
-                html += `<div class="summary-item"><span class="summary-label">Time Limit:</span> ${content.time_limit ? content.time_limit + ' min' : 'None'}</div>`;
-                html += `</div>`;
-
-                (content.questions || []).forEach((q, i) => {
-                    const scoreLabel = q.score ? ` <span style="background: #e0e7ff; color: #4338ca; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">${q.score} pt${q.score > 1 ? 's' : ''}</span>` : '';
-                    const tierColors = { low: '#059669', mid: '#d97706', high: '#dc2626' };
-                    const tierBg = { low: '#d1fae5', mid: '#fef3c7', high: '#fee2e2' };
-                    const tier = q.tier || q.difficulty || 'mid';
-                    const tierLabel = ` <span style="background: ${tierBg[tier] || '#f3f4f6'}; color: ${tierColors[tier] || '#6b7280'}; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">${tier}</span>`;
-                    html += `
-                        <div class="card">
-                            <div class="question">Q${i + 1}. ${q.question}${tierLabel}${scoreLabel}</div>
-                    `;
-                    (q.options || []).forEach((opt, j) => {
-                        const isCorrect = j === q.correct_answer;
-                        const cssClass = isCorrect ? 'option correct' : 'option';
-                        const checkmark = isCorrect ? '✓ ' : '';
-                        html += `<div class="${cssClass}">${checkmark}${opt}</div>`;
-                    });
-                    if (q.explanation) {
-                        html += `<div style="margin-top: 8px; padding: 8px; background: #f0f9ff; border-radius: 4px; font-size: 13px; color: #1e40af;"><strong>Explanation:</strong> ${q.explanation}</div>`;
-                    }
-                    html += `</div>`;
-                });
-
-            } else if (category === 'story') {
-                html += `<h3>${content.title || 'Story'}</h3>`;
-                html += `<p style="font-style: italic; color: #666;">${content.synopsis || ''}</p>`;
-
-                const nodes = content.nodes || {};
-                const startNode = content.start_node || 'start';
-
-                // Store nodes globally for navigation
-                window.storyNodes = nodes;
-                window.currentNode = startNode;
-
-                html += `<div id="story-container"></div>`;
-
-            } else if (category === 'simulation') {
-                html += `<h3>${content.title || 'Simulation'}</h3>`;
-                html += `<p style="font-style: italic; color: #666; margin-bottom: 20px;">${content.description || ''}</p>`;
-
-                // Variables Section
-                if (content.variables && content.variables.length > 0) {
-                    html += `<h4 style="color: #667eea; margin-top: 20px; margin-bottom: 10px;">📊 Variables</h4>`;
-                    html += `<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 20px;">`;
-                    
-                    content.variables.forEach(variable => {
-                        const defaultVal = variable.initial_value !== undefined ? variable.initial_value : 
-                                          variable.default !== undefined ? variable.default : 
-                                          variable.min_value !== undefined ? variable.min_value : 0;
-                        const minVal = variable.min_value !== undefined ? variable.min_value : variable.min !== undefined ? variable.min : 0;
-                        const maxVal = variable.max_value !== undefined ? variable.max_value : variable.max !== undefined ? variable.max : 100;
-                        const unit = variable.unit ? ` ${variable.unit}` : '';
-                        
-                        html += `
-                            <div class="card" style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-left: 4px solid #3b82f6;">
-                                <div style="font-weight: 600; color: #1e40af; margin-bottom: 8px; font-size: 15px;">
-                                    ${variable.name}
-                                </div>
-                                <div style="background: white; padding: 8px; border-radius: 6px; margin-bottom: 8px;">
-                                    <div style="font-size: 24px; font-weight: 700; color: #3b82f6;">
-                                        ${defaultVal}${unit}
-                                    </div>
-                                    <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
-                                        Range: ${minVal}${unit} - ${maxVal}${unit}
-                                    </div>
-                                </div>
-                                <p style="font-size: 12px; color: #475569; line-height: 1.4;">
-                                    ${variable.description || 'No description'}
-                                </p>
-                            </div>
-                        `;
-                    });
-                    
-                    html += `</div>`;
-                }
-
-                // Controls Section
-                if (content.controls && content.controls.length > 0) {
-                    html += `<h4 style="color: #667eea; margin-top: 20px; margin-bottom: 10px;">🎛️ Controls</h4>`;
-                    html += `<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 20px;">`;
-                    
-                    content.controls.forEach(control => {
-                        const typeIcon = control.type === 'slider' ? '🎚️' : control.type === 'button' ? '🔘' : '🔲';
-                        const typeColor = control.type === 'slider' ? '#8b5cf6' : control.type === 'button' ? '#10b981' : '#f59e0b';
-                        
-                        html += `
-                            <div class="card" style="background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%); border-left: 4px solid ${typeColor};">
-                                <div style="font-weight: 600; color: #6b21a8; margin-bottom: 8px; font-size: 14px;">
-                                    ${typeIcon} ${control.label}
-                                </div>
-                                <div style="background: white; padding: 8px; border-radius: 6px; margin-bottom: 8px;">
-                                    <div style="font-size: 12px; color: #64748b;">
-                                        <strong>Type:</strong> ${control.type}
-                                    </div>
-                                    ${control.target_variable ? `<div style="font-size: 12px; color: #64748b;"><strong>Target:</strong> ${control.target_variable}</div>` : ''}
-                                    ${control.min !== undefined ? `<div style="font-size: 12px; color: #64748b;"><strong>Range:</strong> ${control.min} - ${control.max}</div>` : ''}
-                                    ${control.action ? `<div style="font-size: 12px; color: #64748b;"><strong>Action:</strong> ${control.action}</div>` : ''}
-                                </div>
-                            </div>
-                        `;
-                    });
-                    
-                    html += `</div>`;
-                }
-
-                // Rules Section
-                if (content.rules && content.rules.length > 0) {
-                    html += `<h4 style="color: #667eea; margin-top: 20px; margin-bottom: 10px;">📜 Simulation Rules</h4>`;
-                    html += `<div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">`;
-                    
-                    content.rules.forEach((rule, index) => {
-                        html += `
-                            <div class="card" style="background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%); border-left: 4px solid #eab308;">
-                                <div style="display: flex; align-items: center; gap: 10px;">
-                                    <div style="
-                                        background: #eab308; 
-                                        color: white; 
-                                        width: 28px; 
-                                        height: 28px; 
-                                        border-radius: 50%; 
-                                        display: flex; 
-                                        align-items: center; 
-                                        justify-content: center; 
-                                        font-weight: 700;
-                                        font-size: 13px;
-                                        flex-shrink: 0;
-                                    ">
-                                        ${index + 1}
-                                    </div>
-                                    <div style="font-size: 13px; color: #713f12; line-height: 1.5;">
-                                        ${rule}
-                                    </div>
-                                </div>
-                            </div>
-                        `;
-                    });
-                    
-                    html += `</div>`;
-                }
-
-                // Initial State Summary
-                if (content.initial_state) {
-                    html += `<h4 style="color: #667eea; margin-top: 20px; margin-bottom: 10px;">🎯 Initial State</h4>`;
-                    html += `
-                        <div class="card" style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-left: 4px solid #22c55e;">
-                            <pre style="font-size: 12px; color: #166534; margin: 0; white-space: pre-wrap; word-wrap: break-word;">${JSON.stringify(content.initial_state, null, 2)}</pre>
-                        </div>
-                    `;
-                }
-
-            } else if (category === 'game') {
-                html += `<h3>${content.title || 'Quest Game'}</h3>`;
-                html += `<p style="font-style: italic; color: #666; margin-bottom: 20px;">${content.description || ''}</p>`;
-                
-                // Show all nodes with all choices
-                if (content.nodes && Object.keys(content.nodes).length > 0) {
-                    const nodeCount = Object.keys(content.nodes).length;
-                    html += `
-                        <div class="card" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-left: 4px solid #f59e0b; margin-bottom: 20px;">
-                            <div style="font-weight: 600; color: #92400e; margin-bottom: 8px;">
-                                🗺️ Complete Game Map
-                            </div>
-                            <div style="font-size: 13px; color: #78350f;">
-                                <strong>${nodeCount}</strong> scenes with all choices
-                            </div>
-                        </div>
-                    `;
-                    
-                    // Show ALL nodes with ALL choices
-                    Object.entries(content.nodes).forEach(([nodeId, node], index) => {
-                        const isEnding = node.is_ending || (node.choices && node.choices.length === 0);
-                        html += `
-                            <div class="card" style="margin-bottom: 15px; ${isEnding ? 'border-left: 4px solid #ef4444;' : ''}">
-                                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                                    <div style="background: #667eea; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0;">
-                                        ${index + 1}
-                                    </div>
-                                    <div style="font-weight: 600; color: #667eea; font-size: 15px;">
-                                        ${node.title || nodeId}
-                                        ${isEnding ? ' <span style="background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">ENDING</span>' : ''}
-                                    </div>
-                                </div>
-                                <p style="font-size: 13px; color: #666; margin-bottom: 12px; line-height: 1.5;">
-                                    ${node.description || ''}
-                                </p>
-                                ${node.choices && node.choices.length > 0 ? `
-                                    <div style="background: #f8fafc; padding: 12px; border-radius: 8px; border-left: 3px solid #94a3b8;">
-                                        <div style="font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 8px;">
-                                            ⚡ Choices:
-                                        </div>
-                                        ${node.choices.map((choice, i) => `
-                                            <div style="display: flex; align-items: start; gap: 8px; margin-bottom: 6px;">
-                                                <div style="background: #94a3b8; color: white; min-width: 20px; height: 20px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0;">
-                                                    ${i + 1}
-                                                </div>
-                                                <div style="font-size: 12px; color: #334155;">
-                                                    ${choice.text} <span style="color: #94a3b8;">→ ${choice.next_node_id}</span>
-                                                </div>
-                                            </div>
-                                        `).join('')}
-                                    </div>
-                                ` : isEnding ? `
-                                    <div style="background: #fef2f2; padding: 10px; border-radius: 8px; border-left: 3px solid #ef4444;">
-                                        <div style="font-size: 12px; color: #991b1b; font-weight: 600;">
-                                            🏁 Game ends here
-                                        </div>
-                                    </div>
-                                ` : ''}
-                                ${node.requirements && node.requirements.length > 0 ? `
-                                    <div style="background: #fef3c7; padding: 8px; border-radius: 6px; margin-top: 10px; border-left: 3px solid #f59e0b;">
-                                        <div style="font-size: 11px; color: #92400e;">
-                                            <strong>Requires:</strong> ${node.requirements.join(', ')}
-                                        </div>
-                                    </div>
-                                ` : ''}
-                                ${node.rewards && node.rewards.length > 0 ? `
-                                    <div style="background: #dcfce7; padding: 8px; border-radius: 6px; margin-top: 10px; border-left: 3px solid #22c55e;">
-                                        <div style="font-size: 11px; color: #166534;">
-                                            <strong>Rewards:</strong> ${node.rewards.join(', ')}
-                                        </div>
-                                    </div>
-                                ` : ''}
-                            </div>
-                        `;
-                    });
-                }
-
+            if (action === 'ideate') {
+                renderIdeation(data.content);
+            } else if (action === 'review') {
+                lastReview = data.content;
+                renderReview(data.content);
+            } else if (action === 'publish') {
+                lastContent = data.content;
+                renderResult(action, data);
             } else {
-                html += `<h3>${contentType.replace('_', ' ').toUpperCase()}</h3>`;
-                html += `<pre style="font-size: 12px; background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto;">${JSON.stringify(content, null, 2)}</pre>`;
+                lastContent = data.content;
+                renderResult(action, data);
             }
-
-            html += `</div>`;
-
-            // Update logs after rendering
-            setTimeout(updateLogsDisplay, 100);
-
-            return html;
         }
+    } catch (e) {
+        log('error', `[Error] ${e.message}`);
+    }
 
-        // Story navigation functions
-        function renderStoryNode(nodeId) {
-            const container = document.getElementById('story-container');
-            if (!container || !window.storyNodes) return;
+    btns.forEach(b => b.disabled = false);
+}
 
-            const node = window.storyNodes[nodeId];
-            if (!node) {
-                container.innerHTML = '<div class="error">Node not found: ' + nodeId + '</div>';
-                return;
-            }
+// --- Render results ---
+function renderIdeation(content) {
+    const body = document.getElementById('resultBody');
+    body.innerHTML = `
+        <div class="review-summary">
+            <strong>Chosen Format:</strong> ${content.chosen_format || 'N/A'}<br>
+            <strong>Topic:</strong> ${content.topic_statement || 'N/A'}<br>
+            <strong>Direction:</strong> ${content.creative_direction || 'N/A'}<br>
+            <strong>Reasoning:</strong> ${content.reasoning || 'N/A'}
+        </div>
+        <div class="result-content"><pre>${JSON.stringify(content.params || {}, null, 2)}</pre></div>
+    `;
+}
 
-            let html = '<div class="card">';
-            
-            // Node content
-            html += `<p style="font-size: 15px; line-height: 1.6; margin-bottom: 20px;">${node.content}</p>`;
-            
-            // Branches as buttons
-            const branches = node.branches || [];
-            if (branches.length > 0) {
-                html += '<div style="display: flex; flex-direction: column; gap: 10px;">';
-                branches.forEach((branch, i) => {
-                    // Resilient field lookup: LLM may use varying key names
-                    const target = branch.next_node_id || branch.next_node || branch.target_node || branch.target || branch.target_node_id || branch.next || '';
-                    const label = branch.text || branch.label || branch.choice || 'Continue';
-                    if (!target) return; // skip branches without a valid target
-                    html += `
-                        <button 
-                            onclick="navigateToNode('${target}')" 
-                            class="story-choice-btn"
-                            style="
-                                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                                color: white;
-                                border: none;
-                                padding: 12px 20px;
-                                border-radius: 8px;
-                                font-size: 14px;
-                                cursor: pointer;
-                                transition: transform 0.2s, box-shadow 0.2s;
-                                text-align: left;
-                            "
-                            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.4)'"
-                            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'"
-                        >
-                            → ${label}
-                        </button>
-                    `;
-                });
-                html += '</div>';
-            } else {
-                // Ending node
-                html += '<div style="margin-top: 20px; padding: 15px; background: #f0f9ff; border-left: 4px solid #3b82f6; border-radius: 4px;">';
-                html += '<strong style="color: #1e40af;">🎬 The End</strong>';
-                html += '<p style="margin-top: 8px; color: #1e40af; font-size: 13px;">You have reached an ending!</p>';
-                html += '<button onclick="navigateToNode(window.storyNodes[Object.keys(window.storyNodes)[0]].node_id || \'start\')" style="margin-top: 10px; padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px;">↺ Start Over</button>';
-                html += '</div>';
-            }
-            
-            html += '</div>';
-            
-            // Path history
-            if (!window.storyPath) window.storyPath = [];
-            window.storyPath.push(nodeId);
-            
-            if (window.storyPath.length > 1) {
-                html += '<div style="margin-top: 15px; font-size: 12px; color: #888;">';
-                html += '<strong>Your Path:</strong> ' + window.storyPath.join(' → ');
-                html += '</div>';
-            }
-            
-            container.innerHTML = html;
-        }
+function renderReview(content) {
+    const valid = content.valid !== false;
+    const score = content.score || 0;
+    const badgeCls = score >= 80 ? 'badge-success' : score >= 50 ? 'badge-warning' : 'badge-error';
+    const errors = (content.errors || []).map(e => `<li style="color:#c0392b">${e}</li>`).join('');
+    const warnings = (content.warnings || []).map(w => `<li style="color:#f39c12">${w}</li>`).join('');
 
-        function navigateToNode(nodeId) {
-            window.currentNode = nodeId;
-            renderStoryNode(nodeId);
-        }
+    const body = document.getElementById('resultBody');
+    body.innerHTML = `
+        <div class="review-summary">
+            <span class="badge ${badgeCls}">${valid ? 'Valid' : 'Invalid'}</span>
+            <span class="review-score" style="color:${score>=80?'#27ae60':score>=50?'#f39c12':'#c0392b'}">${score}/100</span>
+            <p style="margin-top:8px">${content.summary || ''}</p>
+        </div>
+        ${errors ? '<h4 style="color:#c0392b;margin:8px 0">Errors</h4><ul>' + errors + '</ul>' : ''}
+        ${warnings ? '<h4 style="color:#f39c12;margin:8px 0">Warnings</h4><ul>' + warnings + '</ul>' : ''}
+        ${content.suggestions ? '<h4 style="margin:8px 0">Suggestions</h4><ul>' + content.suggestions.map(s=>'<li>'+s+'</li>').join('') + '</ul>' : ''}
+    `;
+}
 
-        // Auto-generate after content types load
-        // (loadContentTypes is called at script start, then we auto-generate)
-    </script>
+function renderResult(action, data) {
+    const body = document.getElementById('resultBody');
+    const content = data.content || {};
+
+    let html = '';
+
+    if (content.validation_result) {
+        const vr = content.validation_result;
+        const score = vr.score || 0;
+        const badgeCls = score >= 80 ? 'badge-success' : score >= 50 ? 'badge-warning' : 'badge-error';
+        html += `<div class="review-summary">
+            <span class="badge ${badgeCls}">${vr.valid ? 'Valid' : 'Invalid'}</span>
+            <span class="review-score">${score}/100</span>
+            <span>${vr.summary || ''}</span>
+        </div>`;
+    }
+
+    // Detect quiz
+    if (content.questions || (content.content && content.content.questions)) {
+        const quiz = content.questions ? content : content.content || content;
+        html += renderQuiz(quiz);
+    } else if (content.nodes || (content.content && content.content.nodes)) {
+        const story = content.nodes ? content : content.content || content;
+        html += renderStory(story);
+    } else {
+        html += `<div class="result-content"><pre>${JSON.stringify(content, null, 2)}</pre></div>`;
+    }
+
+    body.innerHTML = html;
+
+    // Store as external content
+    const ext = document.getElementById('externalContent');
+    const rawContent = content.content || content;
+    ext.value = JSON.stringify(rawContent, null, 2);
+}
+
+function renderQuiz(quiz) {
+    let html = `<h3 style="margin:12px 0">${quiz.title || 'Quiz'}</h3>`;
+    html += `<p style="color:#666;margin-bottom:12px">${quiz.description || ''}</p>`;
+    (quiz.questions || []).forEach((q, i) => {
+        html += `<div style="background:#f8f9fa;padding:12px;border-radius:8px;margin-bottom:8px">
+            <strong>Q${i+1}.</strong> ${q.question}
+            <span class="badge badge-${q.tier==='high'?'error':q.tier==='mid'?'warning':'success'}">${q.tier} (${q.score}pt)</span>
+            <ul style="margin:6px 0">`;
+        (q.options || []).forEach((opt, j) => {
+            const mark = j === q.correct_answer ? ' style="color:#27ae60;font-weight:600"' : '';
+            html += `<li${mark}>${opt}${j === q.correct_answer ? ' &#10003;' : ''}</li>`;
+        });
+        html += `</ul>`;
+        if (q.explanation) html += `<p style="color:#888;font-size:0.85rem">${q.explanation}</p>`;
+        html += `</div>`;
+    });
+    return html;
+}
+
+function renderStory(story) {
+    const nodes = story.nodes || {};
+    const startId = story.start_node || 'start';
+    let html = `<h3 style="margin:12px 0">${story.title || 'Story'}</h3>`;
+    html += `<p style="color:#666;margin-bottom:12px">${story.synopsis || ''}</p>`;
+    html += `<div id="storyView"></div>`;
+    setTimeout(() => showNode(startId, nodes), 0);
+    return html;
+}
+
+function showNode(nodeId, nodes) {
+    const node = nodes[nodeId];
+    if (!node) return;
+    const view = document.getElementById('storyView');
+    if (!view) return;
+    let html = `<div style="background:#f8f9fa;padding:15px;border-radius:8px">
+        <p>${node.content}</p>`;
+    if (node.is_ending) {
+        html += `<p style="color:#764ba2;font-weight:600;margin-top:10px">THE END</p>`;
+    } else {
+        html += `<div style="margin-top:10px">`;
+        (node.branches || []).forEach(b => {
+            html += `<button onclick="showNode('${b.next_node_id}', window._storyNodes)"
+                class="btn btn-generate" style="margin:4px">${b.text}</button>`;
+        });
+        html += `</div>`;
+    }
+    html += `</div>`;
+    view.innerHTML = html;
+    window._storyNodes = nodes;
+}
+
+// Init
+init();
+</script>
 </body>
 </html>
-

@@ -21,7 +21,7 @@ from ..models.content_models import (
     Quiz,
     WebSimulation,
 )
-from ..utils.schema_helpers import build_schema_instruction
+from ..utils.schema import build_schema_instruction
 
 
 class ContentRole(str, Enum):

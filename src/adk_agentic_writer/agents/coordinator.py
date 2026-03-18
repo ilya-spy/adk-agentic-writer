@@ -1,141 +1,145 @@
-"""Coordinator agent – orchestrates WriterAgent and ValidatorAgent.
+"""Coordinator -- LLM-powered root agent with sub-agents.
 
-Provides the public API consumed by backend/api.py:
-- get_supported_tasks()
-- resolve_task(task_id, content_type)
-- get_all_content_types()
-- process_task(task, params)
-- process_with_validation(task, params)
+Inherits runner pool and task registry from BaseAgentService.
+Adds orchestration: ideate, generate, review, refine, publish.
 """
 
+import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-from ..models.agent_models import AgentTask
-from ..tasks.content_tasks import (
-    GENERATE_QUIZ,
-    GENERATE_STORY,
-    GENERATE_GAME,
-    GENERATE_SIMULATION,
-)
-from .writer import WriterAgent
-from .validator import ValidatorAgent
+from google.adk.agents import Agent
+
+from ..formats import get_format, list_formats
+from ..tasks.content_tasks import PRIMARY_TASKS
+from .base import BaseAgentService, MODEL
+from .ideator import create_ideator
+from .writer import create_writer
+from .reviewer import create_reviewer, schema_validate
+from .refiner import create_refiner
 
 logger = logging.getLogger(__name__)
 
-_PRIMARY_TASKS: List[AgentTask] = [
-    GENERATE_QUIZ,
-    GENERATE_STORY,
-    GENERATE_GAME,
-    GENERATE_SIMULATION,
-]
 
+class Coordinator(BaseAgentService):
+    """LLM-powered coordinator with sub-agent orchestration.
 
-class Coordinator:
-    """Lightweight coordinator that routes tasks to writer/validator.
-
-    No LLM call for routing — task resolution is deterministic.
-    The LLM work happens inside WriterAgent and ValidatorAgent.
+    Creates all agent runners at init, delegates via direct methods.
     """
 
-    def __init__(self, model_name: str = "gemini-2.5-flash-lite"):
-        self._writer = WriterAgent(model_name=model_name)
-        self._validator = ValidatorAgent(model_name=model_name)
-        self._tasks = list(_PRIMARY_TASKS)
+    def __init__(self, model_name: str = MODEL):
+        super().__init__(model=model_name)
+        self._register_tasks(PRIMARY_TASKS)
 
-        self._task_by_id: Dict[str, AgentTask] = {
-            t.task_id: t for t in self._tasks
-        }
-        self._type_to_task: Dict[str, AgentTask] = {}
-        for t in self._tasks:
-            for ct in t.content_types:
-                self._type_to_task[ct] = t
+        self._ideator = create_ideator(model_name)
+        self._writers: Dict[str, Agent] = {}
+        for fmt in list_formats():
+            self._writers[fmt.name] = create_writer(fmt, model_name)
+        self._reviewer = create_reviewer(model_name)
+        self._refiner = create_refiner(model_name)
 
         logger.info(
-            "Coordinator ready: %d tasks, %d content-type aliases",
-            len(self._task_by_id),
+            "Coordinator ready: %d formats, %d task aliases",
+            len(self._writers),
             len(self._type_to_task),
         )
 
     # ------------------------------------------------------------------
-    # Discovery
+    # Action methods
     # ------------------------------------------------------------------
 
-    def get_supported_tasks(self) -> List[AgentTask]:
-        return list(self._tasks)
+    async def ideate(self, prompt: str) -> Dict[str, Any]:
+        runner = self._ensure_runner("ideator", self._ideator)
+        return await self._run(runner, "IdeatorAgent", prompt)
 
-    def get_all_content_types(self) -> Dict[str, List[str]]:
-        """Return {task_id: [content_type, ...]} mapping."""
-        return {t.task_id: list(t.content_types) for t in self._tasks}
+    async def generate(self, content_type: str, prompt: str) -> Dict[str, Any]:
+        fmt = get_format(content_type)
+        writer_name = fmt.name if fmt else content_type
+        writer = self._writers.get(writer_name)
+        if not writer:
+            writer = self._writers.get("quiz")
+            logger.warning("Unknown format %r, falling back to quiz", content_type)
 
-    def resolve_task(
-        self,
-        task_id: Optional[str] = None,
-        content_type: Optional[str] = None,
-    ) -> Optional[AgentTask]:
-        """Resolve a task by ID or content-type alias."""
-        if task_id and task_id in self._task_by_id:
-            return self._task_by_id[task_id]
-        if content_type and content_type in self._type_to_task:
-            return self._type_to_task[content_type]
-        return None
+        runner = self._ensure_runner(f"writer_{writer_name}", writer)
+        return await self._run(runner, writer.name, prompt)
 
-    # ------------------------------------------------------------------
-    # Execution
-    # ------------------------------------------------------------------
-
-    async def process_task(
-        self,
-        task: AgentTask,
-        params: Dict[str, Any],
+    async def review(
+        self, content: Dict[str, Any], content_type: str = "unknown",
     ) -> Dict[str, Any]:
-        """Generate content for a task (writer only, no validation)."""
-        content_type = self._effective_content_type(task, params)
-        topic = params.get("topic", "general")
+        try:
+            runner = self._ensure_runner("reviewer", self._reviewer)
+            prompt = (
+                f"Content type: {content_type}\n\n"
+                f"Content to review:\n{json.dumps(content, indent=2, ensure_ascii=False)}"
+            )
+            result = await self._run(runner, "ReviewerAgent", prompt)
+            result.setdefault("valid", len(result.get("errors", [])) == 0)
+            result.setdefault("score", 100 if result["valid"] else 50)
+            result.setdefault("errors", [])
+            result.setdefault("warnings", [])
+            result.setdefault("summary", "Review complete")
+            return result
+        except Exception as exc:
+            logger.warning("LLM review failed, falling back to schema: %s", exc)
+            return schema_validate(content, content_type)
 
-        logger.info(
-            "Processing task=%s content_type=%s topic=%r",
-            task.task_id, content_type, topic,
-        )
-
-        result = await self._writer.generate(
-            content_type=content_type,
-            topic=topic,
-            **params,
-        )
-        return result
-
-    async def process_with_validation(
-        self,
-        task: AgentTask,
-        params: Dict[str, Any],
+    async def refine(
+        self, content: Dict[str, Any], review_result: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """Generate content, then validate it. Returns combined result."""
-        content = await self.process_task(task, params)
-        content_type = self._effective_content_type(task, params)
+        runner = self._ensure_runner("refiner", self._refiner)
+        prompt = (
+            f"Content to refine:\n{json.dumps(content, indent=2, ensure_ascii=False)}\n\n"
+            f"Review feedback:\n{json.dumps(review_result, indent=2, ensure_ascii=False)}"
+        )
+        return await self._run(runner, "RefinerAgent", prompt)
 
-        validation = await self._validator.validate(content, content_type)
+    async def publish(self, content_type: str, prompt: str) -> Dict[str, Any]:
+        stages: List[Dict[str, Any]] = []
+
+        draft = await self.generate(content_type, prompt)
+        stages.append({"stage": "generate", "output": draft})
+
+        review = await self.review(draft, content_type)
+        stages.append({"stage": "review", "output": review})
+
+        if not review.get("valid", True) or review.get("score", 100) < 90:
+            refined = await self.refine(draft, review)
+            stages.append({"stage": "refine", "output": refined})
+            final_content = refined
+        else:
+            final_content = draft
 
         return {
-            "content": content,
-            "validation_result": validation,
+            "content": final_content,
+            "validation_result": review,
+            "stages": stages,
         }
 
     # ------------------------------------------------------------------
-    # Helpers
+    # Legacy compat
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _effective_content_type(
-        task: AgentTask, params: Dict[str, Any]
-    ) -> str:
-        """Determine the canonical content type for a task + params."""
-        ct = params.get("content_type")
-        if ct:
-            return ct
-        if task.content_types:
-            return task.content_types[0]
-        return "quiz"
+    async def process_task(self, task, params: Dict[str, Any]) -> Dict[str, Any]:
+        content_type = self._effective_content_type(task, params)
+        topic = params.get("topic", "general")
+        fmt = get_format(content_type) or get_format("quiz")
+
+        merged = dict(fmt.default_params) if fmt else {}
+        merged.update(params)
+        merged["topic"] = topic
+
+        try:
+            prompt_text = fmt.writer_prompt.format(**merged)
+        except KeyError:
+            prompt_text = f"Generate {content_type} content about {topic}."
+
+        return await self.generate(content_type, prompt_text)
+
+    async def process_with_validation(self, task, params: Dict[str, Any]) -> Dict[str, Any]:
+        content = await self.process_task(task, params)
+        content_type = self._effective_content_type(task, params)
+        validation = await self.review(content, content_type)
+        return {"content": content, "validation_result": validation}
 
 
 __all__ = ["Coordinator"]
