@@ -1,4 +1,4 @@
-"""FastAPI backend server for the ADK Agentic Writer system."""
+"""FastAPI backend -- task-driven API for the ADK Agentic Writer."""
 
 from ..utils.proxy import clear_proxy_env
 
@@ -9,7 +9,7 @@ import pathlib
 import time
 import uuid
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
@@ -26,44 +26,28 @@ logger = logging.getLogger(__name__)
 log_settings_summary()
 
 from ..agents.coordinator import Coordinator
+from .runtime import RuntimeStore
 
-# ---------------------------------------------------------------------------
-# Global coordinator
-# ---------------------------------------------------------------------------
 _coordinator: Coordinator | None = None
+_runtime = RuntimeStore()
 
 
 # ---------------------------------------------------------------------------
-# Request / Response models
+# Request / Response
 # ---------------------------------------------------------------------------
 
 class AgentRequest(BaseModel):
-    """Unified request model for all agent endpoints."""
-
-    prompt: str = ""
-    content_types: List[str] = []
-    content: Dict[str, Any] = {}
+    """All task parameters go here."""
     parameters: Dict[str, Any] = {}
-    # Legacy compat
-    task_id: str = ""
-    content_type: str = ""
-    topic: str = ""
 
 
 class AgentResponse(BaseModel):
-    """Unified response model for all agent endpoints."""
-
     request_id: str
-    action: str
-    content_type: str = ""
+    task_id: str
+    output_key: str = ""
     content: Dict[str, Any] = {}
     stages: List[Dict[str, Any]] = []
     status: str = "completed"
-
-
-# Legacy compat aliases
-GenerateRequest = AgentRequest
-GenerateResponse = AgentResponse
 
 
 @asynccontextmanager
@@ -83,8 +67,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="ADK Agentic Writer API",
-    description="Multi-agentic system for interactive content production",
-    version="3.0.0",
+    description="Task-driven multi-agentic content production system",
+    version="4.0.0",
     lifespan=lifespan,
 )
 
@@ -106,9 +90,6 @@ async def request_trace(request: Request, call_next):
     return response
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 _PROJECT_ROOT = pathlib.Path(__file__).parent.parent.parent.parent
 
 
@@ -125,36 +106,6 @@ def _get_coordinator() -> Coordinator:
     return _coordinator
 
 
-def _resolve_content_type(req: AgentRequest) -> str:
-    """Extract effective content type from request."""
-    if req.content_type:
-        return req.content_type
-    if req.content_types:
-        return req.content_types[0]
-    return ""
-
-
-def _build_prompt(req: AgentRequest) -> str:
-    """Build the user prompt from request fields."""
-    parts = []
-    if req.prompt:
-        parts.append(req.prompt)
-    elif req.topic:
-        parts.append(f"Create content about: {req.topic}")
-    if req.content_types and len(req.content_types) > 1:
-        parts.append(f"Requested formats: {', '.join(req.content_types)}")
-    return "\n".join(parts) if parts else "Create interesting content."
-
-
-def _error_response(request_id: str, action: str, error) -> AgentResponse:
-    return AgentResponse(
-        request_id=request_id,
-        action=action,
-        content={"error": str(error), "status": "failed"},
-        status="error",
-    )
-
-
 # ---------------------------------------------------------------------------
 # Static pages
 # ---------------------------------------------------------------------------
@@ -166,7 +117,7 @@ async def root():
 
 @app.get("/api")
 async def api_info():
-    return {"message": "ADK Agentic Writer API", "version": "3.0.0", "available": _coordinator is not None}
+    return {"message": "ADK Agentic Writer API", "version": "4.0.0", "available": _coordinator is not None}
 
 
 @app.get("/health")
@@ -180,7 +131,7 @@ async def showcase():
 
 
 # ---------------------------------------------------------------------------
-# Discovery endpoints
+# Discovery
 # ---------------------------------------------------------------------------
 
 @app.get("/tasks")
@@ -190,9 +141,9 @@ async def get_tasks():
         "tasks": [
             {
                 "task_id": t.task_id,
-                "label": t.task_id.replace("generate_", "").replace("_", " ").title(),
-                "content_types": t.content_types,
-                "parameters": list((t.parameters or {}).keys()),
+                "label": t.task_id.replace("_", " ").title(),
+                "output_key": t.output_key or "",
+                "parameters": t.parameters or {},
             }
             for t in coordinator.get_supported_tasks()
         ]
@@ -208,7 +159,7 @@ async def get_content_types():
         content_types.append({
             "value": fmt.name,
             "label": fmt.label,
-            "aliases": fmt.aliases,
+            "flavors": fmt.flavors,
             "parameters": [
                 {"name": p.name, "type": p.type, "default": p.default, "description": p.description}
                 for p in fmt.parameter_specs
@@ -217,188 +168,70 @@ async def get_content_types():
     return {"content_types": content_types}
 
 
+@app.get("/outputs")
+async def get_outputs():
+    return {"outputs": _runtime.all()}
+
+
+@app.get("/supported-outputs")
+async def get_supported_outputs():
+    coordinator = _get_coordinator()
+    keys = list({t.output_key for t in coordinator.get_supported_tasks() if t.output_key})
+    return {"output_keys": sorted(keys)}
+
+
+@app.post("/outputs/clear")
+async def clear_outputs():
+    _runtime.clear()
+    return {"status": "cleared"}
+
+
 # ---------------------------------------------------------------------------
-# Agent action endpoints
+# Generic task execution
 # ---------------------------------------------------------------------------
 
-@app.post("/ideate", response_model=AgentResponse)
-async def ideate(request: AgentRequest):
-    """Run ideation on a user prompt."""
-    request_id = str(uuid.uuid4())
-    coordinator = _get_coordinator()
-    prompt = _build_prompt(request)
-
-    try:
-        result = await coordinator.ideate(prompt)
-        return AgentResponse(
-            request_id=request_id, action="ideate", content=result, status="completed",
-        )
-    except Exception as e:
-        logger.error("Ideation error: %s", e)
-        return _error_response(request_id, "ideate", e)
-
-
-@app.post("/generate", response_model=AgentResponse)
-async def generate_content(request: AgentRequest):
-    """Generate content for a specific format."""
-    request_id = str(uuid.uuid4())
-    coordinator = _get_coordinator()
-    ct = _resolve_content_type(request)
-
-    if not ct:
-        # Legacy compat: resolve via task_id
-        if request.task_id:
-            task = coordinator.resolve_task(task_id=request.task_id)
-            if task and task.content_types:
-                ct = task.content_types[0]
-        if not ct:
-            raise HTTPException(status_code=400, detail="No content_type specified")
-
-    prompt = _build_prompt(request)
-
-    # Merge format default params with request params
-    from ..formats import get_format
-    fmt = get_format(ct)
-    if fmt:
-        merged = dict(fmt.default_params)
-        merged.update(request.parameters)
-        merged["topic"] = request.topic or request.prompt or "general"
-        try:
-            prompt = fmt.writer_prompt.format(**merged)
-        except KeyError:
-            pass
-
-    try:
-        result = await coordinator.generate(ct, prompt)
-        return AgentResponse(
-            request_id=request_id, action="generate", content_type=ct, content=result, status="completed",
-        )
-    except Exception as e:
-        logger.error("Generate error: %s", e)
-        return _error_response(request_id, "generate", e)
-
-
-@app.post("/review", response_model=AgentResponse)
-async def review_content(request: AgentRequest):
-    """Review provided content."""
+@app.post("/task/{task_id}", response_model=AgentResponse)
+async def run_task(task_id: str, request: AgentRequest):
     request_id = str(uuid.uuid4())
     coordinator = _get_coordinator()
 
-    if not request.content:
-        raise HTTPException(status_code=400, detail="No content provided for review")
+    task = coordinator.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail=f"Unknown task: {task_id}")
 
-    ct = _resolve_content_type(request) or "unknown"
-
-    try:
-        result = await coordinator.review(request.content, ct)
-        return AgentResponse(
-            request_id=request_id, action="review", content_type=ct, content=result, status="completed",
-        )
-    except Exception as e:
-        logger.error("Review error: %s", e)
-        return _error_response(request_id, "review", e)
-
-
-@app.post("/refine", response_model=AgentResponse)
-async def refine_content(request: AgentRequest):
-    """Refine content based on review feedback."""
-    request_id = str(uuid.uuid4())
-    coordinator = _get_coordinator()
-
-    if not request.content:
-        raise HTTPException(status_code=400, detail="No content provided for refinement")
-
-    review = request.parameters.get("review_result", {})
-    if not review:
-        review = {"summary": "Please improve overall quality", "errors": [], "warnings": []}
+    params = dict(request.parameters)
 
     try:
-        result = await coordinator.refine(request.content, review)
-        return AgentResponse(
-            request_id=request_id, action="refine", content=result, status="completed",
-        )
-    except Exception as e:
-        logger.error("Refine error: %s", e)
-        return _error_response(request_id, "refine", e)
+        result = await coordinator.process_task(task_id, params)
 
+        output_key = task.output_key or ""
+        content = result
+        stages: List[Dict[str, Any]] = []
 
-@app.post("/publish", response_model=AgentResponse)
-async def publish_content(request: AgentRequest):
-    """Full publish pipeline: generate -> review -> refine."""
-    request_id = str(uuid.uuid4())
-    coordinator = _get_coordinator()
-    ct = _resolve_content_type(request)
+        if isinstance(result, dict) and "stages" in result:
+            stages = result.get("stages", [])
+            content = result.get("content", result)
+            if output_key:
+                _runtime.set(output_key, content)
+        elif output_key:
+            _runtime.set(output_key, result)
 
-    if not ct:
-        raise HTTPException(status_code=400, detail="No content_type specified for publish")
-
-    prompt = _build_prompt(request)
-
-    from ..formats import get_format
-    fmt = get_format(ct)
-    if fmt:
-        merged = dict(fmt.default_params)
-        merged.update(request.parameters)
-        merged["topic"] = request.topic or request.prompt or "general"
-        try:
-            prompt = fmt.writer_prompt.format(**merged)
-        except KeyError:
-            pass
-
-    try:
-        result = await coordinator.publish(ct, prompt)
         return AgentResponse(
             request_id=request_id,
-            action="publish",
-            content_type=ct,
-            content=result.get("content", {}),
-            stages=result.get("stages", []),
+            task_id=task_id,
+            output_key=output_key,
+            content=content if isinstance(content, dict) else {"result": content},
+            stages=stages,
             status="completed",
         )
     except Exception as e:
-        logger.error("Publish error: %s", e)
-        return _error_response(request_id, "publish", e)
-
-
-# Legacy compat endpoint
-@app.post("/generate/with-validation", response_model=AgentResponse)
-async def generate_with_validation(request: AgentRequest):
-    """Generate content then validate (legacy compat)."""
-    request_id = str(uuid.uuid4())
-    coordinator = _get_coordinator()
-    ct = _resolve_content_type(request)
-
-    if not ct and request.task_id:
-        task = coordinator.resolve_task(task_id=request.task_id)
-        if task and task.content_types:
-            ct = task.content_types[0]
-    if not ct:
-        raise HTTPException(status_code=400, detail="No content_type specified")
-
-    prompt = _build_prompt(request)
-
-    from ..formats import get_format
-    fmt = get_format(ct)
-    if fmt:
-        merged = dict(fmt.default_params)
-        merged.update(request.parameters)
-        merged["topic"] = request.topic or request.prompt or "general"
-        try:
-            prompt = fmt.writer_prompt.format(**merged)
-        except KeyError:
-            pass
-
-    try:
-        content = await coordinator.generate(ct, prompt)
-        validation = await coordinator.review(content, ct)
-        result = {"content": content, "validation_result": validation}
+        logger.error("Task %s error: %s", task_id, e)
         return AgentResponse(
-            request_id=request_id, action="generate_with_validation",
-            content_type=ct, content=result, status="completed",
+            request_id=request_id,
+            task_id=task_id,
+            content={"error": str(e), "status": "failed"},
+            status="error",
         )
-    except Exception as e:
-        logger.error("Error in validation workflow: %s", e)
-        return _error_response(request_id, "generate_with_validation", e)
 
 
 if __name__ == "__main__":

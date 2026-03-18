@@ -23,8 +23,7 @@
             border-radius: 12px; padding: 20px; box-shadow: 0 8px 30px rgba(0,0,0,0.15);
         }
         .panel h2 { color: #667eea; margin-bottom: 15px; font-size: 1.2rem; }
-        /* Format chips */
-        .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
+        .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
         .chip {
             padding: 8px 16px; border-radius: 20px; border: 2px solid #667eea;
             background: white; color: #667eea; cursor: pointer; font-size: 0.9rem;
@@ -32,34 +31,33 @@
         }
         .chip.selected { background: #667eea; color: white; }
         .chip:hover { box-shadow: 0 2px 8px rgba(102,126,234,0.3); }
-        /* Inputs */
-        .form-row { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
-        .form-row > .form-group > label { display: block; font-size: 0.85rem; color: #444; font-weight: 500; margin-bottom: 4px; }
-        .form-group { flex: 1; min-width: 200px; }
-        input, textarea, select {
-            width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;
-            font-size: 0.95rem; font-family: inherit;
+        .chip-small {
+            padding: 4px 10px; border-radius: 12px; font-size: 0.75rem;
+            border: 1px solid #aaa; color: #666; cursor: pointer;
         }
-        textarea { min-height: 80px; resize: vertical; }
-        input:focus, textarea:focus { outline: none; border-color: #667eea; }
-        /* Buttons */
-        .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px; }
+        .chip-small.selected { background: #764ba2; color: white; border-color: #764ba2; }
+        .section-label { font-size: 0.85rem; color: #555; font-weight: 600; margin-bottom: 6px; display: block; }
+        .params-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+        .params-grid label { display: block; font-size: 0.8rem; color: #444; margin-bottom: 3px; }
+        .params-grid input, .params-grid textarea {
+            width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px;
+            font-size: 0.9rem; font-family: inherit;
+        }
+        .params-grid input:focus, .params-grid textarea:focus { outline: none; border-color: #667eea; }
+        .task-btns { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px; }
         .btn {
             padding: 10px 24px; border: none; border-radius: 8px; cursor: pointer;
             font-size: 0.95rem; font-weight: 600; transition: all 0.2s;
         }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
         .btn-ideate { background: #f0ad4e; color: white; }
-        .btn-generate { background: #667eea; color: white; }
+        .btn-write { background: #667eea; color: white; }
         .btn-review { background: #5bc0de; color: white; }
         .btn-refine { background: #5cb85c; color: white; }
         .btn-publish { background: #764ba2; color: white; }
-        .btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-        /* Parameters */
-        .params-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
-        /* Log / stages */
         .log-panel {
-            max-height: 300px; overflow-y: auto; background: #1a1a2e; color: #0f0;
+            max-height: 260px; overflow-y: auto; background: #1a1a2e; color: #0f0;
             border-radius: 8px; padding: 15px; font-family: 'Consolas', monospace;
             font-size: 0.85rem; line-height: 1.5;
         }
@@ -69,15 +67,11 @@
         .log-stage { color: #5bc0de; }
         .log-error { color: #ff6b6b; }
         .log-success { color: #5cb85c; }
-        /* Result */
         .result-content {
             background: #f8f9fa; border-radius: 8px; padding: 15px; margin-top: 10px;
             max-height: 500px; overflow-y: auto;
         }
-        .result-content pre {
-            white-space: pre-wrap; word-break: break-word; font-size: 0.85rem;
-        }
-        /* Validation badge */
+        .result-content pre { white-space: pre-wrap; word-break: break-word; font-size: 0.85rem; }
         .badge {
             display: inline-block; padding: 4px 12px; border-radius: 12px;
             font-size: 0.8rem; font-weight: 600; margin-right: 8px;
@@ -85,24 +79,15 @@
         .badge-success { background: #d4edda; color: #155724; }
         .badge-warning { background: #fff3cd; color: #856404; }
         .badge-error { background: #f8d7da; color: #721c24; }
-        /* Review panel */
         .review-summary { margin: 10px 0; padding: 12px; border-radius: 8px; background: #f8f9fa; }
         .review-score { font-size: 1.5rem; font-weight: 700; }
-        /* External content */
-        .external-input { display: none; }
-        .external-input.visible { display: block; }
-        .toggle-row { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
-        .toggle-label { font-size: 0.85rem; color: #444; font-weight: 500; }
-        /* Tabs */
-        .tabs { display: flex; gap: 4px; margin-bottom: 10px; }
-        .tab {
-            padding: 8px 16px; border: none; border-radius: 8px 8px 0 0;
-            cursor: pointer; background: #e9ecef; font-size: 0.85rem;
+        .output-keys { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+        .output-key-chip {
+            padding: 5px 12px; border-radius: 14px; font-size: 0.8rem;
+            background: #e8e0f0; color: #5b3d8f; cursor: pointer; font-weight: 500;
         }
-        .tab.active { background: #f8f9fa; font-weight: 600; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        /* Spinner */
+        .output-key-chip:hover { background: #d4c5e8; }
+        .hidden { display: none !important; }
         .spinner {
             display: inline-block; width: 16px; height: 16px;
             border: 2px solid rgba(255,255,255,0.3); border-top-color: white;
@@ -110,234 +95,208 @@
             margin-right: 6px; vertical-align: middle;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .hidden { display: none !important; }
     </style>
 </head>
 <body>
     <a href="/" class="home-link">Home</a>
 
-    <!-- Controls Panel -->
+    <!-- Controls -->
     <div class="panel">
         <h2>Content Formats</h2>
         <div class="chips" id="formatChips">Loading...</div>
-
-        <div class="form-row">
-            <div class="form-group" style="flex:1.5">
-                <label>Prompt</label>
-                <textarea id="promptInput" placeholder="Describe what you want to create..."></textarea>
-            </div>
-            <div class="form-group" style="flex:1">
-                <label>Topic (shortcut)</label>
-                <input id="topicInput" placeholder="e.g. Python Programming">
-                <div style="margin-top:8px;display:flex;align-items:center;gap:6px;cursor:pointer" onclick="document.getElementById('externalToggle').click()">
-                    <input type="checkbox" id="externalToggle" style="width:auto;margin:0" onclick="event.stopPropagation()">
-                    <span style="font-size:0.85rem;color:#444;font-weight:500">External content (review/refine)</span>
-                </div>
-            </div>
-        </div>
-
-        <div id="paramsPanel" class="hidden">
-            <label style="font-size:0.85rem;color:#555;margin-bottom:6px;display:block">Format Parameters</label>
-            <div class="params-grid" id="paramsGrid"></div>
-        </div>
-
-        <div class="external-input" id="externalSection">
-            <label style="font-size:0.85rem;color:#555">Paste content JSON</label>
-            <textarea id="externalContent" placeholder='{"title": "...", "questions": [...]}' style="min-height:120px;font-family:Consolas,monospace;font-size:0.8rem"></textarea>
-        </div>
-
-        <div class="actions">
-            <button class="btn btn-ideate" onclick="runAction('ideate')">Ideate</button>
-            <button class="btn btn-generate" onclick="runAction('generate')">Generate</button>
-            <button class="btn btn-review" onclick="runAction('review')">Review</button>
-            <button class="btn btn-refine" onclick="runAction('refine')">Refine</button>
-            <button class="btn btn-publish" onclick="runAction('publish')">Publish</button>
-        </div>
+        <div class="chips" id="flavorChips" style="margin-bottom:0"></div>
     </div>
 
-    <!-- Log Panel -->
+    <!-- Task Parameters -->
+    <div class="panel" id="taskPanel">
+        <h2>Task Parameters</h2>
+        <div class="params-grid" id="paramsGrid"></div>
+        <div class="task-btns" id="taskBtns">Loading tasks...</div>
+    </div>
+
+    <!-- Agent Activity -->
     <div class="panel">
         <h2>Agent Activity</h2>
         <div class="log-panel" id="logPanel">
-            <div class="log-entry"><span class="log-time">--:--:--</span> Ready. Select a format and enter a prompt.</div>
+            <div class="log-entry"><span class="log-time">--:--:--</span> Ready. Select a format, fill params, run a task.</div>
         </div>
     </div>
 
-    <!-- Results Panel -->
-    <div class="panel" id="resultPanel" class="hidden">
+    <!-- Output Keys -->
+    <div class="panel" id="outputsPanel">
+        <h2>Output Keys</h2>
+        <div class="output-keys" id="outputKeys"><em style="color:#999">No outputs yet.</em></div>
+        <div id="outputPreview" class="hidden" style="margin-top:12px">
+            <span class="section-label" id="outputPreviewLabel"></span>
+            <div class="result-content"><pre id="outputPreviewBody"></pre></div>
+        </div>
+    </div>
+
+    <!-- Result -->
+    <div class="panel" id="resultPanel">
         <h2>Result</h2>
-        <div class="tabs" id="resultTabs"></div>
-        <div id="resultBody"></div>
+        <div id="resultBody"><em style="color:#999">Run a task to see results here.</em></div>
     </div>
 
 <script>
-const API_BASE = window.location.origin;
+const API = window.location.origin;
 let formats = [];
-let selectedFormats = new Set();
-let lastContent = null;
-let lastReview = null;
+let tasks = [];
+let selectedFormat = null;
+let selectedFlavor = null;
+let outputCache = {};
 
-// --- Init ---
 async function init() {
     try {
-        const resp = await fetch(`${API_BASE}/content-types`);
-        const data = await resp.json();
-        formats = data.content_types || [];
-        renderChips();
+        const [fmtResp, taskResp] = await Promise.all([
+            fetch(`${API}/content-types`),
+            fetch(`${API}/tasks`),
+        ]);
+        formats = (await fmtResp.json()).content_types || [];
+        tasks = (await taskResp.json()).tasks || [];
+        renderFormatChips();
+        renderTaskBtns();
     } catch (e) {
-        log('error', 'Failed to load content types: ' + e.message);
+        log('error', 'Init failed: ' + e.message);
     }
 }
 
-function renderChips() {
-    const container = document.getElementById('formatChips');
-    container.innerHTML = '';
+function renderFormatChips() {
+    const c = document.getElementById('formatChips');
+    c.innerHTML = '';
     formats.forEach(fmt => {
         const chip = document.createElement('div');
-        chip.className = 'chip';
+        chip.className = 'chip' + (selectedFormat === fmt.value ? ' selected' : '');
         chip.textContent = fmt.label;
-        chip.dataset.value = fmt.value;
-        chip.onclick = () => toggleChip(chip, fmt);
-        container.appendChild(chip);
+        chip.onclick = () => { selectFormat(fmt); };
+        c.appendChild(chip);
     });
 }
 
-function toggleChip(chip, fmt) {
-    if (selectedFormats.has(fmt.value)) {
-        selectedFormats.delete(fmt.value);
-        chip.classList.remove('selected');
-    } else {
-        selectedFormats.add(fmt.value);
-        chip.classList.add('selected');
-    }
-    updateParams();
+function selectFormat(fmt) {
+    selectedFormat = fmt.value;
+    selectedFlavor = fmt.value;
+    renderFormatChips();
+    renderFlavorChips(fmt);
+    updateParamsGrid();
 }
 
-function updateParams() {
+function renderFlavorChips(fmt) {
+    const c = document.getElementById('flavorChips');
+    c.innerHTML = '';
+    if (!fmt.flavors || fmt.flavors.length <= 1) return;
+    fmt.flavors.forEach(fl => {
+        const chip = document.createElement('div');
+        chip.className = 'chip-small' + (selectedFlavor === fl ? ' selected' : '');
+        chip.textContent = fl;
+        chip.onclick = () => { selectedFlavor = fl; renderFlavorChips(fmt); updateParamsGrid(); };
+        c.appendChild(chip);
+    });
+}
+
+function updateParamsGrid() {
     const grid = document.getElementById('paramsGrid');
-    const panel = document.getElementById('paramsPanel');
     grid.innerHTML = '';
-    const sel = [...selectedFormats];
-    if (sel.length === 0) { panel.classList.add('hidden'); return; }
-    const fmt = formats.find(f => f.value === sel[0]);
-    if (!fmt || !fmt.parameters || fmt.parameters.length === 0) { panel.classList.add('hidden'); return; }
-    panel.classList.remove('hidden');
-    fmt.parameters.forEach(p => {
+    const allParams = new Map();
+
+    if (selectedFormat) {
+        const fmt = formats.find(f => f.value === selectedFormat);
+        if (fmt && fmt.parameters) {
+            fmt.parameters.forEach(p => {
+                if (p.name === 'flavor') return;
+                allParams.set(p.name, p);
+            });
+        }
+    }
+
+    allParams.forEach((p, name) => {
         const div = document.createElement('div');
-        div.innerHTML = `<label>${p.description || p.name}</label>
-            <input id="param_${p.name}" value="${p.default}" placeholder="${p.name}">`;
+        const val = (name === 'topic') ? '' : (outputCache[name] !== undefined ? outputCache[name] : p.default);
+        div.innerHTML = `<label>${p.description || name}</label>
+            <input id="param_${name}" value="${val}" placeholder="${name}">`;
         grid.appendChild(div);
     });
 }
 
-// --- External toggle ---
-document.getElementById('externalToggle').addEventListener('change', function() {
-    document.getElementById('externalSection').classList.toggle('visible', this.checked);
-});
+function renderTaskBtns() {
+    const c = document.getElementById('taskBtns');
+    c.innerHTML = '';
+    const colors = { ideate: 'btn-ideate', write: 'btn-write', review: 'btn-review', refine: 'btn-refine', publish: 'btn-publish' };
+    tasks.forEach(t => {
+        const btn = document.createElement('button');
+        btn.className = 'btn ' + (colors[t.task_id] || 'btn-write');
+        btn.textContent = t.label;
+        btn.onclick = () => runTask(t);
+        c.appendChild(btn);
+    });
+}
+
+function collectParams(taskDef) {
+    const params = {};
+    if (selectedFormat) params.format = selectedFormat;
+    if (selectedFlavor) params.flavor = selectedFlavor;
+
+    const allKeys = new Set(Object.keys(taskDef.parameters || {}));
+    const fmt = selectedFormat ? formats.find(f => f.value === selectedFormat) : null;
+    if (fmt && fmt.parameters) fmt.parameters.forEach(p => allKeys.add(p.name));
+
+    allKeys.forEach(k => {
+        const el = document.getElementById(`param_${k}`);
+        if (el && el.value) {
+            params[k] = el.value;
+        }
+    });
+
+    // Auto-fill from output cache
+    Object.keys(taskDef.parameters || {}).forEach(k => {
+        if (!params[k] && outputCache[k] !== undefined) {
+            params[k] = outputCache[k];
+        }
+    });
+
+    return params;
+}
 
 // --- Logging ---
 function log(type, msg) {
     const panel = document.getElementById('logPanel');
     const now = new Date().toLocaleTimeString();
-    const cls = type === 'error' ? 'log-error' : type === 'success' ? 'log-success' :
-                type === 'agent' ? 'log-agent' : type === 'stage' ? 'log-stage' : '';
+    const cls = { error: 'log-error', success: 'log-success', agent: 'log-agent', stage: 'log-stage' }[type] || '';
     panel.innerHTML += `<div class="log-entry"><span class="log-time">${now}</span> <span class="${cls}">${msg}</span></div>`;
     panel.scrollTop = panel.scrollHeight;
 }
 
-function clearLog() {
-    document.getElementById('logPanel').innerHTML = '';
-}
-
-// --- Build request ---
-function buildRequest() {
-    const prompt = document.getElementById('promptInput').value;
-    const topic = document.getElementById('topicInput').value;
-    const types = [...selectedFormats];
-    const params = {};
-
-    // Collect parameter inputs
-    const fmt = types.length > 0 ? formats.find(f => f.value === types[0]) : null;
-    if (fmt && fmt.parameters) {
-        fmt.parameters.forEach(p => {
-            const el = document.getElementById(`param_${p.name}`);
-            if (el) {
-                let val = el.value;
-                if (p.type === 'int') val = parseInt(val) || p.default;
-                else if (p.type === 'float') val = parseFloat(val) || p.default;
-                params[p.name] = val;
-            }
-        });
-    }
-
-    let content = {};
-    if (document.getElementById('externalToggle').checked) {
-        try { content = JSON.parse(document.getElementById('externalContent').value || '{}'); }
-        catch (e) { log('error', 'Invalid JSON in external content'); }
-    } else if (lastContent) {
-        content = lastContent;
-    }
-
-    return {
-        prompt, topic,
-        content_types: types,
-        content_type: types[0] || '',
-        content,
-        parameters: params,
-    };
-}
-
-// --- Run actions ---
-async function runAction(action) {
+// --- Run task ---
+async function runTask(taskDef) {
     const btns = document.querySelectorAll('.btn');
     btns.forEach(b => b.disabled = true);
 
-    clearLog();
-    log('agent', `[Coordinator] Starting ${action} action...`);
+    document.getElementById('logPanel').innerHTML = '';
+    log('agent', `[Coordinator] Running task: ${taskDef.task_id}`);
 
-    const req = buildRequest();
-    if (action === 'review' && req.content_type) {
-        log('stage', `[Review] Reviewing ${req.content_type} content`);
-    }
-    if (action === 'refine' && lastReview) {
-        req.parameters.review_result = lastReview;
-        log('stage', `[Refine] Using previous review feedback`);
-    }
-
-    const endpoint = `${API_BASE}/${action}`;
-    log('stage', `[API] POST ${endpoint}`);
+    const params = collectParams(taskDef);
+    log('stage', `[API] POST /task/${taskDef.task_id}`);
 
     try {
-        const resp = await fetch(endpoint, {
+        const resp = await fetch(`${API}/task/${taskDef.task_id}`, {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(req),
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ parameters: params }),
         });
         const data = await resp.json();
 
         if (data.status === 'error') {
             log('error', `[Error] ${data.content?.error || 'Unknown error'}`);
         } else {
-            log('success', `[${action.toUpperCase()}] Completed successfully`);
+            log('success', `[${taskDef.task_id.toUpperCase()}] Completed`);
+            if (data.stages) data.stages.forEach(s => log('stage', `  └ ${s.stage} done`));
 
-            if (data.stages && data.stages.length > 0) {
-                data.stages.forEach(s => {
-                    log('stage', `[${s.stage}] Done`);
-                });
+            if (data.output_key && data.content) {
+                outputCache[data.output_key] = data.content;
             }
 
-            if (action === 'ideate') {
-                renderIdeation(data.content);
-            } else if (action === 'review') {
-                lastReview = data.content;
-                renderReview(data.content);
-            } else if (action === 'publish') {
-                lastContent = data.content;
-                renderResult(action, data);
-            } else {
-                lastContent = data.content;
-                renderResult(action, data);
-            }
+            renderOutput(taskDef.task_id, data);
+            refreshOutputKeys();
         }
     } catch (e) {
         log('error', `[Error] ${e.message}`);
@@ -346,128 +305,140 @@ async function runAction(action) {
     btns.forEach(b => b.disabled = false);
 }
 
-// --- Render results ---
-function renderIdeation(content) {
-    const body = document.getElementById('resultBody');
-    body.innerHTML = `
-        <div class="review-summary">
-            <strong>Chosen Format:</strong> ${content.chosen_format || 'N/A'}<br>
-            <strong>Topic:</strong> ${content.topic_statement || 'N/A'}<br>
-            <strong>Direction:</strong> ${content.creative_direction || 'N/A'}<br>
-            <strong>Reasoning:</strong> ${content.reasoning || 'N/A'}
-        </div>
-        <div class="result-content"><pre>${JSON.stringify(content.params || {}, null, 2)}</pre></div>
-    `;
+// --- Outputs ---
+async function refreshOutputKeys() {
+    try {
+        const resp = await fetch(`${API}/outputs`);
+        const data = await resp.json();
+        const keys = Object.keys(data.outputs || {});
+        const c = document.getElementById('outputKeys');
+        if (keys.length === 0) {
+            c.innerHTML = '<em style="color:#999">No outputs yet.</em>';
+            return;
+        }
+        c.innerHTML = '';
+        keys.forEach(k => {
+            const chip = document.createElement('div');
+            chip.className = 'output-key-chip';
+            chip.textContent = k;
+            chip.onclick = () => previewOutput(k, data.outputs[k]);
+            c.appendChild(chip);
+        });
+    } catch (e) { /* ignore */ }
 }
 
-function renderReview(content) {
-    const valid = content.valid !== false;
-    const score = content.score || 0;
-    const badgeCls = score >= 80 ? 'badge-success' : score >= 50 ? 'badge-warning' : 'badge-error';
-    const errors = (content.errors || []).map(e => `<li style="color:#c0392b">${e}</li>`).join('');
-    const warnings = (content.warnings || []).map(w => `<li style="color:#f39c12">${w}</li>`).join('');
+function previewOutput(key, value) {
+    const preview = document.getElementById('outputPreview');
+    const label = document.getElementById('outputPreviewLabel');
+    const body = document.getElementById('outputPreviewBody');
+    label.textContent = key;
+    body.textContent = typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);
+    preview.classList.remove('hidden');
+}
 
+// --- Render ---
+function renderOutput(taskId, data) {
     const body = document.getElementById('resultBody');
+    const content = data.content || {};
+
+    if (taskId === 'ideate') { renderIdeation(body, content); return; }
+    if (taskId === 'review') { renderReview(body, content); return; }
+
+    let html = '';
+    if (content.validation_result) {
+        const vr = content.validation_result;
+        const score = vr.score || 0;
+        const bc = score >= 80 ? 'badge-success' : score >= 50 ? 'badge-warning' : 'badge-error';
+        html += `<div class="review-summary">
+            <span class="badge ${bc}">${vr.valid ? 'Valid' : 'Invalid'}</span>
+            <span class="review-score">${score}/100</span>
+            <span>${vr.summary || ''}</span></div>`;
+    }
+
+    const c = content.content || content;
+    if (c.questions) html += renderQuiz(c);
+    else if (c.nodes) html += renderStory(c);
+    else html += `<div class="result-content"><pre>${JSON.stringify(c, null, 2)}</pre></div>`;
+
+    body.innerHTML = html;
+}
+
+function renderIdeation(body, content) {
     body.innerHTML = `
         <div class="review-summary">
-            <span class="badge ${badgeCls}">${valid ? 'Valid' : 'Invalid'}</span>
+            <strong>Format:</strong> ${content.chosen_format || 'N/A'}
+            <strong style="margin-left:12px">Topic:</strong> ${content.topic_statement || 'N/A'}<br>
+            <strong>Direction:</strong> ${content.creative_direction || 'N/A'}<br>
+            <em style="color:#888">${content.reasoning || ''}</em>
+        </div>
+        <div class="result-content"><pre>${JSON.stringify(content.params || content, null, 2)}</pre></div>`;
+}
+
+function renderReview(body, content) {
+    const valid = content.valid !== false;
+    const score = content.score || 0;
+    const bc = score >= 80 ? 'badge-success' : score >= 50 ? 'badge-warning' : 'badge-error';
+    const errors = (content.errors || []).map(e => `<li style="color:#c0392b">${e}</li>`).join('');
+    const warnings = (content.warnings || []).map(w => `<li style="color:#f39c12">${w}</li>`).join('');
+    body.innerHTML = `
+        <div class="review-summary">
+            <span class="badge ${bc}">${valid ? 'Valid' : 'Invalid'}</span>
             <span class="review-score" style="color:${score>=80?'#27ae60':score>=50?'#f39c12':'#c0392b'}">${score}/100</span>
             <p style="margin-top:8px">${content.summary || ''}</p>
         </div>
         ${errors ? '<h4 style="color:#c0392b;margin:8px 0">Errors</h4><ul>' + errors + '</ul>' : ''}
         ${warnings ? '<h4 style="color:#f39c12;margin:8px 0">Warnings</h4><ul>' + warnings + '</ul>' : ''}
-        ${content.suggestions ? '<h4 style="margin:8px 0">Suggestions</h4><ul>' + content.suggestions.map(s=>'<li>'+s+'</li>').join('') + '</ul>' : ''}
-    `;
-}
-
-function renderResult(action, data) {
-    const body = document.getElementById('resultBody');
-    const content = data.content || {};
-
-    let html = '';
-
-    if (content.validation_result) {
-        const vr = content.validation_result;
-        const score = vr.score || 0;
-        const badgeCls = score >= 80 ? 'badge-success' : score >= 50 ? 'badge-warning' : 'badge-error';
-        html += `<div class="review-summary">
-            <span class="badge ${badgeCls}">${vr.valid ? 'Valid' : 'Invalid'}</span>
-            <span class="review-score">${score}/100</span>
-            <span>${vr.summary || ''}</span>
-        </div>`;
-    }
-
-    // Detect quiz
-    if (content.questions || (content.content && content.content.questions)) {
-        const quiz = content.questions ? content : content.content || content;
-        html += renderQuiz(quiz);
-    } else if (content.nodes || (content.content && content.content.nodes)) {
-        const story = content.nodes ? content : content.content || content;
-        html += renderStory(story);
-    } else {
-        html += `<div class="result-content"><pre>${JSON.stringify(content, null, 2)}</pre></div>`;
-    }
-
-    body.innerHTML = html;
-
-    // Store as external content
-    const ext = document.getElementById('externalContent');
-    const rawContent = content.content || content;
-    ext.value = JSON.stringify(rawContent, null, 2);
+        ${content.suggestions ? '<h4 style="margin:8px 0">Suggestions</h4><ul>' + content.suggestions.map(s=>'<li>'+s+'</li>').join('') + '</ul>' : ''}`;
 }
 
 function renderQuiz(quiz) {
-    let html = `<h3 style="margin:12px 0">${quiz.title || 'Quiz'}</h3>`;
-    html += `<p style="color:#666;margin-bottom:12px">${quiz.description || ''}</p>`;
+    let h = `<h3 style="margin:12px 0">${quiz.title || 'Quiz'}</h3>`;
+    h += `<p style="color:#666;margin-bottom:12px">${quiz.description || ''}</p>`;
     (quiz.questions || []).forEach((q, i) => {
-        html += `<div style="background:#f8f9fa;padding:12px;border-radius:8px;margin-bottom:8px">
+        h += `<div style="background:#f8f9fa;padding:12px;border-radius:8px;margin-bottom:8px">
             <strong>Q${i+1}.</strong> ${q.question}
             <span class="badge badge-${q.tier==='high'?'error':q.tier==='mid'?'warning':'success'}">${q.tier} (${q.score}pt)</span>
             <ul style="margin:6px 0">`;
         (q.options || []).forEach((opt, j) => {
-            const mark = j === q.correct_answer ? ' style="color:#27ae60;font-weight:600"' : '';
-            html += `<li${mark}>${opt}${j === q.correct_answer ? ' &#10003;' : ''}</li>`;
+            const m = j === q.correct_answer ? ' style="color:#27ae60;font-weight:600"' : '';
+            h += `<li${m}>${opt}${j === q.correct_answer ? ' &#10003;' : ''}</li>`;
         });
-        html += `</ul>`;
-        if (q.explanation) html += `<p style="color:#888;font-size:0.85rem">${q.explanation}</p>`;
-        html += `</div>`;
+        h += `</ul>`;
+        if (q.explanation) h += `<p style="color:#888;font-size:0.85rem">${q.explanation}</p>`;
+        h += `</div>`;
     });
-    return html;
+    return h;
 }
 
 function renderStory(story) {
     const nodes = story.nodes || {};
     const startId = story.start_node || 'start';
-    let html = `<h3 style="margin:12px 0">${story.title || 'Story'}</h3>`;
-    html += `<p style="color:#666;margin-bottom:12px">${story.synopsis || ''}</p>`;
-    html += `<div id="storyView"></div>`;
+    let h = `<h3 style="margin:12px 0">${story.title || 'Story'}</h3>`;
+    h += `<p style="color:#666;margin-bottom:12px">${story.synopsis || ''}</p>`;
+    h += `<div id="storyView"></div>`;
     setTimeout(() => showNode(startId, nodes), 0);
-    return html;
+    return h;
 }
 
 function showNode(nodeId, nodes) {
-    const node = nodes[nodeId];
-    if (!node) return;
-    const view = document.getElementById('storyView');
-    if (!view) return;
-    let html = `<div style="background:#f8f9fa;padding:15px;border-radius:8px">
-        <p>${node.content}</p>`;
+    const node = nodes[nodeId]; if (!node) return;
+    const view = document.getElementById('storyView'); if (!view) return;
+    let h = `<div style="background:#f8f9fa;padding:15px;border-radius:8px"><p>${node.content}</p>`;
     if (node.is_ending) {
-        html += `<p style="color:#764ba2;font-weight:600;margin-top:10px">THE END</p>`;
+        h += `<p style="color:#764ba2;font-weight:600;margin-top:10px">THE END</p>`;
     } else {
-        html += `<div style="margin-top:10px">`;
+        h += `<div style="margin-top:10px">`;
         (node.branches || []).forEach(b => {
-            html += `<button onclick="showNode('${b.next_node_id}', window._storyNodes)"
-                class="btn btn-generate" style="margin:4px">${b.text}</button>`;
+            h += `<button onclick="showNode('${b.next_node_id}', window._storyNodes)"
+                class="btn btn-write" style="margin:4px">${b.text}</button>`;
         });
-        html += `</div>`;
+        h += `</div>`;
     }
-    html += `</div>`;
-    view.innerHTML = html;
+    h += `</div>`;
+    view.innerHTML = h;
     window._storyNodes = nodes;
 }
 
-// Init
 init();
 </script>
 </body>

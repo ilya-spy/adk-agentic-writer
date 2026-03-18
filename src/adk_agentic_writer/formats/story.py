@@ -61,6 +61,8 @@ STORY_FORMAT = FormatSpec(
     model_class=BranchedNarrative,
     default_params={"genre": "fantasy", "num_nodes": 7},
     parameter_specs=[
+        ParamSpec("topic", "str", "", "Content topic"),
+        ParamSpec("flavor", "str", "story", "Content flavor"),
         ParamSpec("genre", "str", "fantasy", "Story genre: fantasy, scifi, mystery, adventure"),
         ParamSpec("num_nodes", "int", 7, "Approximate number of story nodes"),
     ],
@@ -75,7 +77,7 @@ and meaningful choices that affect the story.
 CRITICAL: Respond with valid JSON only. No markdown, no explanations, no code blocks.
 The JSON must exactly match the schema structure provided.""",
     writer_prompt="""\
-Create a branched interactive narrative about "{topic}".
+Create a branched interactive {flavor} about "{topic}".
 
 Requirements:
 - Genre: {genre}
@@ -100,7 +102,7 @@ Refine this branched narrative. Fix any issues from the review. Ensure:
 - Branch structure is consistent
 - Content is vivid with rich descriptions
 - Choices feel meaningful to the reader""",
-    aliases=["narrative", "branched_narrative", "adventure"],
+    flavors=["story", "narrative", "branched_narrative", "adventure"],
     temperature=0.85,
     max_tokens=2048,
 )

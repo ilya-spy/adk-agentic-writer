@@ -1,8 +1,8 @@
 """Content format registry.
 
-Each format module defines a FormatSpec with all prompts, schemas,
-parameters, and sample outputs. The registry makes them available
-by name or alias.
+Each format module defines a FormatSpec with prompts, schemas, parameters,
+and sample outputs.  The registry creates a separate entry per *flavor*
+so that ``get_format("trivia")`` returns a FormatSpec with ``flavor="trivia"``.
 """
 
 from typing import Dict, List, Optional
@@ -13,14 +13,17 @@ from .story import STORY_FORMAT
 from .game import GAME_FORMAT
 from .simulation import SIMULATION_FORMAT
 
+_BASE_FORMATS = [QUIZ_FORMAT, STORY_FORMAT, GAME_FORMAT, SIMULATION_FORMAT]
+
 
 def _build_registry() -> Dict[str, FormatSpec]:
-    """Build name+alias -> FormatSpec lookup."""
+    """Build flavor -> FormatSpec lookup (one entry per flavor)."""
     reg: Dict[str, FormatSpec] = {}
-    for fmt in [QUIZ_FORMAT, STORY_FORMAT, GAME_FORMAT, SIMULATION_FORMAT]:
-        reg[fmt.name] = fmt
-        for alias in fmt.aliases:
-            reg[alias] = fmt
+    for fmt in _BASE_FORMATS:
+        for flavor in fmt.flavors:
+            reg[flavor] = fmt.for_flavor(flavor)
+        if fmt.name not in reg:
+            reg[fmt.name] = fmt.for_flavor(fmt.name)
     return reg
 
 
@@ -32,13 +35,13 @@ def get_format(name: str) -> Optional[FormatSpec]:
 
 
 def list_formats() -> List[FormatSpec]:
-    """Return de-duplicated list of base formats (no aliases)."""
+    """Return de-duplicated list of base formats (one per base name)."""
     seen: set = set()
     result: List[FormatSpec] = []
-    for fmt in FORMAT_REGISTRY.values():
+    for fmt in _BASE_FORMATS:
         if fmt.name not in seen:
             seen.add(fmt.name)
-            result.append(fmt)
+            result.append(fmt.for_flavor(fmt.name))
     return result
 
 

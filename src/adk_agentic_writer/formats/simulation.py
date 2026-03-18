@@ -10,6 +10,8 @@ SIMULATION_FORMAT = FormatSpec(
     model_class=WebSimulation,
     default_params={"complexity": "medium", "simulation_type": "interactive"},
     parameter_specs=[
+        ParamSpec("topic", "str", "", "Content topic"),
+        ParamSpec("flavor", "str", "simulation", "Content flavor"),
         ParamSpec("complexity", "str", "medium", "Simulation complexity: basic, medium, advanced"),
         ParamSpec("simulation_type", "str", "interactive", "Type of simulation"),
     ],
@@ -23,7 +25,7 @@ and realistic variable interactions.
 CRITICAL: Respond with valid JSON only. No markdown, no explanations, no code blocks.
 The JSON must exactly match the schema structure provided.""",
     writer_prompt="""\
-Create an interactive simulation about "{topic}".
+Create an interactive {flavor} about "{topic}".
 
 Requirements:
 - Define key variables with realistic ranges
@@ -42,7 +44,7 @@ Refine this simulation. Fix any issues from the review. Ensure:
 - Controls are intuitive and well-labeled
 - Rules are scientifically plausible
 - Overall design is educational and engaging""",
-    aliases=["web_simulation", "interactive", "simulator"],
+    flavors=["simulation", "web_simulation", "interactive", "simulator"],
     temperature=0.65,
     max_tokens=2048,
 )

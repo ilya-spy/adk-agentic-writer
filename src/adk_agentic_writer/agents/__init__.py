@@ -1,16 +1,22 @@
-"""Agent modules for the ADK Agentic Writer system.
+"""Agent modules for the ADK Agentic Writer system."""
 
-Agent factories: create_ideator, create_writer, create_reviewer, create_refiner.
-"""
-
+from .base import BaseAgentService, MODEL
 from .coordinator import Coordinator
-from .ideator import create_ideator
-from .writer import create_writer
-from .reviewer import create_reviewer, schema_validate
-from .refiner import create_refiner, create_loop_refiner
+from .ideator import IdeatorAgent, create_ideator
+from .writer import WriterAgent, create_writer
+from .reviewer import ReviewerAgent, create_reviewer, schema_validate
+from .refiner import RefinerAgent, create_refiner, create_loop_refiner
+from .publisher import PublisherAgent
 
 __all__ = [
+    "BaseAgentService",
+    "MODEL",
     "Coordinator",
+    "IdeatorAgent",
+    "WriterAgent",
+    "ReviewerAgent",
+    "RefinerAgent",
+    "PublisherAgent",
     "create_ideator",
     "create_writer",
     "create_reviewer",

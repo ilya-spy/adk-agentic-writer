@@ -1,13 +1,12 @@
-"""Refiner agent -- improves content based on review feedback.
+"""Refiner agent -- improves content based on review feedback."""
 
-Creates a native ADK LlmAgent that reads draft_content and
-review_result from session state, refines the content, and
-overwrites draft_content with the improved version.
-"""
+import json
+from typing import Any, Dict
 
 from google.adk.agents import Agent
 
-MODEL = "gemini-2.5-flash"
+from ..tasks import REFINE
+from .base import BaseAgentService, MODEL
 
 _INSTRUCTION = """\
 You are an expert content refiner.
@@ -60,6 +59,7 @@ OUTPUT: Either call exit_loop OR output refined JSON. Nothing else.
 
 
 def create_refiner(model: str = MODEL) -> Agent:
+    """Standalone factory kept for workflow composition."""
     return Agent(
         name="RefinerAgent",
         model=model,
@@ -71,7 +71,6 @@ def create_refiner(model: str = MODEL) -> Agent:
 
 
 def create_loop_refiner(exit_loop_tool, model: str = MODEL) -> Agent:
-    """Create a refiner that can call exit_loop to break out of a LoopAgent."""
     return Agent(
         name="RefinerAgent",
         model=model,
@@ -81,3 +80,33 @@ def create_loop_refiner(exit_loop_tool, model: str = MODEL) -> Agent:
         include_contents="none",
         tools=[exit_loop_tool],
     )
+
+
+class RefinerAgent(BaseAgentService):
+    """Refines content based on review feedback."""
+
+    def __init__(self, model: str = MODEL):
+        super().__init__(model=model)
+        self._register_tasks([REFINE])
+        self._agent = create_refiner(model)
+
+    async def process_task(
+        self, task_id: str, params: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        draft = params.get("draft_content", {})
+        review = params.get("review_result", {})
+        if isinstance(draft, dict):
+            draft_str = json.dumps(draft, indent=2, ensure_ascii=False)
+        else:
+            draft_str = str(draft)
+        if isinstance(review, dict):
+            review_str = json.dumps(review, indent=2, ensure_ascii=False)
+        else:
+            review_str = str(review)
+
+        prompt = (
+            f"Content to refine:\n{draft_str}\n\n"
+            f"Review feedback:\n{review_str}"
+        )
+        runner = self._ensure_runner("refiner", self._agent)
+        return await self._run(runner, "RefinerAgent", prompt)

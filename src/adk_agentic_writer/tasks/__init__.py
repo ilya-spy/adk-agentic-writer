@@ -1,21 +1,15 @@
-"""Task definitions for content generation and editorial workflows."""
+"""Task definitions for the ADK Agentic Writer."""
 
-from .content_tasks import (
-    GENERATE_QUIZ,
-    GENERATE_STORY,
-    GENERATE_GAME,
-    GENERATE_SIMULATION,
-    PRIMARY_TASKS,
-)
-from .editorial_tasks import REFINE_CONTENT, REVIEW_CONTENT, VALIDATE_CONTENT
+from .content_tasks import IDEATE, WRITE
+from .editorial_tasks import REVIEW, REFINE, PUBLISH
+
+ALL_TASKS = [IDEATE, WRITE, REVIEW, REFINE, PUBLISH]
 
 __all__ = [
-    "GENERATE_QUIZ",
-    "GENERATE_STORY",
-    "GENERATE_GAME",
-    "GENERATE_SIMULATION",
-    "PRIMARY_TASKS",
-    "REVIEW_CONTENT",
-    "VALIDATE_CONTENT",
-    "REFINE_CONTENT",
+    "IDEATE",
+    "WRITE",
+    "REVIEW",
+    "REFINE",
+    "PUBLISH",
+    "ALL_TASKS",
 ]

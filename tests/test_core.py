@@ -1,12 +1,11 @@
 """Tests for the ADK Agentic Writer system.
 
 All tests run offline (no GOOGLE_API_KEY, no LLM calls).
-Covers: response parsing, format registry, prompt building,
-schema validation, and workflow construction.
+Covers: response parsing, format registry, flavors, unified tasks,
+prompt building, schema validation, workflow construction, runtime store.
 """
 
 import json
-import os
 import pytest
 
 # ---------------------------------------------------------------------------
@@ -134,16 +133,20 @@ class TestFormatRegistry:
         assert names == {"quiz", "story", "game", "simulation"}
 
     def test_lookup_by_name(self):
-        assert get_format("quiz") is QUIZ_FORMAT
-        assert get_format("story") is STORY_FORMAT
-        assert get_format("game") is GAME_FORMAT
-        assert get_format("simulation") is SIMULATION_FORMAT
+        fmt = get_format("quiz")
+        assert fmt is not None
+        assert fmt.name == "quiz"
 
-    def test_lookup_by_alias(self):
-        assert get_format("trivia") is QUIZ_FORMAT
-        assert get_format("narrative") is STORY_FORMAT
-        assert get_format("quest_game") is GAME_FORMAT
-        assert get_format("web_simulation") is SIMULATION_FORMAT
+    def test_lookup_by_flavor(self):
+        fmt = get_format("trivia")
+        assert fmt is not None
+        assert fmt.name == "quiz"
+        assert fmt.flavor == "trivia"
+
+    def test_all_flavors_registered(self):
+        assert get_format("narrative") is not None
+        assert get_format("quest_game") is not None
+        assert get_format("web_simulation") is not None
 
     def test_unknown_returns_none(self):
         assert get_format("nonexistent") is None
@@ -167,82 +170,114 @@ class TestFormatRegistry:
 
 
 # ---------------------------------------------------------------------------
-# 3. Task resolution
+# 3. Flavors
 # ---------------------------------------------------------------------------
-from adk_agentic_writer.tasks.content_tasks import (
-    GENERATE_QUIZ,
-    GENERATE_STORY,
-    GENERATE_GAME,
-    GENERATE_SIMULATION,
-)
-from adk_agentic_writer.agents.coordinator import Coordinator
 
 
-class TestTaskResolution:
-    """Test task resolution without instantiating Coordinator."""
+class TestFlavors:
+    def test_quiz_flavors(self):
+        assert "quiz" in QUIZ_FORMAT.flavors
+        assert "trivia" in QUIZ_FORMAT.flavors
+        assert "test" in QUIZ_FORMAT.flavors
 
-    def setup_method(self):
-        tasks = [GENERATE_QUIZ, GENERATE_STORY, GENERATE_GAME, GENERATE_SIMULATION]
-        self.task_by_id = {t.task_id: t for t in tasks}
-        self.type_to_task = {}
-        for t in tasks:
-            for ct in t.content_types:
-                self.type_to_task[ct] = t
+    def test_flavor_creates_clone(self):
+        trivia = get_format("trivia")
+        quiz = get_format("quiz")
+        assert trivia.flavor == "trivia"
+        assert quiz.flavor == "quiz"
+        assert trivia.name == quiz.name == "quiz"
 
-    def test_resolve_by_task_id(self):
-        assert self.task_by_id["generate_quiz"] is GENERATE_QUIZ
-        assert self.task_by_id["generate_story"] is GENERATE_STORY
+    def test_each_flavor_has_own_spec(self):
+        trivia = get_format("trivia")
+        quiz = get_format("quiz")
+        assert trivia is not quiz
 
-    def test_resolve_by_content_type(self):
-        assert self.type_to_task["quiz"] is GENERATE_QUIZ
-        assert self.type_to_task["trivia"] is GENERATE_QUIZ
-        assert self.type_to_task["story"] is GENERATE_STORY
+    def test_flavor_in_default_params(self):
+        trivia = get_format("trivia")
+        assert trivia.default_params.get("flavor") == "trivia"
 
-    def test_all_primary_tasks_present(self):
-        ids = {t.task_id for t in [GENERATE_QUIZ, GENERATE_STORY, GENERATE_GAME, GENERATE_SIMULATION]}
-        assert ids == {"generate_quiz", "generate_story", "generate_game", "generate_simulation"}
+    def test_story_flavors(self):
+        assert "narrative" in STORY_FORMAT.flavors
+        assert "adventure" in STORY_FORMAT.flavors
 
-    def test_effective_content_type_from_params(self):
-        ct = Coordinator._effective_content_type(GENERATE_QUIZ, {"content_type": "trivia"})
-        assert ct == "trivia"
+    def test_topic_in_parameter_specs(self):
+        for fmt in list_formats():
+            param_names = [p.name for p in fmt.parameter_specs]
+            assert "topic" in param_names, f"{fmt.name} missing 'topic' param"
 
-    def test_effective_content_type_from_task(self):
-        ct = Coordinator._effective_content_type(GENERATE_QUIZ, {})
-        assert ct == "quiz"
-
-    def test_effective_content_type_default(self):
-        from adk_agentic_writer.models.agent_models import AgentTask, AgentRole
-        empty = AgentTask(task_id="empty", agent_role=AgentRole.WRITER, prompt="x", content_types=[])
-        ct = Coordinator._effective_content_type(empty, {})
-        assert ct == "quiz"
+    def test_flavor_in_parameter_specs(self):
+        for fmt in list_formats():
+            param_names = [p.name for p in fmt.parameter_specs]
+            assert "flavor" in param_names, f"{fmt.name} missing 'flavor' param"
 
 
 # ---------------------------------------------------------------------------
-# 4. Prompt building from format specs
+# 4. Unified tasks
 # ---------------------------------------------------------------------------
+from adk_agentic_writer.tasks import IDEATE, WRITE, REVIEW, REFINE, PUBLISH, ALL_TASKS
+
+
+class TestUnifiedTasks:
+    def test_all_tasks_present(self):
+        ids = {t.task_id for t in ALL_TASKS}
+        assert ids == {"ideate", "write", "review", "refine", "publish"}
+
+    def test_output_keys(self):
+        assert IDEATE.output_key == "ideation_result"
+        assert WRITE.output_key == "draft_content"
+        assert REVIEW.output_key == "review_result"
+        assert REFINE.output_key == "draft_content"
+        assert PUBLISH.output_key == "published_content"
+
+    def test_task_has_parameters(self):
+        for t in ALL_TASKS:
+            assert t.parameters is not None, f"Task {t.task_id} missing parameters"
+
+
+# ---------------------------------------------------------------------------
+# 5. Prompt building from format specs
+# ---------------------------------------------------------------------------
+
 
 class TestPromptBuilding:
-    def test_quiz_prompt_contains_topic(self):
+    def test_quiz_prompt_with_flavor(self):
         prompt = QUIZ_FORMAT.writer_prompt.format(
-            topic="Python", num_questions=5, difficulty="medium", num_options=4,
+            topic="Python", flavor="trivia",
+            num_questions=5, difficulty="medium", num_options=4,
         )
         assert "Python" in prompt
+        assert "trivia" in prompt
         assert "5" in prompt
 
     def test_quiz_prompt_has_schema(self):
         assert "correct_answer" in QUIZ_FORMAT.schema_description
         assert "tier" in QUIZ_FORMAT.schema_description
 
-    def test_story_prompt(self):
+    def test_story_prompt_with_flavor(self):
         prompt = STORY_FORMAT.writer_prompt.format(
-            topic="Dragons", num_nodes=7, genre="fantasy",
+            topic="Dragons", flavor="adventure", num_nodes=7, genre="fantasy",
         )
         assert "Dragons" in prompt
+        assert "adventure" in prompt
         assert "fantasy" in prompt
+
+    def test_game_prompt_with_flavor(self):
+        prompt = GAME_FORMAT.writer_prompt.format(
+            topic="Space", flavor="quest", num_nodes=5,
+        )
+        assert "Space" in prompt
+        assert "quest" in prompt
+
+    def test_simulation_prompt_with_flavor(self):
+        prompt = SIMULATION_FORMAT.writer_prompt.format(
+            topic="Gravity", flavor="simulator",
+        )
+        assert "Gravity" in prompt
+        assert "simulator" in prompt
 
 
 # ---------------------------------------------------------------------------
-# 5. Schema validation (from reviewer module)
+# 6. Schema validation (from reviewer module)
 # ---------------------------------------------------------------------------
 from adk_agentic_writer.agents.reviewer import schema_validate
 
@@ -294,6 +329,21 @@ class TestSchemaValidation:
         assert result["valid"] is False
         assert any("out of bounds" in e for e in result["errors"])
 
+    def test_quiz_flavor_alias_validation(self):
+        """schema_validate should work with flavor names like 'trivia'."""
+        quiz = {
+            "title": "Trivia",
+            "description": "A trivia quiz",
+            "difficulty": "easy",
+            "questions": [{
+                "question": "Q?", "options": ["A", "B"],
+                "correct_answer": 0, "tier": "low", "score": 1,
+            }],
+            "passing_score": 50,
+        }
+        result = schema_validate(quiz, "trivia")
+        assert result["valid"] is True
+
     def test_story_missing_start(self):
         story = {
             "title": "No Start",
@@ -313,24 +363,91 @@ class TestSchemaValidation:
 
 
 # ---------------------------------------------------------------------------
-# 6. Workflow construction (verifies factories return correct types)
+# 7. Runtime store
+# ---------------------------------------------------------------------------
+from adk_agentic_writer.backend.runtime import RuntimeStore
+
+
+class TestRuntimeStore:
+    def test_set_and_get(self):
+        store = RuntimeStore()
+        store.set("draft_content", {"title": "Quiz"})
+        assert store.get("draft_content") == {"title": "Quiz"}
+
+    def test_get_missing_returns_default(self):
+        store = RuntimeStore()
+        assert store.get("missing") is None
+        assert store.get("missing", "default") == "default"
+
+    def test_keys(self):
+        store = RuntimeStore()
+        store.set("a", 1)
+        store.set("b", 2)
+        assert set(store.keys()) == {"a", "b"}
+
+    def test_all(self):
+        store = RuntimeStore()
+        store.set("x", 10)
+        assert store.all() == {"x": 10}
+
+    def test_clear(self):
+        store = RuntimeStore()
+        store.set("key", "value")
+        store.clear()
+        assert store.keys() == []
+        assert store.get("key") is None
+
+
+# ---------------------------------------------------------------------------
+# 8. Workflow construction (verifies factories return correct types)
 # ---------------------------------------------------------------------------
 
-class TestWorkflowConstruction:
-    def test_write_review_creates_sequential(self):
-        from adk_agentic_writer.workflows import create_write_review_pipeline
-        pipeline = create_write_review_pipeline(QUIZ_FORMAT)
-        assert pipeline.name == "WriteReview_quiz"
-        assert len(pipeline.sub_agents) == 2
 
+class TestWorkflowConstruction:
     def test_refinement_creates_sequential_with_loop(self):
         from adk_agentic_writer.workflows import create_refinement_pipeline
-        pipeline = create_refinement_pipeline(STORY_FORMAT, max_iterations=2)
-        assert pipeline.name == "WriteAndRefine_story"
+        pipeline = create_refinement_pipeline(QUIZ_FORMAT)
+        assert "WriteAndRefine" in pipeline.name
         assert len(pipeline.sub_agents) == 2
 
     def test_publish_creates_full_pipeline(self):
         from adk_agentic_writer.workflows import create_publish_pipeline
         pipeline = create_publish_pipeline(GAME_FORMAT)
-        assert pipeline.name == "PublishPipeline_game"
+        assert "PublishPipeline" in pipeline.name
         assert len(pipeline.sub_agents) == 3
+
+
+# ---------------------------------------------------------------------------
+# 9. Agent service registration
+# ---------------------------------------------------------------------------
+
+
+class TestAgentServiceRegistration:
+    def test_base_agent_service_tasks(self):
+        from adk_agentic_writer.agents.base import BaseAgentService
+        svc = BaseAgentService()
+        assert svc.get_supported_tasks() == []
+        assert svc.handles("write") is False
+
+    def test_writer_agent_handles_write(self):
+        from adk_agentic_writer.agents.writer import WriterAgent
+        writer = WriterAgent.__new__(WriterAgent)
+        writer._model = "test"
+        writer._runners = {}
+        writer._tasks = []
+        writer._task_by_id = {}
+        from adk_agentic_writer.tasks import WRITE
+        writer._register_tasks([WRITE])
+        assert writer.handles("write")
+        assert not writer.handles("review")
+
+    def test_reviewer_agent_handles_review(self):
+        from adk_agentic_writer.agents.reviewer import ReviewerAgent
+        reviewer = ReviewerAgent.__new__(ReviewerAgent)
+        reviewer._model = "test"
+        reviewer._runners = {}
+        reviewer._tasks = []
+        reviewer._task_by_id = {}
+        from adk_agentic_writer.tasks import REVIEW
+        reviewer._register_tasks([REVIEW])
+        assert reviewer.handles("review")

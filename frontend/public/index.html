@@ -329,9 +329,23 @@
                     <div class="response-container"></div>
                 </div>
                 <div class="endpoint-wrapper">
+                    <div class="endpoint" onclick="testEndpoint('GET', '/tasks', this)">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-path">/tasks</span>
+                    </div>
+                    <div class="response-container"></div>
+                </div>
+                <div class="endpoint-wrapper">
+                    <div class="endpoint" onclick="testEndpoint('GET', '/outputs', this)">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-path">/outputs</span>
+                    </div>
+                    <div class="response-container"></div>
+                </div>
+                <div class="endpoint-wrapper">
                     <div class="endpoint" onclick="showGenerateInfo(this)">
                         <span class="method post">POST</span>
-                        <span class="endpoint-path">/generate</span>
+                        <span class="endpoint-path">/task/{"{task_id}"}</span>
                     </div>
                     <div class="response-container"></div>
                 </div>

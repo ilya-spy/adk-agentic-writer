@@ -1,24 +1,27 @@
-"""Editorial tasks: review, validate, refine."""
+"""Editorial tasks: review, refine, publish."""
 
 from ..models.agent_models import AgentRole, AgentTask
 
-REVIEW_CONTENT = AgentTask(
-    task_id="review_content",
+REVIEW = AgentTask(
+    task_id="review",
     agent_role=AgentRole.REVIEWER,
-    prompt="Review the following content and provide detailed feedback.\n\nContent: {content_draft}",
-    output_key="feedback",
+    prompt="Review the following content and provide detailed feedback",
+    output_key="review_result",
+    parameters={"draft_content": ""},
 )
 
-VALIDATE_CONTENT = AgentTask(
-    task_id="validate_content",
-    agent_role=AgentRole.REVIEWER,
-    prompt="Validate that the following content meets quality standards.\n\nContent: {content_draft}",
-    output_key="validation_result",
-)
-
-REFINE_CONTENT = AgentTask(
-    task_id="refine_content",
+REFINE = AgentTask(
+    task_id="refine",
     agent_role=AgentRole.REFINER,
-    prompt="Refine the following content based on feedback.\n\nContent: {content_draft}\n\nFeedback: {feedback}",
-    output_key="refined_content",
+    prompt="Refine content based on review feedback",
+    output_key="draft_content",
+    parameters={"draft_content": "", "review_result": ""},
+)
+
+PUBLISH = AgentTask(
+    task_id="publish",
+    agent_role=AgentRole.COORDINATOR,
+    prompt="Full publish pipeline: ideate, write, review, refine",
+    output_key="published_content",
+    parameters={"format": "", "topic": ""},
 )
