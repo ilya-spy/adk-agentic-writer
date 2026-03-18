@@ -10,6 +10,8 @@ GAME_FORMAT = FormatSpec(
     model_class=QuestGame,
     default_params={"complexity": "medium", "theme": "fantasy", "num_nodes": 5},
     parameter_specs=[
+        ParamSpec("topic", "str", "", "Content topic"),
+        ParamSpec("flavor", "str", "game", "Content flavor"),
         ParamSpec("complexity", "str", "medium", "Game complexity: simple, medium, complex"),
         ParamSpec("theme", "str", "fantasy", "Game theme/setting"),
         ParamSpec("num_nodes", "int", 5, "Number of quest nodes"),
@@ -24,7 +26,7 @@ and logical quest progression.
 CRITICAL: Respond with valid JSON only. No markdown, no explanations, no code blocks.
 The JSON must exactly match the schema structure provided.""",
     writer_prompt="""\
-Create an interactive quest game about "{topic}".
+Create an interactive quest {flavor} about "{topic}".
 
 Requirements:
 - Create approximately {num_nodes} quest nodes
@@ -44,7 +46,7 @@ Refine this quest game. Fix any issues from the review. Ensure:
 - Quest progression is logical and engaging
 - Rewards and requirements are balanced
 - Victory conditions are achievable""",
-    aliases=["quest_game", "quest", "rpg"],
+    flavors=["game", "quest_game", "quest", "rpg"],
     temperature=0.75,
     max_tokens=2048,
 )

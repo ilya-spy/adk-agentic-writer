@@ -1,14 +1,22 @@
-"""Ideator agent -- brainstorms topic, selects format, sets params.
+"""Ideator agent -- brainstorms topic, selects format, sets params."""
 
-Creates a native ADK LlmAgent that analyzes a user prompt and
-requested content types to produce a structured ideation result.
-"""
+from typing import Any, Dict
 
 from google.adk.agents import Agent
 
 from ..formats import list_formats
+from ..tasks import IDEATE
+from .base import BaseAgentService, MODEL
 
-MODEL = "gemini-2.5-flash"
+
+def _build_format_list() -> str:
+    lines = []
+    for fmt in list_formats():
+        flavors = ", ".join(fmt.flavors) if fmt.flavors else fmt.name
+        params = ", ".join(f"{p.name}={p.default}" for p in fmt.parameter_specs)
+        lines.append(f"- {fmt.name} ({fmt.label}) flavors=[{flavors}] params=[{params}]")
+    return "\n".join(lines)
+
 
 _INSTRUCTION = """\
 You are a professional content brainstormer and ideation specialist.
@@ -37,15 +45,35 @@ OUTPUT (valid JSON only, no markdown):
 """
 
 
-def _build_format_list() -> str:
-    lines = []
-    for fmt in list_formats():
-        params = ", ".join(f"{p.name}={p.default}" for p in fmt.parameter_specs)
-        lines.append(f"- {fmt.name} ({fmt.label}): params=[{params}]")
-    return "\n".join(lines)
+class IdeatorAgent(BaseAgentService):
+    """Brainstorms topic, selects format, sets optimal parameters."""
+
+    def __init__(self, model: str = MODEL):
+        super().__init__(model=model)
+        self._register_tasks([IDEATE])
+        instruction = _INSTRUCTION.replace("{format_list}", _build_format_list())
+        self._agent = Agent(
+            name="IdeatorAgent",
+            model=model,
+            instruction=instruction,
+            description="Brainstorms topic, selects format, and sets optimal parameters.",
+            output_key="ideation_result",
+            include_contents="none",
+        )
+
+    async def process_task(
+        self, task_id: str, params: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        prompt = params.get("prompt", "")
+        formats = params.get("formats", [])
+        if formats:
+            prompt += f"\nRequested formats: {', '.join(formats)}"
+        runner = self._ensure_runner("ideator", self._agent)
+        return await self._run(runner, "IdeatorAgent", prompt)
 
 
 def create_ideator(model: str = MODEL) -> Agent:
+    """Standalone factory kept for workflow composition."""
     instruction = _INSTRUCTION.replace("{format_list}", _build_format_list())
     return Agent(
         name="IdeatorAgent",

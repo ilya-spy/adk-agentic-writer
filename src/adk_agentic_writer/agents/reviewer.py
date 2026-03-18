@@ -1,9 +1,4 @@
-"""Reviewer agent -- validates and reviews generated content.
-
-Creates a native ADK LlmAgent that reads draft_content from session
-state, validates it against the format schema, and produces a
-structured review result.
-"""
+"""Reviewer agent -- validates and reviews generated content."""
 
 import json
 from typing import Any, Dict, List
@@ -11,8 +6,8 @@ from typing import Any, Dict, List
 from google.adk.agents import Agent
 
 from ..formats import get_format
-
-MODEL = "gemini-2.5-flash"
+from ..tasks import REVIEW
+from .base import BaseAgentService, MODEL
 
 _INSTRUCTION = """\
 You are a strict content quality reviewer.
@@ -50,6 +45,7 @@ Review the following content:
 
 
 def create_reviewer(model: str = MODEL) -> Agent:
+    """Standalone factory kept for workflow composition."""
     return Agent(
         name="ReviewerAgent",
         model=model,
@@ -60,14 +56,43 @@ def create_reviewer(model: str = MODEL) -> Agent:
     )
 
 
+class ReviewerAgent(BaseAgentService):
+    """Reviews content quality and validates against schema."""
+
+    def __init__(self, model: str = MODEL):
+        super().__init__(model=model)
+        self._register_tasks([REVIEW])
+        self._agent = create_reviewer(model)
+
+    async def process_task(
+        self, task_id: str, params: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        draft = params.get("draft_content", {})
+        content_type = params.get("format", "unknown")
+        if isinstance(draft, dict):
+            draft_str = json.dumps(draft, indent=2, ensure_ascii=False)
+        else:
+            draft_str = str(draft)
+
+        prompt = f"Content type: {content_type}\n\nContent to review:\n{draft_str}"
+        try:
+            runner = self._ensure_runner("reviewer", self._agent)
+            result = await self._run(runner, "ReviewerAgent", prompt)
+            result.setdefault("valid", len(result.get("errors", [])) == 0)
+            result.setdefault("score", 100 if result["valid"] else 50)
+            result.setdefault("errors", [])
+            result.setdefault("warnings", [])
+            result.setdefault("summary", "Review complete")
+            return result
+        except Exception:
+            return schema_validate(draft if isinstance(draft, dict) else {}, content_type)
+
+
 def schema_validate(
     content: Dict[str, Any],
     content_type: str,
 ) -> Dict[str, Any]:
-    """Lightweight local schema validation (no LLM).
-
-    Kept as a standalone utility for fast fallback validation.
-    """
+    """Lightweight local schema validation (no LLM)."""
     errors: List[str] = []
     warnings: List[str] = []
 
@@ -86,7 +111,7 @@ def schema_validate(
         except Exception as exc:
             errors.append(f"Schema validation failed: {exc}")
 
-    if content_type == "quiz":
+    if content_type in ("quiz", "trivia", "test"):
         questions = content.get("questions", [])
         if not questions:
             errors.append("Quiz has no questions")
@@ -100,7 +125,7 @@ def schema_validate(
                         f"out of bounds (only {len(opts)} options)"
                     )
 
-    if content_type in ("story", "branched_narrative"):
+    if content_type in ("story", "narrative", "branched_narrative", "adventure"):
         nodes = content.get("nodes", {})
         if "start" not in nodes:
             errors.append("Story missing 'start' node")

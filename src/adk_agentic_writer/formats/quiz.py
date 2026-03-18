@@ -58,6 +58,8 @@ QUIZ_FORMAT = FormatSpec(
         "passing_score": 70,
     },
     parameter_specs=[
+        ParamSpec("topic", "str", "", "Content topic"),
+        ParamSpec("flavor", "str", "quiz", "Content flavor"),
         ParamSpec("num_questions", "int", 5, "Number of questions"),
         ParamSpec("difficulty", "str", "medium", "Overall difficulty: easy, medium, hard"),
         ParamSpec("num_options", "int", 4, "Answer options per question"),
@@ -72,7 +74,7 @@ helpful explanations, and varying difficulty levels.
 CRITICAL: Respond with valid JSON only. No markdown, no explanations, no code blocks.
 The JSON must exactly match the schema structure provided.""",
     writer_prompt="""\
-Generate an educational quiz about "{topic}".
+Generate an educational {flavor} about "{topic}".
 
 The overall TOPIC difficulty is "{difficulty}" — this controls how hard the question
 CONTENT is (e.g. easy = beginner-friendly facts, hard = advanced/tricky knowledge).
@@ -104,7 +106,7 @@ Refine this quiz. Fix any issues from the review. Ensure:
 - Explanations are clear and educational
 - Questions are engaging and at appropriate difficulty
 - All structural rules are met""",
-    aliases=["trivia", "test"],
+    flavors=["quiz", "trivia", "test"],
     temperature=0.7,
     max_tokens=1536,
 )
