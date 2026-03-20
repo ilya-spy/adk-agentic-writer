@@ -27,8 +27,9 @@ MODEL = "gemini-2.5-flash"
 class BaseAgentService:
     """Shared runner pool, task registry, and prompt execution.
 
-    Subclasses populate ``_tasks`` via ``_register_tasks`` and override
-    ``process_task`` to handle their specific tasks.
+    Subclasses populate ``_tasks`` via ``_register_tasks`` and override:
+      - ``prepare_task`` to build a prompt from task params
+      - ``run_prompt``   to execute a prompt through the ADK runner
     """
 
     def __init__(self, model: str = MODEL):
@@ -69,10 +70,37 @@ class BaseAgentService:
         log_llm_response(logger, agent_name, result)
         return result
 
+    # ------------------------------------------------------------------
+    # Public API -- subclasses override prepare_task and run_prompt
+    # ------------------------------------------------------------------
+
+    def prepare_task(
+        self, task_id: str, params: Dict[str, Any],
+    ) -> str:
+        """Build a prompt string from task parameters."""
+        raise NotImplementedError(
+            f"{self.__class__.__name__}.prepare_task not implemented"
+        )
+
+    async def run_prompt(self, prompt: str) -> Dict[str, Any]:
+        """Execute a prompt through the agent's runner / pipeline."""
+        raise NotImplementedError(
+            f"{self.__class__.__name__}.run_prompt not implemented"
+        )
+
     async def process_task(
         self, task_id: str, params: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """Execute a task by id. Subclasses must override."""
-        raise NotImplementedError(
-            f"{self.__class__.__name__} does not handle task '{task_id}'"
-        )
+        """Convenience: prepare_task -> run_prompt."""
+        prompt = self.prepare_task(task_id, params)
+        return await self.run_prompt(prompt)
+
+
+def find_by_task(
+    agents: List["BaseAgentService"], task_id: str,
+) -> "BaseAgentService":
+    """Find the first agent in *agents* that handles *task_id*."""
+    for agent in agents:
+        if agent.handles(task_id):
+            return agent
+    raise ValueError(f"No agent in the team handles task '{task_id}'")

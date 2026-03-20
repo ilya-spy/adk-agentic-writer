@@ -56,7 +56,7 @@ def create_reviewer(model: str = MODEL) -> Agent:
     )
 
 
-class ReviewerAgent(BaseAgentService):
+class ReviewerAgentService(BaseAgentService):
     """Reviews content quality and validates against schema."""
 
     def __init__(self, model: str = MODEL):
@@ -64,17 +64,20 @@ class ReviewerAgent(BaseAgentService):
         self._register_tasks([REVIEW])
         self._agent = create_reviewer(model)
 
-    async def process_task(
+    def prepare_task(
         self, task_id: str, params: Dict[str, Any],
-    ) -> Dict[str, Any]:
+    ) -> str:
         draft = params.get("draft_content", {})
         content_type = params.get("format", "unknown")
         if isinstance(draft, dict):
             draft_str = json.dumps(draft, indent=2, ensure_ascii=False)
         else:
             draft_str = str(draft)
+        self._last_draft = draft
+        self._last_content_type = content_type
+        return f"Content type: {content_type}\n\nContent to review:\n{draft_str}"
 
-        prompt = f"Content type: {content_type}\n\nContent to review:\n{draft_str}"
+    async def run_prompt(self, prompt: str) -> Dict[str, Any]:
         try:
             runner = self._ensure_runner("reviewer", self._agent)
             result = await self._run(runner, "ReviewerAgent", prompt)
@@ -85,7 +88,9 @@ class ReviewerAgent(BaseAgentService):
             result.setdefault("summary", "Review complete")
             return result
         except Exception:
-            return schema_validate(draft if isinstance(draft, dict) else {}, content_type)
+            draft = getattr(self, "_last_draft", {})
+            ct = getattr(self, "_last_content_type", "unknown")
+            return schema_validate(draft if isinstance(draft, dict) else {}, ct)
 
 
 def schema_validate(

@@ -38,7 +38,7 @@ class ContentRole(str, Enum):
 # Common Prompt Components
 # =============================================================================
 
-_COMMON_INSTRUCTION = """You are an expert content creator specializing in interactive and engaging content for modern editorials.
+_COMMON_INSTRUCTION = """You are an expert content prodcustion seniot staff specializing in interactive and engaging content for modern editorials.
 Your responses must be valid JSON matching the exact schema provided.
 Be creative, engaging, and educational. Ensure all content is appropriate for general audiences."""
 

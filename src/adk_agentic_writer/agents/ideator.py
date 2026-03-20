@@ -14,14 +14,16 @@ def _build_format_list() -> str:
     for fmt in list_formats():
         flavors = ", ".join(fmt.flavors) if fmt.flavors else fmt.name
         params = ", ".join(f"{p.name}={p.default}" for p in fmt.parameter_specs)
-        lines.append(f"- {fmt.name} ({fmt.label}) flavors=[{flavors}] params=[{params}]")
+        lines.append(
+            f"- {fmt.name} ({fmt.label}) flavors=[{flavors}] params=[{params}]"
+        )
     return "\n".join(lines)
 
 
 _INSTRUCTION = """\
 You are a professional content brainstormer and ideation specialist.
 
-Your job is to analyze a user's creative prompt and their selected content format(s),
+Your job is to analyze a user's creative prompt and their hints about the content format(s),
 then produce a clear, actionable brief for the content writer.
 
 AVAILABLE FORMATS:
@@ -34,18 +36,20 @@ TASK:
 4. Suggest optimal parameter values for the chosen format.
 5. Provide a short creative direction note.
 
-OUTPUT (valid JSON only, no markdown):
+EXAMPLE OUTPUT (valid JSON only, no markdown):
 {{
   "chosen_format": "quiz",
   "topic_statement": "A refined, specific topic description",
-  "params": {{"num_questions": 5, "difficulty": "medium"}},
+  "params": {{
+    "num_questions": 5 (think about how many is appropriate for the topic),
+    "difficulty": "medium" (think about what difficulty is appropriate for the topic)}},
   "creative_direction": "Brief note on tone, angle, or approach",
   "reasoning": "Why this format and approach was chosen"
 }}
 """
 
 
-class IdeatorAgent(BaseAgentService):
+class IdeatorAgentService(BaseAgentService):
     """Brainstorms topic, selects format, sets optimal parameters."""
 
     def __init__(self, model: str = MODEL):
@@ -61,13 +65,16 @@ class IdeatorAgent(BaseAgentService):
             include_contents="none",
         )
 
-    async def process_task(
+    def prepare_task(
         self, task_id: str, params: Dict[str, Any],
-    ) -> Dict[str, Any]:
+    ) -> str:
         prompt = params.get("prompt", "")
         formats = params.get("formats", [])
         if formats:
             prompt += f"\nRequested formats: {', '.join(formats)}"
+        return prompt
+
+    async def run_prompt(self, prompt: str) -> Dict[str, Any]:
         runner = self._ensure_runner("ideator", self._agent)
         return await self._run(runner, "IdeatorAgent", prompt)
 

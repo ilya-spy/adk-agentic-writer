@@ -22,4 +22,4 @@ WRITE.output_key   # "draft_content"
 WRITE.parameters   # {"format": "", "flavor": "", "topic": ""}
 ```
 
-Tasks are executed via the Coordinator's `process_task(task_id, params)` method.
+Tasks are executed via the CoordinatorService's `process_task(task_id, params)` method.

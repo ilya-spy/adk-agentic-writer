@@ -1,64 +1,60 @@
-"""Publisher agent -- full ideate-write-review-refine pipeline."""
+"""Publisher agent -- full ideate-write-review/refine pipeline via ADK."""
 
-import json
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict
 
-from ..formats import get_format
+from google.adk.agents import Agent
+
 from ..tasks import PUBLISH
+from ..workflows.publish import create_publish_pipeline
 from .base import BaseAgentService, MODEL
-from .ideator import IdeatorAgent
-from .writer import WriterAgent
-from .reviewer import ReviewerAgent
-from .refiner import RefinerAgent
 
 logger = logging.getLogger(__name__)
 
 
-class PublisherAgent(BaseAgentService):
-    """Orchestrates the full publish pipeline via sub-agent services."""
+class PublisherAgentService(BaseAgentService):
+    """Runs the full publish pipeline as an ADK SequentialAgent.
 
-    def __init__(self, model: str = MODEL):
+    Accepts pre-built ADK agents: ideator, per-format writers dict,
+    reviewer, and refiner.  Builds a pipeline per format on demand.
+    """
+
+    def __init__(
+        self,
+        ideator: Agent,
+        writers: Dict[str, Agent],
+        reviewer: Agent,
+        refiner: Agent,
+        model: str = MODEL,
+    ):
         super().__init__(model=model)
         self._register_tasks([PUBLISH])
-        self._ideator = IdeatorAgent(model)
-        self._writer = WriterAgent(model)
-        self._reviewer = ReviewerAgent(model)
-        self._refiner = RefinerAgent(model)
+        self._ideator = ideator
+        self._writers = writers
+        self._reviewer = reviewer
+        self._refiner = refiner
+        self._pipelines: Dict[str, Any] = {}
 
-    async def process_task(
+    def _get_pipeline(self, fmt_name: str):
+        if fmt_name not in self._pipelines:
+            writer = self._writers.get(
+                fmt_name, next(iter(self._writers.values())),
+            )
+            self._pipelines[fmt_name] = create_publish_pipeline(
+                self._ideator, writer, self._reviewer, self._refiner,
+            )
+        return self._pipelines[fmt_name]
+
+    def prepare_task(
         self, task_id: str, params: Dict[str, Any],
-    ) -> Dict[str, Any]:
-        stages: List[Dict[str, Any]] = []
+    ) -> str:
         fmt_name = params.get("format", params.get("flavor", "quiz"))
         topic = params.get("topic", "general")
+        self._last_fmt_name = fmt_name
+        return f"Create {fmt_name} about {topic}"
 
-        draft = await self._writer.process_task("write", {
-            "format": fmt_name,
-            "flavor": fmt_name,
-            "topic": topic,
-            **{k: v for k, v in params.items() if k not in ("format", "topic")},
-        })
-        stages.append({"stage": "write", "output": draft})
-
-        review = await self._reviewer.process_task("review", {
-            "draft_content": draft,
-            "format": fmt_name,
-        })
-        stages.append({"stage": "review", "output": review})
-
-        if not review.get("valid", True) or review.get("score", 100) < 90:
-            refined = await self._refiner.process_task("refine", {
-                "draft_content": draft,
-                "review_result": review,
-            })
-            stages.append({"stage": "refine", "output": refined})
-            final = refined
-        else:
-            final = draft
-
-        return {
-            "content": final,
-            "validation_result": review,
-            "stages": stages,
-        }
+    async def run_prompt(self, prompt: str) -> Dict[str, Any]:
+        fmt_name = getattr(self, "_last_fmt_name", "quiz")
+        pipeline = self._get_pipeline(fmt_name)
+        runner = self._ensure_runner(f"publish_{fmt_name}", pipeline)
+        return await self._run(runner, pipeline.name, prompt)

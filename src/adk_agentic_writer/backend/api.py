@@ -8,7 +8,6 @@ import logging
 import pathlib
 import time
 import uuid
-from contextlib import asynccontextmanager
 from typing import Any, Dict, List
 
 from dotenv import load_dotenv
@@ -25,11 +24,8 @@ configure_logging()
 logger = logging.getLogger(__name__)
 log_settings_summary()
 
-from ..agents.coordinator import Coordinator
-from .runtime import RuntimeStore
-
-_coordinator: Coordinator | None = None
-_runtime = RuntimeStore()
+from ..agents.coordinator import CoordinatorService
+from .runtime import get_runtime, get_coordinator, lifespan
 
 
 # ---------------------------------------------------------------------------
@@ -48,21 +44,6 @@ class AgentResponse(BaseModel):
     content: Dict[str, Any] = {}
     stages: List[Dict[str, Any]] = []
     status: str = "completed"
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    global _coordinator
-    logger.info("Initializing ADK agent system...")
-    try:
-        _coordinator = Coordinator()
-        logger.info("Coordinator initialized successfully")
-    except Exception as e:
-        logger.error("Failed to initialize coordinator: %s", e)
-        _coordinator = None
-    yield
-    logger.info("Shutting down ADK agent system...")
-    _coordinator = None
 
 
 app = FastAPI(
@@ -100,10 +81,11 @@ def _serve_html(filename: str) -> HTMLResponse:
     return HTMLResponse(f"<html><body><h1>{filename} not found</h1></body></html>", status_code=404)
 
 
-def _get_coordinator() -> Coordinator:
-    if _coordinator is None:
+def _get_coordinator() -> CoordinatorService:
+    coordinator = get_coordinator()
+    if coordinator is None:
         raise HTTPException(status_code=503, detail="Agent system not available")
-    return _coordinator
+    return coordinator
 
 
 # ---------------------------------------------------------------------------
@@ -117,12 +99,13 @@ async def root():
 
 @app.get("/api")
 async def api_info():
-    return {"message": "ADK Agentic Writer API", "version": "4.0.0", "available": _coordinator is not None}
+    return {"message": "ADK Agentic Writer API", "version": "4.0.0", "available": get_coordinator() is not None}
 
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy" if _coordinator else "unavailable", "coordinator": _coordinator is not None}
+    c = get_coordinator()
+    return {"status": "healthy" if c else "unavailable", "coordinator": c is not None}
 
 
 @app.get("/showcase", response_class=HTMLResponse)
@@ -168,9 +151,15 @@ async def get_content_types():
     return {"content_types": content_types}
 
 
+@app.get("/services")
+async def get_services():
+    """List registered service names."""
+    return {"services": get_runtime().services.keys()}
+
+
 @app.get("/outputs")
 async def get_outputs():
-    return {"outputs": _runtime.all()}
+    return {"outputs": get_runtime().outputs.all()}
 
 
 @app.get("/supported-outputs")
@@ -182,7 +171,7 @@ async def get_supported_outputs():
 
 @app.post("/outputs/clear")
 async def clear_outputs():
-    _runtime.clear()
+    get_runtime().outputs.clear()
     return {"status": "cleared"}
 
 
@@ -212,9 +201,9 @@ async def run_task(task_id: str, request: AgentRequest):
             stages = result.get("stages", [])
             content = result.get("content", result)
             if output_key:
-                _runtime.set(output_key, content)
+                get_runtime().outputs.set(output_key, content)
         elif output_key:
-            _runtime.set(output_key, result)
+            get_runtime().outputs.set(output_key, result)
 
         return AgentResponse(
             request_id=request_id,

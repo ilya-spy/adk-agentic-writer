@@ -14,12 +14,12 @@ src/adk_agentic_writer/
 │   └── simulation.py     # Web simulation (flavors: simulation, simulator)
 ├── agents/               # Agent services
 │   ├── base.py           # BaseAgentService (runner pool, task registry)
-│   ├── ideator.py        # IdeatorAgent → IDEATE task
-│   ├── writer.py         # WriterAgent → WRITE task
-│   ├── reviewer.py       # ReviewerAgent → REVIEW task + schema_validate
-│   ├── refiner.py        # RefinerAgent → REFINE task
-│   ├── publisher.py      # PublisherAgent → PUBLISH task (pipeline)
-│   └── coordinator.py    # Coordinator (routes tasks to sub-agents)
+│   ├── ideator.py        # IdeatorAgentService → IDEATE task
+│   ├── writer.py         # WriterAgentService → WRITE task
+│   ├── reviewer.py       # ReviewerAgentService → REVIEW task + schema_validate
+│   ├── refiner.py        # RefinerAgentService → REFINE task
+│   ├── publisher.py      # PublisherAgentService → PUBLISH task (pipeline)
+│   └── coordinator.py    # CoordinatorService (routes tasks to sub-agents)
 ├── tasks/                # Task definitions
 │   ├── content_tasks.py  # IDEATE, WRITE
 │   └── editorial_tasks.py# REVIEW, REFINE, PUBLISH
@@ -29,7 +29,7 @@ src/adk_agentic_writer/
 │   └── publish.py        # Ideator → Writer → LoopAgent
 ├── backend/
 │   ├── api.py            # FastAPI app with task-driven endpoints
-│   └── runtime.py        # RuntimeStore (inter-task state)
+│   └── runtime.py        # RuntimeStore (agents, services, outputs)
 ├── models/               # Pydantic data models
 └── utils/                # Helpers (response parsing, logging, proxy)
 ```
@@ -46,8 +46,8 @@ Five tasks: `IDEATE`, `WRITE`, `REVIEW`, `REFINE`, `PUBLISH`.
 Each has an `output_key` (e.g. `draft_content`, `review_result`) used to store results in `RuntimeStore`.
 
 ### Agent Services
-Each agent inherits `BaseAgentService`, registers its tasks, and exposes `process_task(task_id, params)`.
-The `Coordinator` collects all sub-agent tasks and routes calls to the correct agent.
+Each agent service inherits `BaseAgentService`, registers its tasks, and exposes `prepare_task`, `run_prompt`, and `process_task`.
+The `CoordinatorService` collects all sub-agent tasks and routes calls to the correct service.
 
 ### API
 Single generic endpoint: `POST /task/{task_id}` with `{parameters: {...}}`.
@@ -56,4 +56,4 @@ Discovery: `GET /tasks`, `GET /content-types`, `GET /outputs`, `GET /supported-o
 
 ### Workflows
 ADK `SequentialAgent` and `LoopAgent` compositions for multi-step pipelines.
-Used internally by `PublisherAgent` and available for programmatic use.
+Used internally by `PublisherAgentService` and available for programmatic use.
