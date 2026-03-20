@@ -68,9 +68,9 @@ curl -X POST http://localhost:8000/task/review \
 ### Python API
 
 ```python
-from adk_agentic_writer.agents import Coordinator
+from adk_agentic_writer.agents import CoordinatorService
 
-coordinator = Coordinator()
+coordinator = CoordinatorService()
 
 # List tasks
 for t in coordinator.get_supported_tasks():

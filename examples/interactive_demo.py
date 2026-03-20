@@ -1,4 +1,4 @@
-"""Example: Interactive CLI demo using the Coordinator directly.
+"""Example: Interactive CLI demo using the CoordinatorService directly.
 
 Usage: python examples/interactive_demo.py
 
@@ -12,13 +12,13 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from adk_agentic_writer.agents.coordinator import Coordinator
+from adk_agentic_writer.agents.coordinator import CoordinatorService
 
 
 async def main():
     print("=== ADK Agentic Writer - Interactive Demo ===\n")
 
-    coordinator = Coordinator()
+    coordinator = CoordinatorService()
     tasks = coordinator.get_supported_tasks()
     print("Supported tasks:")
     for t in tasks:

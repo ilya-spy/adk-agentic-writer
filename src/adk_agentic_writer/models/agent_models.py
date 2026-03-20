@@ -39,6 +39,8 @@ class AgentRole(str, Enum):
     ANALYZER = "analyzer"
     STRATEGIST = "strategist"
     STREAMER = "streamer"
+    IDEATOR = "ideator"
+    PUBLISHER = "publisher"
 
 
 class WorkflowMetadata(BaseModel):

@@ -109,6 +109,7 @@ class TestExtractText:
     def test_object_with_text(self):
         class FakeResp:
             text = "result"
+
         assert extract_text(FakeResp()) == "result"
 
 
@@ -242,8 +243,11 @@ class TestUnifiedTasks:
 class TestPromptBuilding:
     def test_quiz_prompt_with_flavor(self):
         prompt = QUIZ_FORMAT.writer_prompt.format(
-            topic="Python", flavor="trivia",
-            num_questions=5, difficulty="medium", num_options=4,
+            topic="Python",
+            flavor="trivia",
+            num_questions=5,
+            difficulty="medium",
+            num_options=4,
         )
         assert "Python" in prompt
         assert "trivia" in prompt
@@ -255,7 +259,10 @@ class TestPromptBuilding:
 
     def test_story_prompt_with_flavor(self):
         prompt = STORY_FORMAT.writer_prompt.format(
-            topic="Dragons", flavor="adventure", num_nodes=7, genre="fantasy",
+            topic="Dragons",
+            flavor="adventure",
+            num_nodes=7,
+            genre="fantasy",
         )
         assert "Dragons" in prompt
         assert "adventure" in prompt
@@ -263,14 +270,17 @@ class TestPromptBuilding:
 
     def test_game_prompt_with_flavor(self):
         prompt = GAME_FORMAT.writer_prompt.format(
-            topic="Space", flavor="quest", num_nodes=5,
+            topic="Space",
+            flavor="quest",
+            num_nodes=5,
         )
         assert "Space" in prompt
         assert "quest" in prompt
 
     def test_simulation_prompt_with_flavor(self):
         prompt = SIMULATION_FORMAT.writer_prompt.format(
-            topic="Gravity", flavor="simulator",
+            topic="Gravity",
+            flavor="simulator",
         )
         assert "Gravity" in prompt
         assert "simulator" in prompt
@@ -335,10 +345,15 @@ class TestSchemaValidation:
             "title": "Trivia",
             "description": "A trivia quiz",
             "difficulty": "easy",
-            "questions": [{
-                "question": "Q?", "options": ["A", "B"],
-                "correct_answer": 0, "tier": "low", "score": 1,
-            }],
+            "questions": [
+                {
+                    "question": "Q?",
+                    "options": ["A", "B"],
+                    "correct_answer": 0,
+                    "tier": "low",
+                    "score": 1,
+                }
+            ],
             "passing_score": 50,
         }
         result = schema_validate(quiz, "trivia")
@@ -350,7 +365,9 @@ class TestSchemaValidation:
             "synopsis": "A story",
             "genre": "fantasy",
             "start_node": "start",
-            "nodes": {"node_1": {"node_id": "node_1", "content": "...", "branches": []}},
+            "nodes": {
+                "node_1": {"node_id": "node_1", "content": "...", "branches": []}
+            },
             "characters": [],
         }
         result = schema_validate(story, "story")
@@ -365,37 +382,80 @@ class TestSchemaValidation:
 # ---------------------------------------------------------------------------
 # 7. Runtime store
 # ---------------------------------------------------------------------------
-from adk_agentic_writer.backend.runtime import RuntimeStore
+from adk_agentic_writer.backend.runtime import RuntimeStore, NamedStore
+
+
+class TestNamedStore:
+    def test_set_and_get(self):
+        ns = NamedStore()
+        ns.set("a", 1)
+        assert ns.get("a") == 1
+
+    def test_get_missing(self):
+        ns = NamedStore()
+        assert ns.get("x") is None
+        assert ns.get("x", 42) == 42
+
+    def test_keys_and_all(self):
+        ns = NamedStore()
+        ns.set("a", 1)
+        ns.set("b", 2)
+        assert set(ns.keys()) == {"a", "b"}
+        assert ns.all() == {"a": 1, "b": 2}
+
+    def test_clear(self):
+        ns = NamedStore()
+        ns.set("a", 1)
+        ns.clear()
+        assert ns.keys() == []
 
 
 class TestRuntimeStore:
-    def test_set_and_get(self):
+    def test_outputs_set_get(self):
         store = RuntimeStore()
-        store.set("draft_content", {"title": "Quiz"})
-        assert store.get("draft_content") == {"title": "Quiz"}
+        store.outputs.set("draft_content", {"title": "Quiz"})
+        assert store.outputs.get("draft_content") == {"title": "Quiz"}
 
-    def test_get_missing_returns_default(self):
+    def test_outputs_keys_all_clear(self):
         store = RuntimeStore()
-        assert store.get("missing") is None
-        assert store.get("missing", "default") == "default"
+        store.outputs.set("a", 1)
+        store.outputs.set("b", 2)
+        assert set(store.outputs.keys()) == {"a", "b"}
+        assert store.outputs.all() == {"a": 1, "b": 2}
+        store.outputs.clear()
+        assert store.outputs.keys() == []
 
-    def test_keys(self):
+    def test_outputs_missing_returns_default(self):
         store = RuntimeStore()
-        store.set("a", 1)
-        store.set("b", 2)
-        assert set(store.keys()) == {"a", "b"}
+        assert store.outputs.get("missing") is None
+        assert store.outputs.get("missing", "default") == "default"
 
-    def test_all(self):
+    def test_agents_property(self):
         store = RuntimeStore()
-        store.set("x", 10)
-        assert store.all() == {"x": 10}
+        store.agents.set("writer", "agent_obj")
+        assert store.agents.get("writer") == "agent_obj"
+        assert store.agents.keys() == ["writer"]
 
-    def test_clear(self):
+    def test_services_property(self):
         store = RuntimeStore()
-        store.set("key", "value")
-        store.clear()
-        assert store.keys() == []
-        assert store.get("key") is None
+        store.services.set("coordinator", "svc_obj")
+        assert store.services.get("coordinator") == "svc_obj"
+        assert store.services.keys() == ["coordinator"]
+
+    def test_stores_are_isolated(self):
+        store = RuntimeStore()
+        store.outputs.set("key", "output_val")
+        store.agents.set("key", "agent_val")
+        store.services.set("key", "service_val")
+        assert store.outputs.get("key") == "output_val"
+        assert store.agents.get("key") == "agent_val"
+        assert store.services.get("key") == "service_val"
+
+    def test_custom_named_store(self):
+        store = RuntimeStore()
+        custom = store.store("custom")
+        custom.set("foo", "bar")
+        assert store.store("custom").get("foo") == "bar"
 
 
 # ---------------------------------------------------------------------------
@@ -404,15 +464,31 @@ class TestRuntimeStore:
 
 
 class TestWorkflowConstruction:
-    def test_refinement_creates_sequential_with_loop(self):
+    def test_refinement_creates_loop(self):
         from adk_agentic_writer.workflows import create_refinement_pipeline
-        pipeline = create_refinement_pipeline(QUIZ_FORMAT)
-        assert "WriteAndRefine" in pipeline.name
+        from adk_agentic_writer.agents.reviewer import create_reviewer
+        from adk_agentic_writer.agents.refiner import create_refiner
+        from adk_agentic_writer.workflows.tools import exit_loop
+
+        reviewer = create_reviewer()
+        refiner = create_refiner(exit_loop)
+        pipeline = create_refinement_pipeline(reviewer, refiner)
+        assert "RefinementLoop" in pipeline.name
         assert len(pipeline.sub_agents) == 2
 
     def test_publish_creates_full_pipeline(self):
         from adk_agentic_writer.workflows import create_publish_pipeline
-        pipeline = create_publish_pipeline(GAME_FORMAT)
+        from adk_agentic_writer.agents.ideator import create_ideator
+        from adk_agentic_writer.agents.writer import create_writer
+        from adk_agentic_writer.agents.reviewer import create_reviewer
+        from adk_agentic_writer.agents.refiner import create_refiner
+        from adk_agentic_writer.workflows.tools import exit_loop
+
+        ideator = create_ideator()
+        writer = create_writer(GAME_FORMAT)
+        reviewer = create_reviewer()
+        refiner = create_refiner(exit_loop)
+        pipeline = create_publish_pipeline(ideator, writer, reviewer, refiner)
         assert "PublishPipeline" in pipeline.name
         assert len(pipeline.sub_agents) == 3
 
@@ -425,29 +501,65 @@ class TestWorkflowConstruction:
 class TestAgentServiceRegistration:
     def test_base_agent_service_tasks(self):
         from adk_agentic_writer.agents.base import BaseAgentService
+
         svc = BaseAgentService()
         assert svc.get_supported_tasks() == []
         assert svc.handles("write") is False
 
-    def test_writer_agent_handles_write(self):
-        from adk_agentic_writer.agents.writer import WriterAgent
-        writer = WriterAgent.__new__(WriterAgent)
+    def test_writer_service_handles_write(self):
+        from adk_agentic_writer.agents.writer import WriterAgentService
+
+        writer = WriterAgentService.__new__(WriterAgentService)
         writer._model = "test"
         writer._runners = {}
         writer._tasks = []
         writer._task_by_id = {}
         from adk_agentic_writer.tasks import WRITE
+
         writer._register_tasks([WRITE])
         assert writer.handles("write")
         assert not writer.handles("review")
 
-    def test_reviewer_agent_handles_review(self):
-        from adk_agentic_writer.agents.reviewer import ReviewerAgent
-        reviewer = ReviewerAgent.__new__(ReviewerAgent)
+    def test_reviewer_service_handles_review(self):
+        from adk_agentic_writer.agents.reviewer import ReviewerAgentService
+
+        reviewer = ReviewerAgentService.__new__(ReviewerAgentService)
         reviewer._model = "test"
         reviewer._runners = {}
         reviewer._tasks = []
         reviewer._task_by_id = {}
         from adk_agentic_writer.tasks import REVIEW
+
         reviewer._register_tasks([REVIEW])
         assert reviewer.handles("review")
+
+
+# ---------------------------------------------------------------------------
+# 10. find_by_task helper
+# ---------------------------------------------------------------------------
+
+
+class TestFindByTask:
+    def test_finds_correct_agent(self):
+        from adk_agentic_writer.agents.base import BaseAgentService, find_by_task
+        from adk_agentic_writer.tasks import WRITE, REVIEW
+
+        writer = BaseAgentService.__new__(BaseAgentService)
+        writer._tasks = []
+        writer._task_by_id = {}
+        writer._register_tasks([WRITE])
+
+        reviewer = BaseAgentService.__new__(BaseAgentService)
+        reviewer._tasks = []
+        reviewer._task_by_id = {}
+        reviewer._register_tasks([REVIEW])
+
+        assert find_by_task([writer, reviewer], "write") is writer
+        assert find_by_task([writer, reviewer], "review") is reviewer
+
+    def test_raises_on_missing_task(self):
+        from adk_agentic_writer.agents.base import BaseAgentService, find_by_task
+
+        agent = BaseAgentService()
+        with pytest.raises(ValueError, match="No agent"):
+            find_by_task([agent], "nonexistent")

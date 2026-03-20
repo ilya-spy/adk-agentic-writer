@@ -1,26 +1,26 @@
 """Agent modules for the ADK Agentic Writer system."""
 
-from .base import BaseAgentService, MODEL
-from .coordinator import Coordinator
-from .ideator import IdeatorAgent, create_ideator
-from .writer import WriterAgent, create_writer
-from .reviewer import ReviewerAgent, create_reviewer, schema_validate
-from .refiner import RefinerAgent, create_refiner, create_loop_refiner
-from .publisher import PublisherAgent
+from .base import BaseAgentService, MODEL, find_by_task
+from .coordinator import CoordinatorService
+from .ideator import IdeatorAgentService, create_ideator
+from .writer import WriterAgentService, create_writer
+from .reviewer import ReviewerAgentService, create_reviewer, schema_validate
+from .refiner import RefinerAgentService, create_refiner
+from .publisher import PublisherAgentService
 
 __all__ = [
-    "BaseAgentService",
     "MODEL",
-    "Coordinator",
-    "IdeatorAgent",
-    "WriterAgent",
-    "ReviewerAgent",
-    "RefinerAgent",
-    "PublisherAgent",
+    "find_by_task",
+    "BaseAgentService",
+    "CoordinatorService",
+    "IdeatorAgentService",
+    "WriterAgentService",
+    "ReviewerAgentService",
+    "RefinerAgentService",
+    "PublisherAgentService",
     "create_ideator",
     "create_writer",
     "create_reviewer",
     "create_refiner",
-    "create_loop_refiner",
     "schema_validate",
 ]

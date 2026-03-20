@@ -1,58 +1,70 @@
-"""Coordinator -- collects sub-agent tasks and routes by task_id."""
+"""CoordinatorService -- collects sub-agent tasks and routes by task_id."""
 
 import logging
 from typing import Any, Dict, List
 
 from ..models.agent_models import AgentTask
 from .base import BaseAgentService, MODEL
-from .ideator import IdeatorAgent
-from .writer import WriterAgent
-from .reviewer import ReviewerAgent
-from .refiner import RefinerAgent
-from .publisher import PublisherAgent
 
 logger = logging.getLogger(__name__)
 
 
-class Coordinator(BaseAgentService):
+class CoordinatorService(BaseAgentService):
     """Central router that delegates to sub-agent services by task_id.
 
-    ``get_supported_tasks()`` returns the union of all sub-agent tasks.
-    ``process_task(task_id, params)`` routes to the correct sub-agent.
+    Receives pre-built sub-agents via constructor injection.
+    Routes ``prepare_task``, ``run_prompt``, and ``process_task``
+    to the correct sub-agent based on task_id.
     """
 
-    def __init__(self, model_name: str = MODEL):
+    def __init__(
+        self,
+        sub_agents: List[BaseAgentService],
+        model_name: str = MODEL,
+    ):
         super().__init__(model=model_name)
 
-        self._sub_agents: List[BaseAgentService] = [
-            IdeatorAgent(model_name),
-            WriterAgent(model_name),
-            ReviewerAgent(model_name),
-            RefinerAgent(model_name),
-            PublisherAgent(model_name),
-        ]
+        self._sub_agents = list(sub_agents)
 
         all_tasks: List[AgentTask] = []
         self._router: Dict[str, BaseAgentService] = {}
-        for agent in self._sub_agents:
-            for task in agent.get_supported_tasks():
+        for svc in self._sub_agents:
+            for task in svc.get_supported_tasks():
                 all_tasks.append(task)
-                self._router[task.task_id] = agent
+                self._router[task.task_id] = svc
 
         self._register_tasks(all_tasks)
 
         logger.info(
-            "Coordinator ready: tasks=%s",
+            "CoordinatorService ready: tasks=%s",
             [t.task_id for t in all_tasks],
         )
+
+    def _resolve(self, task_id: str) -> BaseAgentService:
+        svc = self._router.get(task_id)
+        if not svc:
+            raise ValueError(f"Unknown task: {task_id}")
+        return svc
+
+    def prepare_task(
+        self, task_id: str, params: Dict[str, Any],
+    ) -> str:
+        svc = self._resolve(task_id)
+        self._last_routed = svc
+        return svc.prepare_task(task_id, params)
+
+    async def run_prompt(self, prompt: str) -> Dict[str, Any]:
+        svc = getattr(self, "_last_routed", None)
+        if not svc:
+            raise RuntimeError(
+                "CoordinatorService.run_prompt requires prepare_task first"
+            )
+        return await svc.run_prompt(prompt)
 
     async def process_task(
         self, task_id: str, params: Dict[str, Any],
     ) -> Dict[str, Any]:
-        agent = self._router.get(task_id)
-        if not agent:
-            raise ValueError(f"Unknown task: {task_id}")
-        return await agent.process_task(task_id, params)
+        return await self._resolve(task_id).process_task(task_id, params)
 
 
-__all__ = ["Coordinator"]
+__all__ = ["CoordinatorService"]

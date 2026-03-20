@@ -12,7 +12,9 @@ GAME_FORMAT = FormatSpec(
     parameter_specs=[
         ParamSpec("topic", "str", "", "Content topic"),
         ParamSpec("flavor", "str", "game", "Content flavor"),
-        ParamSpec("complexity", "str", "medium", "Game complexity: simple, medium, complex"),
+        ParamSpec(
+            "complexity", "str", "medium", "Game complexity: simple, medium, hard"
+        ),
         ParamSpec("theme", "str", "fantasy", "Game theme/setting"),
         ParamSpec("num_nodes", "int", 5, "Number of quest nodes"),
     ],
@@ -26,10 +28,9 @@ and logical quest progression.
 CRITICAL: Respond with valid JSON only. No markdown, no explanations, no code blocks.
 The JSON must exactly match the schema structure provided.""",
     writer_prompt="""\
-Create an interactive quest {flavor} about "{topic}".
-
+Create an interactive gamified {flavor} about "{topic}".
 Requirements:
-- Create approximately {num_nodes} quest nodes
+- Create approximately {num_nodes} structural content nodes
 - Include a start node and victory condition
 - Each node should have title, description, choices, and rewards
 - Design clear progression path with optional side quests""",

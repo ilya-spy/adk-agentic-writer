@@ -28,7 +28,7 @@ def create_writer(fmt: FormatSpec, model: str = MODEL) -> Agent:
     )
 
 
-class WriterAgent(BaseAgentService):
+class WriterAgentService(BaseAgentService):
     """Creates writer agents per format on demand, routes by flavor/format."""
 
     def __init__(self, model: str = MODEL):
@@ -38,16 +38,14 @@ class WriterAgent(BaseAgentService):
         for fmt in list_formats():
             self._writers[fmt.name] = create_writer(fmt, model)
 
-    async def process_task(
+    def prepare_task(
         self, task_id: str, params: Dict[str, Any],
-    ) -> Dict[str, Any]:
+    ) -> str:
         flavor = params.get("flavor", params.get("format", "quiz"))
         topic = params.get("topic", "general")
 
         fmt = get_format(flavor) or get_format("quiz")
-        writer = self._writers.get(fmt.name)
-        if not writer:
-            writer = self._writers.get("quiz")
+        self._last_fmt = fmt
 
         merged = dict(fmt.default_params)
         merged.update(params)
@@ -55,9 +53,13 @@ class WriterAgent(BaseAgentService):
         merged.setdefault("flavor", flavor)
 
         try:
-            prompt_text = fmt.writer_prompt.format(**merged)
+            return fmt.writer_prompt.format(**merged)
         except KeyError:
-            prompt_text = f"Generate {flavor} content about {topic}."
+            return f"Generate {flavor} content about {topic}."
 
-        runner = self._ensure_runner(f"writer_{fmt.name}", writer)
-        return await self._run(runner, writer.name, prompt_text)
+    async def run_prompt(self, prompt: str) -> Dict[str, Any]:
+        fmt = getattr(self, "_last_fmt", None)
+        fmt_name = fmt.name if fmt else "quiz"
+        writer = self._writers.get(fmt_name) or next(iter(self._writers.values()))
+        runner = self._ensure_runner(f"writer_{fmt_name}", writer)
+        return await self._run(runner, writer.name, prompt)

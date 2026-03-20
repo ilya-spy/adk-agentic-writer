@@ -34,7 +34,7 @@ These prompts distinguish between:
 - **Overall quiz difficulty** (easy/medium/hard) — governs topic complexity
 - **Per-question scoring tiers** (low/mid/high → 1/2/3 pts) — governs point distribution
 
-**Note**: Static team uses unified `WriterAgent` and `DesignerAgent` that handle multiple content types via task routing. Gemini team uses these prompts with the LLM.
+**Note**: Static team uses unified `WriterAgentService` and `DesignerAgent` that handle multiple content types via task routing. Gemini team uses these prompts with the LLM.
 
 ## Editorial Team (`editorial_team.py`)
 

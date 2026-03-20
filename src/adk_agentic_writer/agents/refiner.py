@@ -1,4 +1,4 @@
-"""Refiner agent -- improves content based on review feedback."""
+"""Refiner agent -- iterative review/refine loop via ADK pipeline."""
 
 import json
 from typing import Any, Dict
@@ -6,32 +6,9 @@ from typing import Any, Dict
 from google.adk.agents import Agent
 
 from ..tasks import REFINE
+from ..workflows.refine import create_refinement_pipeline
 from .base import BaseAgentService, MODEL
 
-_INSTRUCTION = """\
-You are an expert content refiner.
-
-You receive content JSON (draft) and review feedback.
-Your task is to improve the content based on the review.
-
-**Current Content:**
-{draft_content}
-
-**Review Feedback:**
-{review_result}
-
-TASK:
-1. Read every error and warning from the review.
-2. Fix all errors -- these are critical.
-3. Address warnings where possible.
-4. Apply suggestions to improve quality.
-5. Maintain the same JSON schema structure.
-6. Keep the content engaging and creative.
-
-OUTPUT: The refined content as valid JSON only.
-Same schema as the input, but improved.
-No markdown, no explanations -- just the JSON object.
-"""
 
 _INSTRUCTION_WITH_EXIT = """\
 You are an expert content refiner.
@@ -58,19 +35,8 @@ OUTPUT: Either call exit_loop OR output refined JSON. Nothing else.
 """
 
 
-def create_refiner(model: str = MODEL) -> Agent:
-    """Standalone factory kept for workflow composition."""
-    return Agent(
-        name="RefinerAgent",
-        model=model,
-        instruction=_INSTRUCTION,
-        description="Refines and improves content based on review feedback.",
-        output_key="draft_content",
-        include_contents="none",
-    )
-
-
-def create_loop_refiner(exit_loop_tool, model: str = MODEL) -> Agent:
+def create_refiner(exit_loop_tool, model: str = MODEL) -> Agent:
+    """Factory for a loop-aware refiner that can call exit_loop."""
     return Agent(
         name="RefinerAgent",
         model=model,
@@ -82,31 +48,30 @@ def create_loop_refiner(exit_loop_tool, model: str = MODEL) -> Agent:
     )
 
 
-class RefinerAgent(BaseAgentService):
-    """Refines content based on review feedback."""
+class RefinerAgentService(BaseAgentService):
+    """Runs an iterative Reviewer <-> Refiner loop pipeline.
 
-    def __init__(self, model: str = MODEL):
+    Accepts pre-built ADK reviewer and refiner agents and composes
+    them into a LoopAgent via create_refinement_pipeline.
+    """
+
+    def __init__(self, reviewer: Agent, refiner: Agent, model: str = MODEL):
         super().__init__(model=model)
         self._register_tasks([REFINE])
-        self._agent = create_refiner(model)
+        self._pipeline = create_refinement_pipeline(reviewer, refiner)
 
-    async def process_task(
-        self, task_id: str, params: Dict[str, Any],
-    ) -> Dict[str, Any]:
+    def prepare_task(
+        self,
+        task_id: str,
+        params: Dict[str, Any],
+    ) -> str:
         draft = params.get("draft_content", {})
-        review = params.get("review_result", {})
         if isinstance(draft, dict):
             draft_str = json.dumps(draft, indent=2, ensure_ascii=False)
         else:
             draft_str = str(draft)
-        if isinstance(review, dict):
-            review_str = json.dumps(review, indent=2, ensure_ascii=False)
-        else:
-            review_str = str(review)
+        return f"Content to refine:\n{draft_str}"
 
-        prompt = (
-            f"Content to refine:\n{draft_str}\n\n"
-            f"Review feedback:\n{review_str}"
-        )
-        runner = self._ensure_runner("refiner", self._agent)
-        return await self._run(runner, "RefinerAgent", prompt)
+    async def run_prompt(self, prompt: str) -> Dict[str, Any]:
+        runner = self._ensure_runner("refiner", self._pipeline)
+        return await self._run(runner, "RefinementLoop", prompt)
