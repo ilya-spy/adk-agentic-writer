@@ -7,9 +7,9 @@ from google.adk.agents import Agent
 
 from ..formats import get_format
 from ..tasks import REVIEW
-from .base import BaseAgentService, MODEL
+from .base import BaseAgentService
 
-_INSTRUCTION = """\
+_INSTRUCTION_BASE = """\
 You are a strict content quality reviewer.
 
 You receive generated content JSON and its format type.
@@ -37,35 +37,65 @@ Scoring guide:
 - 50-69: Acceptable, needs refinement
 - Below 50: Poor, major issues
 
-CRITICAL: Respond with valid JSON only. No markdown, no explanations outside the JSON.
+CRITICAL: Respond with valid JSON only. No markdown, no explanations outside the JSON."""
+
+_INSTRUCTION_PIPELINE = _INSTRUCTION_BASE + """
 
 Review the following content:
 {draft_content}
 """
 
+_INSTRUCTION_SERVICE = _INSTRUCTION_BASE + """
 
-def create_reviewer(model: str = MODEL) -> Agent:
-    """Standalone factory kept for workflow composition."""
+The content to review will be provided in the user message."""
+
+
+def create_reviewer(
+    instruction: str | None = None,
+    *,
+    model: str = "gemini-2.5-flash",
+    output_key: str | None = "review_result",
+) -> Agent:
+    """Base factory -- accepts explicit instruction and output_key."""
+    if instruction is None:
+        instruction = _INSTRUCTION_PIPELINE
     return Agent(
         name="ReviewerAgent",
         model=model,
-        instruction=_INSTRUCTION,
+        instruction=instruction,
         description="Reviews and validates generated content for quality and correctness.",
-        output_key="review_result",
+        output_key=output_key,
         include_contents="none",
+    )
+
+
+def create_reviewer_pipeline(model: str = "gemini-2.5-flash") -> Agent:
+    """Pipeline variant -- reads draft_content from session state."""
+    return create_reviewer(
+        _INSTRUCTION_PIPELINE, model=model, output_key="review_result",
+    )
+
+
+def create_reviewer_service(model: str = "gemini-2.5-flash") -> Agent:
+    """Service variant -- receives content via user prompt, no output_key."""
+    return create_reviewer(
+        _INSTRUCTION_SERVICE, model=model, output_key=None,
     )
 
 
 class ReviewerAgentService(BaseAgentService):
     """Reviews content quality and validates against schema."""
 
-    def __init__(self, model: str = MODEL):
-        super().__init__(model=model)
+    def __init__(self):
+        super().__init__()
         self._register_tasks([REVIEW])
-        self._agent = create_reviewer(model)
+        self._pipeline_agents.append(create_reviewer_pipeline())
+        self._service_agents.append(create_reviewer_service())
 
     def prepare_task(
-        self, task_id: str, params: Dict[str, Any],
+        self,
+        task_id: str,
+        params: Dict[str, Any],
     ) -> str:
         draft = params.get("draft_content", {})
         content_type = params.get("format", "unknown")
@@ -79,7 +109,8 @@ class ReviewerAgentService(BaseAgentService):
 
     async def run_prompt(self, prompt: str) -> Dict[str, Any]:
         try:
-            runner = self._ensure_runner("reviewer", self._agent)
+            agent = self._service_agents[0]
+            runner = self._ensure_runner("reviewer", agent)
             result = await self._run(runner, "ReviewerAgent", prompt)
             result.setdefault("valid", len(result.get("errors", [])) == 0)
             result.setdefault("score", 100 if result["valid"] else 50)
@@ -104,8 +135,10 @@ def schema_validate(
     if not content:
         errors.append("Content is empty")
         return {
-            "valid": False, "score": 0,
-            "errors": errors, "warnings": warnings,
+            "valid": False,
+            "score": 0,
+            "errors": errors,
+            "warnings": warnings,
             "summary": "Empty content",
         }
 

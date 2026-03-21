@@ -162,13 +162,6 @@ async def get_outputs():
     return {"outputs": get_runtime().outputs.all()}
 
 
-@app.get("/supported-outputs")
-async def get_supported_outputs():
-    coordinator = _get_coordinator()
-    keys = list({t.output_key for t in coordinator.get_supported_tasks() if t.output_key})
-    return {"output_keys": sorted(keys)}
-
-
 @app.post("/outputs/clear")
 async def clear_outputs():
     get_runtime().outputs.clear()

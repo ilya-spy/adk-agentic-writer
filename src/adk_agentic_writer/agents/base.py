@@ -21,8 +21,6 @@ from ..utils.log import log_llm_prompt, log_llm_response
 
 logger = logging.getLogger(__name__)
 
-MODEL = "gemini-2.5-flash"
-
 
 class BaseAgentService:
     """Shared runner pool, task registry, and prompt execution.
@@ -32,21 +30,30 @@ class BaseAgentService:
       - ``run_prompt``   to execute a prompt through the ADK runner
     """
 
-    def __init__(self, model: str = MODEL):
-        self._model = model
+    def __init__(self):
+        self._pipeline_agents: List[Agent] = []
+        self._service_agents: List[Agent] = []
         self._runners: Dict[str, InMemoryRunner] = {}
         self._tasks: List[AgentTask] = []
         self._task_by_id: Dict[str, AgentTask] = {}
 
     def _register_tasks(self, tasks: List[AgentTask]) -> None:
-        self._tasks = list(tasks)
-        self._task_by_id = {t.task_id: t for t in tasks}
+        """Append/update tasks. Duplicate task_ids are replaced."""
+        for t in tasks:
+            self._task_by_id[t.task_id] = t
+        self._tasks = list(self._task_by_id.values())
 
     def get_supported_tasks(self) -> List[AgentTask]:
         return list(self._tasks)
 
     def get_task(self, task_id: str) -> Optional[AgentTask]:
         return self._task_by_id.get(task_id)
+    
+    def get_agents(self, mode: str = "pipeline") -> List[Agent]:
+        """Return ADK agents.  *mode*: ``'pipeline'`` or ``'service'``."""
+        if mode == "service":
+            return list(self._service_agents)
+        return list(self._pipeline_agents)
 
     def handles(self, task_id: str) -> bool:
         return task_id in self._task_by_id
@@ -75,7 +82,9 @@ class BaseAgentService:
     # ------------------------------------------------------------------
 
     def prepare_task(
-        self, task_id: str, params: Dict[str, Any],
+        self,
+        task_id: str,
+        params: Dict[str, Any],
     ) -> str:
         """Build a prompt string from task parameters."""
         raise NotImplementedError(
@@ -89,7 +98,9 @@ class BaseAgentService:
         )
 
     async def process_task(
-        self, task_id: str, params: Dict[str, Any],
+        self,
+        task_id: str,
+        params: Dict[str, Any],
     ) -> Dict[str, Any]:
         """Convenience: prepare_task -> run_prompt."""
         prompt = self.prepare_task(task_id, params)
@@ -97,7 +108,8 @@ class BaseAgentService:
 
 
 def find_by_task(
-    agents: List["BaseAgentService"], task_id: str,
+    agents: List["BaseAgentService"],
+    task_id: str,
 ) -> "BaseAgentService":
     """Find the first agent in *agents* that handles *task_id*."""
     for agent in agents:

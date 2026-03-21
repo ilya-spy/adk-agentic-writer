@@ -27,11 +27,22 @@ The JSON must exactly match the schema structure provided.""",
     writer_prompt="""\
 Create an interactive {flavor} about "{topic}".
 
-Requirements:
-- Define key variables with realistic ranges
-- Create intuitive controls (sliders, buttons, toggles)
-- Define rules/equations for variable interactions
-- Specify visualization type (chart, animation, 3d)""",
+STYLE — adapt to the "{flavor}" format:
+- "simulation": Standard educational simulation with clear learning goals.
+- "web_simulation": Browser-focused; emphasize visual output and interactivity.
+- "interactive": Hands-on exploration; let the user experiment freely.
+- "simulator": Realistic model; accuracy and fidelity over simplicity.
+
+COMPLEXITY — the complexity is "{complexity}":
+- "basic": Keep the model simple with 2-3 variables.
+- "medium": Moderate number of variables with clear interactions.
+- "advanced": Include multiple interacting variables and feedback loops.
+
+RULES:
+- Define key variables with realistic ranges.
+- Create intuitive controls (sliders, buttons, toggles).
+- Define rules/equations for variable interactions.
+- Specify visualization type (chart, animation, 3d).""",
     reviewer_prompt="""\
 Review this simulation. Check:
 - Variables have realistic ranges and units
@@ -44,7 +55,7 @@ Refine this simulation. Fix any issues from the review. Ensure:
 - Controls are intuitive and well-labeled
 - Rules are scientifically plausible
 - Overall design is educational and engaging""",
-    flavors=["simulation", "web_simulation", "interactive", "simulator"],
+    flavors=["web_simulation", "interactive", "simulator"],
     temperature=0.65,
     max_tokens=2048,
 )

@@ -47,7 +47,6 @@ Open `http://localhost:8000/showcase` for the interactive UI.
 | `/content-types` | GET | List formats with flavors and parameters |
 | `/outputs` | GET | View stored output keys |
 | `/outputs/clear` | POST | Clear stored outputs |
-| `/supported-outputs` | GET | List all possible output key names |
 | `/showcase` | GET | Interactive content showcase UI |
 | `/health` | GET | Health check |
 
