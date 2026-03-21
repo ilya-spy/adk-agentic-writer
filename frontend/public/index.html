@@ -265,6 +265,13 @@
             overflow-y: auto;
         }
 
+        .response-json .json-key { font-weight: 700; color: #93c5fd; }
+        .response-json .json-string { color: #86efac; }
+        .response-json .json-number { color: #fde68a; }
+        .response-json .json-bool { color: #c4b5fd; }
+        .response-json .json-null { color: #94a3b8; font-style: italic; }
+        .response-json .json-bracket { color: #cbd5e1; }
+
         .close-btn {
             background: none;
             border: none;
@@ -416,7 +423,7 @@
                             <button class="close-btn" onclick="this.closest('.response-container').classList.remove('visible')">✕</button>
                         </div>
                     </div>
-                    <div class="response-json">${JSON.stringify(data, null, 2)}</div>
+                    <div class="response-json">${renderJsonHtml(data)}</div>
                 `;
             } catch (error) {
                 container.innerHTML = `
@@ -454,6 +461,38 @@
                 </div>
             `;
             container.classList.add('visible');
+        }
+
+        function renderJsonHtml(value, indent) {
+            indent = indent || 0;
+            const pad = '  '.repeat(indent);
+            const padInner = '  '.repeat(indent + 1);
+
+            if (value === null) return '<span class="json-null">null</span>';
+            if (typeof value === 'boolean') return `<span class="json-bool">${value}</span>`;
+            if (typeof value === 'number') return `<span class="json-number">${value}</span>`;
+            if (typeof value === 'string') {
+                const escaped = value.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+                return `<span class="json-string">"${escaped}"</span>`;
+            }
+
+            if (Array.isArray(value)) {
+                if (value.length === 0) return '<span class="json-bracket">[]</span>';
+                const items = value.map(v => padInner + renderJsonHtml(v, indent + 1));
+                return '<span class="json-bracket">[</span>\n' + items.join(',\n') + '\n' + pad + '<span class="json-bracket">]</span>';
+            }
+
+            if (typeof value === 'object') {
+                const keys = Object.keys(value);
+                if (keys.length === 0) return '<span class="json-bracket">{}</span>';
+                const entries = keys.map(k => {
+                    const escapedKey = k.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+                    return padInner + '<span class="json-key">"' + escapedKey + '"</span>: ' + renderJsonHtml(value[k], indent + 1);
+                });
+                return '<span class="json-bracket">{</span>\n' + entries.join(',\n') + '\n' + pad + '<span class="json-bracket">}</span>';
+            }
+
+            return String(value);
         }
 
         // Check status on load
