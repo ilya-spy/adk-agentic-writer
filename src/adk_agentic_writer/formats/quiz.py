@@ -72,7 +72,6 @@ QUIZ_FORMAT = FormatSpec(
 You are an expert content creator specializing in interactive and engaging content.
 You create engaging educational quizzes with clear, engaging, thought-provoking questions,
 helpful explanations, and varying difficulty levels.
-St
 
 CRITICAL: Respond with valid JSON only. No markdown, no explanations, no code blocks.
 The JSON must exactly match the schema structure provided.""",

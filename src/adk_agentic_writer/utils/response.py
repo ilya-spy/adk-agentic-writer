@@ -73,6 +73,56 @@ def _fix_json_escapes(text: str) -> str:
     return text
 
 
+def _fix_double_braces(text: str) -> Optional[str]:
+    """Collapse ``{{`` / ``}}`` to ``{`` / ``}`` outside JSON string literals.
+
+    LLMs sometimes echo Python-template-style double braces from prompts.
+    Valid JSON never contains ``{{`` or ``}}`` outside strings, so this is safe.
+    Returns the fixed text if any replacements were made, else None.
+    """
+    if "{{" not in text and "}}" not in text:
+        return None
+
+    out: list[str] = []
+    in_string = False
+    escape_next = False
+    i = 0
+    changed = False
+    while i < len(text):
+        ch = text[i]
+        if escape_next:
+            escape_next = False
+            out.append(ch)
+            i += 1
+            continue
+        if ch == "\\" and in_string:
+            escape_next = True
+            out.append(ch)
+            i += 1
+            continue
+        if ch == '"':
+            in_string = not in_string
+            out.append(ch)
+            i += 1
+            continue
+        if not in_string and i + 1 < len(text):
+            pair = text[i : i + 2]
+            if pair == "{{":
+                out.append("{")
+                i += 2
+                changed = True
+                continue
+            if pair == "}}":
+                out.append("}")
+                i += 2
+                changed = True
+                continue
+        out.append(ch)
+        i += 1
+
+    return "".join(out) if changed else None
+
+
 def _repair_truncated_json(text: str) -> Optional[str]:
     """Attempt to close a truncated JSON object/array.
     Returns the repaired string, or None if repair seems impossible.
@@ -173,8 +223,9 @@ def parse_json(text: str, agent_name: str = "agent") -> Dict[str, Any]:
     2. Strip code fences
     3. Strict parse
     4. Fix escape sequences and retry
-    5. Allow control characters (strict=False)
-    6. Repair truncated JSON (LLM hit token limit)
+    5. Collapse double braces (``{{`` / ``}}``)
+    6. Allow control characters (strict=False)
+    7. Repair truncated JSON (LLM hit token limit)
     """
     refusal = detect_refusal(text)
     if refusal:
@@ -198,7 +249,17 @@ def parse_json(text: str, agent_name: str = "agent") -> Dict[str, Any]:
     except json.JSONDecodeError:
         pass
 
-    # --- 3. Lenient parse (allow control chars) ---
+    # --- 3. Double-brace collapse (LLM echoed {{ / }} from prompt) ---
+    debraced = _fix_double_braces(fixed)
+    if debraced:
+        try:
+            result = json.loads(debraced)
+            logger.warning("[%s] JSON required double-brace collapse", agent_name)
+            return result
+        except json.JSONDecodeError:
+            fixed = debraced  # carry forward for subsequent steps
+
+    # --- 4. Lenient parse (allow control chars) ---
     try:
         result = json.loads(fixed, strict=False)
         logger.warning("[%s] JSON required strict=False", agent_name)
@@ -206,7 +267,7 @@ def parse_json(text: str, agent_name: str = "agent") -> Dict[str, Any]:
     except json.JSONDecodeError:
         pass
 
-    # --- 4. Truncated JSON repair ---
+    # --- 5. Truncated JSON repair ---
     repaired = _repair_truncated_json(fixed)
     if repaired:
         try:
@@ -219,7 +280,7 @@ def parse_json(text: str, agent_name: str = "agent") -> Dict[str, Any]:
         except json.JSONDecodeError:
             pass
 
-    # --- 5. Give up ---
+    # --- 6. Give up ---
     logger.error(
         "[%s] JSON parse failed after all recovery attempts.\nRaw (first 500): %s",
         agent_name,

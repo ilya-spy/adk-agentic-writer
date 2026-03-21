@@ -65,17 +65,17 @@ Avoid the trap of always picking middle-of-the-road values. Surprise the user.
 OUTPUT FORMAT (valid JSON only, no markdown):
 The example below shows ONLY the JSON structure. The values are PLACEHOLDERS, not
 recommended defaults. Your actual values MUST be tailored to the specific idea.
-{{
+{
   "chosen_format": "<format name>",
   "topic_statement": "<specific, engaging topic description>",
-  "params": {{
+  "params": {
     "format": "<format name>",
     "flavor": "<chosen flavor>",
     ...format-specific params with values from the allowed ranges...
-  }},
+  },
   "creative_direction": "<tone, angle, or unique approach>",
   "reasoning": "<why this format, flavor, and parameter choices>"
-}}
+}
 """
 
 

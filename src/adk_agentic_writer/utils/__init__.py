@@ -24,6 +24,10 @@ from .response import (
     parse_json,
     detect_refusal,
 )
+from .validator import (
+    validate_and_coerce,
+    schema_validate,
+)
 
 __all__ = [
     "model_to_example_json",
@@ -42,4 +46,6 @@ __all__ = [
     "strip_code_fences",
     "parse_json",
     "detect_refusal",
+    "validate_and_coerce",
+    "schema_validate",
 ]

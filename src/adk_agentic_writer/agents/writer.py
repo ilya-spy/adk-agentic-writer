@@ -95,4 +95,5 @@ class WriterAgentService(BaseAgentService):
         fmt_name = fmt.name if fmt else "quiz"
         writer = self._writers.get(fmt_name) or next(iter(self._writers.values()))
         runner = self._ensure_runner(f"writer_{fmt_name}", writer)
-        return await self._run(runner, writer.name, prompt)
+        model_class = fmt.model_class if fmt else None
+        return await self._run(runner, writer.name, prompt, model_class=model_class)
