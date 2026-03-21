@@ -17,6 +17,7 @@ from google.adk.runners import InMemoryRunner
 
 from ..models.agent_models import AgentTask
 from ..utils.response import extract_text, parse_json
+from ..utils.validator import validate_and_coerce
 from ..utils.log import log_llm_prompt, log_llm_response
 
 logger = logging.getLogger(__name__)
@@ -69,11 +70,15 @@ class BaseAgentService:
         runner: InMemoryRunner,
         agent_name: str,
         prompt: str,
+        *,
+        model_class: Optional[type] = None,
     ) -> Dict[str, Any]:
         log_llm_prompt(logger, agent_name, prompt)
         response = await runner.run_debug(prompt, quiet=True)
         text = extract_text(response)
         result = parse_json(text, agent_name=agent_name)
+        if model_class is not None:
+            result, _ = validate_and_coerce(result, model_class, agent_name)
         log_llm_response(logger, agent_name, result)
         return result
 

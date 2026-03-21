@@ -1,12 +1,12 @@
 """Reviewer agent -- validates and reviews generated content."""
 
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from google.adk.agents import Agent
 
-from ..formats import get_format
 from ..tasks import REVIEW
+from ..utils.validator import schema_validate
 from .base import BaseAgentService
 
 _INSTRUCTION_BASE = """\
@@ -15,14 +15,14 @@ You are a strict content quality reviewer.
 You receive generated content JSON and its format type.
 Analyze the content and respond with ONLY a valid JSON object:
 
-{{
+{
   "valid": true,
   "score": 85,
   "errors": [],
   "warnings": ["minor issue"],
   "summary": "one-line overall assessment",
   "suggestions": ["specific improvement suggestion"]
-}}
+}
 
 Check for:
 - Required fields present and non-empty
@@ -122,58 +122,3 @@ class ReviewerAgentService(BaseAgentService):
             draft = getattr(self, "_last_draft", {})
             ct = getattr(self, "_last_content_type", "unknown")
             return schema_validate(draft if isinstance(draft, dict) else {}, ct)
-
-
-def schema_validate(
-    content: Dict[str, Any],
-    content_type: str,
-) -> Dict[str, Any]:
-    """Lightweight local schema validation (no LLM)."""
-    errors: List[str] = []
-    warnings: List[str] = []
-
-    if not content:
-        errors.append("Content is empty")
-        return {
-            "valid": False,
-            "score": 0,
-            "errors": errors,
-            "warnings": warnings,
-            "summary": "Empty content",
-        }
-
-    fmt = get_format(content_type)
-    if fmt:
-        try:
-            fmt.model_class.model_validate(content)
-        except Exception as exc:
-            errors.append(f"Schema validation failed: {exc}")
-
-    if content_type in ("quiz", "trivia", "test"):
-        questions = content.get("questions", [])
-        if not questions:
-            errors.append("Quiz has no questions")
-        for i, q in enumerate(questions):
-            if isinstance(q, dict):
-                opts = q.get("options", [])
-                ca = q.get("correct_answer", 0)
-                if isinstance(ca, int) and ca >= len(opts):
-                    errors.append(
-                        f"Question {i}: correct_answer index {ca} "
-                        f"out of bounds (only {len(opts)} options)"
-                    )
-
-    if content_type in ("story", "narrative", "branched_narrative", "adventure"):
-        nodes = content.get("nodes", {})
-        if "start" not in nodes:
-            errors.append("Story missing 'start' node")
-
-    valid = len(errors) == 0
-    score = 100 if valid else max(0, 100 - len(errors) * 20)
-    return {
-        "valid": valid,
-        "score": score,
-        "errors": errors,
-        "warnings": warnings,
-        "summary": "Schema validation passed" if valid else "Schema issues found",
-    }
