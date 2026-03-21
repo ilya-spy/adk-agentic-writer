@@ -1,7 +1,7 @@
 """Unified content tasks.
 
 Two core tasks: IDEATE for brainstorming, WRITE for content generation.
-Both accept format/flavor/topic parameters and use output_key for state passing.
+Both accept format/topic parameters and use output_key for state passing.
 """
 
 from ..models.agent_models import AgentRole, AgentTask
@@ -11,13 +11,13 @@ IDEATE = AgentTask(
     agent_role=AgentRole.STRATEGIST,
     prompt="Analyze prompt and select optimal format and parameters",
     output_key="ideation_result",
-    parameters={"prompt": "", "formats": []},
+    parameters={"formats": [], "prompt": ""},
 )
 
 WRITE = AgentTask(
     task_id="write",
     agent_role=AgentRole.WRITER,
-    prompt="Write {flavor} about {topic}",
+    prompt="Write {format} content about {topic}",
     output_key="draft_content",
-    parameters={"format": "", "flavor": "", "topic": ""},
+    parameters={"format": "", "topic": ""},
 )

@@ -1,39 +1,48 @@
 """Publisher agent -- full ideate-write-review/refine pipeline via ADK."""
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from google.adk.agents import Agent
 
 from ..tasks import PUBLISH
 from ..workflows.publish import create_publish_pipeline
-from .base import BaseAgentService, MODEL
+from .base import BaseAgentService
 
 logger = logging.getLogger(__name__)
+
+
+def _writers_by_format(writers: List[Agent]) -> Dict[str, Agent]:
+    """Derive format->agent mapping from agent names (e.g. QuizWriter -> quiz)."""
+    return {
+        agent.name.replace("Writer", "").lower(): agent
+        for agent in writers
+    }
 
 
 class PublisherAgentService(BaseAgentService):
     """Runs the full publish pipeline as an ADK SequentialAgent.
 
-    Accepts pre-built ADK agents: ideator, per-format writers dict,
-    reviewer, and refiner.  Builds a pipeline per format on demand.
+    Receives pre-built ADK agents to compose per-format pipelines.
     """
 
     def __init__(
         self,
         ideator: Agent,
-        writers: Dict[str, Agent],
+        writers: List[Agent],
         reviewer: Agent,
         refiner: Agent,
-        model: str = MODEL,
     ):
-        super().__init__(model=model)
+        super().__init__()
         self._register_tasks([PUBLISH])
         self._ideator = ideator
-        self._writers = writers
+        self._writers = _writers_by_format(writers)
         self._reviewer = reviewer
         self._refiner = refiner
         self._pipelines: Dict[str, Any] = {}
+        self._pipeline_agents.extend(
+            [ideator, reviewer, refiner, *writers]
+        )
 
     def _get_pipeline(self, fmt_name: str):
         if fmt_name not in self._pipelines:
@@ -48,10 +57,15 @@ class PublisherAgentService(BaseAgentService):
     def prepare_task(
         self, task_id: str, params: Dict[str, Any],
     ) -> str:
-        fmt_name = params.get("format", params.get("flavor", "quiz"))
-        topic = params.get("topic", "general")
+        formats = params.get("formats", [])
+        prompt = params.get("prompt", "")
+        fmt_name = formats[0] if formats else "quiz"
         self._last_fmt_name = fmt_name
-        return f"Create {fmt_name} about {topic}"
+        if formats:
+            prompt += f"\n\nREQUESTED FORMATS: {', '.join(formats)}"
+        if not prompt.strip():
+            prompt = f"Create {fmt_name} content"
+        return prompt
 
     async def run_prompt(self, prompt: str) -> Dict[str, Any]:
         fmt_name = getattr(self, "_last_fmt_name", "quiz")

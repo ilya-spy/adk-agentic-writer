@@ -7,10 +7,11 @@ from google.adk.agents import Agent
 
 from ..tasks import REFINE
 from ..workflows.refine import create_refinement_pipeline
-from .base import BaseAgentService, MODEL
+from ..workflows.tools import exit_loop
+from .base import BaseAgentService
 
 
-_INSTRUCTION_WITH_EXIT = """\
+_INSTRUCTION_PIPELINE = """\
 You are an expert content refiner.
 
 You receive content JSON (draft) and review feedback.
@@ -34,31 +35,76 @@ TASK:
 OUTPUT: Either call exit_loop OR output refined JSON. Nothing else.
 """
 
+_INSTRUCTION_SERVICE = """\
+You are an expert content refiner.
 
-def create_refiner(exit_loop_tool, model: str = MODEL) -> Agent:
-    """Factory for a loop-aware refiner that can call exit_loop."""
+You receive content JSON (draft) and review feedback in the user message.
+Your task is to improve the content based on the review.
+
+RULES:
+1. Fix all errors listed in the review.
+2. Address warnings where possible.
+3. Apply suggestions to improve quality.
+4. Preserve the original JSON structure and all required fields.
+
+CRITICAL: Output the refined content as valid JSON only. No markdown, no explanations."""
+
+
+def create_refiner(
+    instruction: str | None = None,
+    *,
+    model: str = "gemini-2.5-flash",
+    output_key: str | None = "draft_content",
+    tools: list | None = None,
+) -> Agent:
+    """Base factory -- accepts explicit instruction, output_key, and tools."""
+    if instruction is None:
+        instruction = _INSTRUCTION_PIPELINE
     return Agent(
         name="RefinerAgent",
         model=model,
-        instruction=_INSTRUCTION_WITH_EXIT,
+        instruction=instruction,
         description="Refines content or exits the loop when quality is sufficient.",
-        output_key="draft_content",
+        output_key=output_key,
         include_contents="none",
+        tools=tools or [],
+    )
+
+
+def create_refiner_pipeline(
+    exit_loop_tool, model: str = "gemini-2.5-flash",
+) -> Agent:
+    """Pipeline variant -- loop-aware with exit_loop tool and output_key."""
+    return create_refiner(
+        _INSTRUCTION_PIPELINE,
+        model=model,
+        output_key="draft_content",
         tools=[exit_loop_tool],
     )
 
 
-class RefinerAgentService(BaseAgentService):
-    """Runs an iterative Reviewer <-> Refiner loop pipeline.
+def create_refiner_service(model: str = "gemini-2.5-flash") -> Agent:
+    """Service variant -- no output_key, no tools; result returned explicitly."""
+    return create_refiner(
+        _INSTRUCTION_SERVICE, model=model, output_key=None, tools=None,
+    )
 
-    Accepts pre-built ADK reviewer and refiner agents and composes
-    them into a LoopAgent via create_refinement_pipeline.
+
+class RefinerAgentService(BaseAgentService):
+    """Refines content based on review feedback.
+
+    Creates its own refiner ADK agents internally.
+    Receives the reviewer ADK agent to compose the loop pipeline
+    (used by publisher); service calls use a standalone agent.
     """
 
-    def __init__(self, reviewer: Agent, refiner: Agent, model: str = MODEL):
-        super().__init__(model=model)
+    def __init__(self, reviewer: Agent):
+        super().__init__()
         self._register_tasks([REFINE])
-        self._pipeline = create_refinement_pipeline(reviewer, refiner)
+        pipe = create_refiner_pipeline(exit_loop)
+        self._pipeline_agents.append(pipe)
+        self._pipeline = create_refinement_pipeline(reviewer, pipe)
+        self._service_agents.append(create_refiner_service())
 
     def prepare_task(
         self,
@@ -66,12 +112,23 @@ class RefinerAgentService(BaseAgentService):
         params: Dict[str, Any],
     ) -> str:
         draft = params.get("draft_content", {})
+        review = params.get("review_result", {})
+        fmt = params.get("format", "")
         if isinstance(draft, dict):
             draft_str = json.dumps(draft, indent=2, ensure_ascii=False)
         else:
             draft_str = str(draft)
-        return f"Content to refine:\n{draft_str}"
+        if isinstance(review, dict):
+            review_str = json.dumps(review, indent=2, ensure_ascii=False)
+        else:
+            review_str = str(review)
+        parts = [f"DRAFT CONTENT:\n{draft_str}", f"REVIEW FEEDBACK:\n{review_str}"]
+        if fmt:
+            parts.append(f"Content format: {fmt}")
+        parts.append("Refine the draft based on the review feedback above.")
+        return "\n\n".join(parts)
 
     async def run_prompt(self, prompt: str) -> Dict[str, Any]:
-        runner = self._ensure_runner("refiner", self._pipeline)
-        return await self._run(runner, "RefinementLoop", prompt)
+        agent = self._service_agents[0]
+        runner = self._ensure_runner("refiner_svc", agent)
+        return await self._run(runner, "RefinerAgent", prompt)

@@ -29,11 +29,22 @@ CRITICAL: Respond with valid JSON only. No markdown, no explanations, no code bl
 The JSON must exactly match the schema structure provided.""",
     writer_prompt="""\
 Create an interactive gamified {flavor} about "{topic}".
-Requirements:
-- Create approximately {num_nodes} structural content nodes
-- Include a start node and victory condition
-- Each node should have title, description, choices, and rewards
-- Design clear progression path with optional side quests""",
+
+STYLE — adapt to the "{flavor}" format:
+- "game": Standard quest game with objectives and rewards.
+- "quest_game" / "quest": Focus on a clear quest line with milestones.
+- "rpg": Emphasize character stats, inventory, and role-playing choices.
+
+COMPLEXITY — the complexity is "{complexity}":
+- "simple": Keep mechanics simple with linear progression.
+- "medium": Add branching paths and optional objectives.
+- "hard": Include inventory management, stat checks, and multiple endings.
+
+RULES:
+- Create approximately {num_nodes} structural content nodes.
+- Include a start node and victory condition.
+- Each node should have title, description, choices, and rewards.
+- Design clear progression path with optional side quests.""",
     reviewer_prompt="""\
 Review this quest game. Check:
 - A start node exists and is referenced by start_node
@@ -47,7 +58,7 @@ Refine this quest game. Fix any issues from the review. Ensure:
 - Quest progression is logical and engaging
 - Rewards and requirements are balanced
 - Victory conditions are achievable""",
-    flavors=["game", "quest_game", "quest", "rpg"],
+    flavors=["quest_game", "quest", "rpg"],
     temperature=0.75,
     max_tokens=2048,
 )

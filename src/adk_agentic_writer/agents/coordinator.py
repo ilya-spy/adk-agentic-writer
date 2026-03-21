@@ -4,7 +4,7 @@ import logging
 from typing import Any, Dict, List
 
 from ..models.agent_models import AgentTask
-from .base import BaseAgentService, MODEL
+from .base import BaseAgentService
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +20,8 @@ class CoordinatorService(BaseAgentService):
     def __init__(
         self,
         sub_agents: List[BaseAgentService],
-        model_name: str = MODEL,
     ):
-        super().__init__(model=model_name)
+        super().__init__()
 
         self._sub_agents = list(sub_agents)
 

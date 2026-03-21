@@ -13,43 +13,79 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from adk_agentic_writer.agents.coordinator import CoordinatorService
+from adk_agentic_writer.agents.ideator import IdeatorAgentService
+from adk_agentic_writer.agents.writer import WriterAgentService
+from adk_agentic_writer.agents.reviewer import ReviewerAgentService
+from adk_agentic_writer.agents.refiner import RefinerAgentService
+from adk_agentic_writer.agents.publisher import PublisherAgentService
 
 
 async def main():
     print("=== ADK Agentic Writer - Interactive Demo ===\n")
 
-    coordinator = CoordinatorService()
+    ideator = IdeatorAgentService()
+    writer = WriterAgentService()
+    reviewer = ReviewerAgentService()
+
+    [ideator_adk] = ideator.get_agents("pipeline")
+    [reviewer_adk] = reviewer.get_agents("pipeline")
+
+    refiner = RefinerAgentService(reviewer_adk)
+    [refiner_adk] = refiner.get_agents("pipeline")
+    publisher = PublisherAgentService(
+        ideator_adk,
+        writer.get_agents("pipeline"),
+        reviewer_adk,
+        refiner_adk,
+    )
+
+    coordinator = CoordinatorService(
+        sub_agents=[ideator, writer, reviewer, refiner, publisher],
+    )
     tasks = coordinator.get_supported_tasks()
     print("Supported tasks:")
     for t in tasks:
         print(f"  {t.task_id:12s} (output: {t.output_key})")
 
     print("\n--- Running 'write' task ---")
-    result = await coordinator.process_task("write", {
-        "format": "quiz",
-        "flavor": "quiz",
-        "topic": "Python Programming",
-        "num_questions": 3,
-        "difficulty": "medium",
-        "num_options": 4,
-    })
-    print(f"Draft content keys: {list(result.keys()) if isinstance(result, dict) else type(result)}")
+    result = await coordinator.process_task(
+        "write",
+        {
+            "format": "quiz",
+            "flavor": "quiz",
+            "topic": "Python Programming",
+            "num_questions": 3,
+            "difficulty": "medium",
+            "num_options": 4,
+        },
+    )
+    print(
+        f"Draft content keys: {list(result.keys()) if isinstance(result, dict) else type(result)}"
+    )
 
     print("\n--- Running 'review' task ---")
-    review = await coordinator.process_task("review", {
-        "draft_content": result,
-        "format": "quiz",
-    })
+    review = await coordinator.process_task(
+        "review",
+        {
+            "draft_content": result,
+            "format": "quiz",
+        },
+    )
     print(f"Review: valid={review.get('valid')}, score={review.get('score')}")
     print(f"Summary: {review.get('summary')}")
 
     if review.get("score", 100) < 90:
         print("\n--- Running 'refine' task ---")
-        refined = await coordinator.process_task("refine", {
-            "draft_content": result,
-            "review_result": review,
-        })
-        print(f"Refined content keys: {list(refined.keys()) if isinstance(refined, dict) else type(refined)}")
+        refined = await coordinator.process_task(
+            "refine",
+            {
+                "draft_content": result,
+                "review_result": review,
+            },
+        )
+        print(
+            f"Refined content keys: {list(refined.keys()) if isinstance(refined, dict) else type(refined)}"
+        )
 
     print("\nDone!")
 

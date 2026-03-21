@@ -177,9 +177,9 @@ class TestFormatRegistry:
 
 class TestFlavors:
     def test_quiz_flavors(self):
-        assert "quiz" in QUIZ_FORMAT.flavors
         assert "trivia" in QUIZ_FORMAT.flavors
         assert "test" in QUIZ_FORMAT.flavors
+        assert "quiz" not in QUIZ_FORMAT.flavors
 
     def test_flavor_creates_clone(self):
         trivia = get_format("trivia")
@@ -273,17 +273,21 @@ class TestPromptBuilding:
             topic="Space",
             flavor="quest",
             num_nodes=5,
+            complexity="medium",
         )
         assert "Space" in prompt
         assert "quest" in prompt
+        assert "medium" in prompt
 
     def test_simulation_prompt_with_flavor(self):
         prompt = SIMULATION_FORMAT.writer_prompt.format(
             topic="Gravity",
             flavor="simulator",
+            complexity="advanced",
         )
         assert "Gravity" in prompt
         assert "simulator" in prompt
+        assert "advanced" in prompt
 
 
 # ---------------------------------------------------------------------------
@@ -430,12 +434,6 @@ class TestRuntimeStore:
         assert store.outputs.get("missing") is None
         assert store.outputs.get("missing", "default") == "default"
 
-    def test_agents_property(self):
-        store = RuntimeStore()
-        store.agents.set("writer", "agent_obj")
-        assert store.agents.get("writer") == "agent_obj"
-        assert store.agents.keys() == ["writer"]
-
     def test_services_property(self):
         store = RuntimeStore()
         store.services.set("coordinator", "svc_obj")
@@ -445,11 +443,11 @@ class TestRuntimeStore:
     def test_stores_are_isolated(self):
         store = RuntimeStore()
         store.outputs.set("key", "output_val")
-        store.agents.set("key", "agent_val")
         store.services.set("key", "service_val")
+        store.store("custom").set("key", "custom_val")
         assert store.outputs.get("key") == "output_val"
-        assert store.agents.get("key") == "agent_val"
         assert store.services.get("key") == "service_val"
+        assert store.store("custom").get("key") == "custom_val"
 
     def test_custom_named_store(self):
         store = RuntimeStore()
@@ -466,28 +464,28 @@ class TestRuntimeStore:
 class TestWorkflowConstruction:
     def test_refinement_creates_loop(self):
         from adk_agentic_writer.workflows import create_refinement_pipeline
-        from adk_agentic_writer.agents.reviewer import create_reviewer
-        from adk_agentic_writer.agents.refiner import create_refiner
+        from adk_agentic_writer.agents.reviewer import create_reviewer_pipeline
+        from adk_agentic_writer.agents.refiner import create_refiner_pipeline
         from adk_agentic_writer.workflows.tools import exit_loop
 
-        reviewer = create_reviewer()
-        refiner = create_refiner(exit_loop)
+        reviewer = create_reviewer_pipeline()
+        refiner = create_refiner_pipeline(exit_loop)
         pipeline = create_refinement_pipeline(reviewer, refiner)
         assert "RefinementLoop" in pipeline.name
         assert len(pipeline.sub_agents) == 2
 
     def test_publish_creates_full_pipeline(self):
         from adk_agentic_writer.workflows import create_publish_pipeline
-        from adk_agentic_writer.agents.ideator import create_ideator
-        from adk_agentic_writer.agents.writer import create_writer
-        from adk_agentic_writer.agents.reviewer import create_reviewer
-        from adk_agentic_writer.agents.refiner import create_refiner
+        from adk_agentic_writer.agents.ideator import create_ideator_pipeline
+        from adk_agentic_writer.agents.writer import create_writer_pipeline
+        from adk_agentic_writer.agents.reviewer import create_reviewer_pipeline
+        from adk_agentic_writer.agents.refiner import create_refiner_pipeline
         from adk_agentic_writer.workflows.tools import exit_loop
 
-        ideator = create_ideator()
-        writer = create_writer(GAME_FORMAT)
-        reviewer = create_reviewer()
-        refiner = create_refiner(exit_loop)
+        ideator = create_ideator_pipeline()
+        writer = create_writer_pipeline(GAME_FORMAT)
+        reviewer = create_reviewer_pipeline()
+        refiner = create_refiner_pipeline(exit_loop)
         pipeline = create_publish_pipeline(ideator, writer, reviewer, refiner)
         assert "PublishPipeline" in pipeline.name
         assert len(pipeline.sub_agents) == 3
@@ -510,7 +508,8 @@ class TestAgentServiceRegistration:
         from adk_agentic_writer.agents.writer import WriterAgentService
 
         writer = WriterAgentService.__new__(WriterAgentService)
-        writer._model = "test"
+        writer._pipeline_agents = []
+        writer._service_agents = []
         writer._runners = {}
         writer._tasks = []
         writer._task_by_id = {}
@@ -524,7 +523,8 @@ class TestAgentServiceRegistration:
         from adk_agentic_writer.agents.reviewer import ReviewerAgentService
 
         reviewer = ReviewerAgentService.__new__(ReviewerAgentService)
-        reviewer._model = "test"
+        reviewer._pipeline_agents = []
+        reviewer._service_agents = []
         reviewer._runners = {}
         reviewer._tasks = []
         reviewer._task_by_id = {}

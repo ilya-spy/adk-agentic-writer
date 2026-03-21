@@ -79,12 +79,23 @@ The JSON must exactly match the schema structure provided.""",
     writer_prompt="""\
 Create a branched interactive {flavor} about "{topic}".
 
-Requirements:
-- Genre: {genre}
-- Create approximately {num_nodes} story nodes
-- Include a "start" node as the entry point
-- Include at least 2 different endings (ending_0, ending_1, etc.)
-- Each non-ending node should have 1-3 branches (choices)
+STYLE — adapt to the "{flavor}" format:
+- "story": Classic branched narrative with rich world-building.
+- "narrative": Literary focus; emphasis on prose quality and character depth.
+- "branched_narrative": Complex multi-path structure with many branches.
+- "adventure": Action-oriented; exciting choices, high stakes, fast pace.
+
+GENRE — the genre is "{genre}":
+- "fantasy": Use magical elements, mythical creatures, and epic quests.
+- "scifi": Include futuristic technology, space exploration, and scientific concepts.
+- "mystery": Create suspense, clues, and unexpected revelations.
+- "adventure": Focus on exploration, challenges, and exciting discoveries.
+
+RULES:
+- Create approximately {num_nodes} story nodes.
+- Include a "start" node as the entry point.
+- Include at least 2 different endings (ending_0, ending_1, etc.).
+- Each non-ending node should have 1-3 branches (choices).
 - Branches format: {{"text": "choice text", "next_node_id": "node_id"}}
 
 Make the story engaging with vivid descriptions and meaningful choices.""",
@@ -102,7 +113,7 @@ Refine this branched narrative. Fix any issues from the review. Ensure:
 - Branch structure is consistent
 - Content is vivid with rich descriptions
 - Choices feel meaningful to the reader""",
-    flavors=["story", "narrative", "branched_narrative", "adventure"],
+    flavors=["narrative", "branched_narrative", "adventure"],
     temperature=0.85,
     max_tokens=2048,
 )

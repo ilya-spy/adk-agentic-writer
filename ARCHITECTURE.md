@@ -51,7 +51,7 @@ The `CoordinatorService` collects all sub-agent tasks and routes calls to the co
 
 ### API
 Single generic endpoint: `POST /task/{task_id}` with `{parameters: {...}}`.
-Discovery: `GET /tasks`, `GET /content-types`, `GET /outputs`, `GET /supported-outputs`.
+Discovery: `GET /tasks`, `GET /content-types`, `GET /outputs`.
 `RuntimeStore` holds output keys between task invocations.
 
 ### Workflows

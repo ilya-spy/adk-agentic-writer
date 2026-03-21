@@ -61,28 +61,38 @@ QUIZ_FORMAT = FormatSpec(
         ParamSpec("topic", "str", "", "Content topic"),
         ParamSpec("flavor", "str", "quiz", "Content flavor"),
         ParamSpec("num_questions", "int", 5, "Number of questions"),
-        ParamSpec("difficulty", "str", "medium", "Overall difficulty: easy, medium, hard"),
+        ParamSpec(
+            "difficulty", "str", "medium", "Overall difficulty: easy, medium, hard"
+        ),
         ParamSpec("num_options", "int", 4, "Answer options per question"),
     ],
     schema_description=QUIZ_SCHEMA,
     sample_output=QUIZ_SAMPLE,
     writer_instruction="""\
 You are an expert content creator specializing in interactive and engaging content.
-You create engaging educational quizzes with clear, thought-provoking questions,
+You create engaging educational quizzes with clear, engaging, thought-provoking questions,
 helpful explanations, and varying difficulty levels.
+St
 
 CRITICAL: Respond with valid JSON only. No markdown, no explanations, no code blocks.
 The JSON must exactly match the schema structure provided.""",
     writer_prompt="""\
 Generate an educational {flavor} about "{topic}".
 
-The overall TOPIC difficulty is "{difficulty}" — this controls how hard the question
-CONTENT is (e.g. easy = beginner-friendly facts, hard = advanced/tricky knowledge).
+STYLE — adapt to the "{flavor}" format:
+- "quiz": Standard educational quiz with clear learning objectives.
+- "trivia": Fun, surprising facts; snappy and entertaining questions.
+- "test": Rigorous assessment; well-structured, formal tone.
 
-IMPORTANT -- follow ALL of these rules precisely:
+DIFFICULTY — the overall difficulty is "{difficulty}":
+- "easy": Keep questions simple and straightforward, suitable for beginners.
+- "medium": Include nuanced questions that require deeper understanding.
+- "hard": Make questions challenging, testing advanced knowledge and critical thinking.
+
+RULES — follow ALL of these precisely:
 
 1. Create exactly {num_questions} questions.
-2. Each question MUST have exactly {num_options} answer options.
+2. Most question MUST have exactly {num_options} answer options (not more, not fewer).
 3. Include a brief explanation for each answer.
 4. SCORING TIERS:
    Every quiz MUST contain a MIX of three scoring tiers:
@@ -90,7 +100,7 @@ IMPORTANT -- follow ALL of these rules precisely:
      - "mid"  tier = 2 points (requires understanding)
      - "high" tier = 3 points (requires analysis / synthesis)
    Include at least one question at EACH tier. Distribute evenly.
-5. Create questions wisely, according to global quiz difficulty.
+5. Create questions wisely, combining global difficulty with per-question tier.
 6. Try creative question sequences, not simply round-robin from low to high tiers.""",
     reviewer_prompt="""\
 Review this quiz content. Check:
@@ -106,7 +116,7 @@ Refine this quiz. Fix any issues from the review. Ensure:
 - Explanations are clear and educational
 - Questions are engaging and at appropriate difficulty
 - All structural rules are met""",
-    flavors=["quiz", "trivia", "test"],
+    flavors=["trivia", "test"],
     temperature=0.7,
     max_tokens=1536,
 )
