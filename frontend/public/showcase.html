@@ -279,6 +279,15 @@
         <div id="finalResults"></div>
     </div>
 
+    <!-- 9. Content Renderer -->
+    <div class="panel" id="rendererPanel" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <h2 style="margin:0"><span class="step-num">9</span> Content Preview</h2>
+            <button class="btn" style="background:#667eea;color:white;margin:0;padding:6px 16px;font-size:0.82rem" onclick="closeRenderer()">Close Preview</button>
+        </div>
+        <div id="rendererContainer"></div>
+    </div>
+
     <!-- Activity log -->
     <div class="log-header">
         <div>
@@ -301,6 +310,7 @@
         </div>
     </div>
 
+<script src="/content-renderer.js"></script>
 <script>
 const API = window.location.origin;
 
@@ -375,10 +385,27 @@ function renderResultsList(containerId, items, labelFn, onSelect) {
     }
 }
 
+let _lastPreviewItem = null;
+
 function showResultPreview(containerId, item) {
     const preview = document.getElementById(`${containerId}_preview`);
     const data = item._raw || item;
-    preview.innerHTML = `<pre class="json-tree">${renderJsonHtml(data)}</pre>`;
+    preview.innerHTML = '';
+
+    if ((containerId === 'finalResults' || containerId === 'draftsResults') && ContentRenderer.detectFormat(data)) {
+        _lastPreviewItem = item;
+        const btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.style.cssText = 'background:#667eea;color:white;margin:0 0 10px;padding:6px 16px;font-size:0.82rem;display:inline-block';
+        btn.textContent = 'Render Preview';
+        btn.onclick = () => renderContent(_lastPreviewItem);
+        preview.appendChild(btn);
+    }
+
+    const pre = document.createElement('pre');
+    pre.className = 'json-tree';
+    pre.innerHTML = renderJsonHtml(data);
+    preview.appendChild(pre);
 }
 
 function renderJsonHtml(value, indent) {
@@ -584,6 +611,19 @@ function onRefinedSelected(item, idx) {
     );
     log('stage', 'Draft updated from refined result — ready for next iteration');
     document.getElementById('reviewerPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderContent(item) {
+    const data = item._raw || item;
+    const panel = document.getElementById('rendererPanel');
+    panel.style.display = '';
+    ContentRenderer.render('rendererContainer', data);
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closeRenderer() {
+    document.getElementById('rendererPanel').style.display = 'none';
+    document.getElementById('rendererContainer').innerHTML = '';
 }
 
 // ---------------------------------------------------------------------------

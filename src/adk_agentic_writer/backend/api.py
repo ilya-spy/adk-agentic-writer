@@ -117,6 +117,16 @@ async def showcase():
     return _serve_html("showcase.html")
 
 
+@app.get("/content-renderer.js")
+async def content_renderer_js():
+    from starlette.responses import Response
+
+    path = _PROJECT_ROOT / "frontend" / "public" / "content-renderer.js"
+    if path.exists():
+        return Response(path.read_text(encoding="utf-8"), media_type="application/javascript")
+    return Response("// not found", status_code=404, media_type="application/javascript")
+
+
 # ---------------------------------------------------------------------------
 # Discovery
 # ---------------------------------------------------------------------------
