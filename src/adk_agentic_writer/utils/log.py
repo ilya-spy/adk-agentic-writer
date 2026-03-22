@@ -97,6 +97,11 @@ def configure_logging(
     LOG_LLM_IO = log_llm_io if log_llm_io is not None else _env_bool("LOG_LLM_IO")
     LOG_LLM_IO_MAX = log_llm_io_max if log_llm_io_max is not None else _env_int("LOG_LLM_IO_MAX", 2000)
 
+    # In verbose LLM mode, disable truncation so developers see full payloads
+    if LOG_LLM_IO and LOG_LLM_IO_MAX > 0 and log_llm_io_max is None:
+        if not os.environ.get("LOG_LLM_IO_MAX"):
+            LOG_LLM_IO_MAX = 0
+
     fmt_name = (log_format or os.environ.get("LOG_FORMAT", "text")).strip().lower()
 
     # ---------- root handler ----------
@@ -148,19 +153,26 @@ def configure_logging(
 # Helpers for LLM I/O logging
 # ---------------------------------------------------------------------------
 
+_SEPARATOR = "─" * 72
+
+
+def _maybe_truncate(text: str) -> str:
+    if LOG_LLM_IO_MAX and len(text) > LOG_LLM_IO_MAX:
+        return text[:LOG_LLM_IO_MAX] + f"\n… [{len(text)} chars total, truncated]"
+    return text
+
+
 def log_llm_prompt(logger: logging.Logger, agent_name: str, prompt: str) -> None:
     """Log the full assembled prompt sent to the LLM."""
     if not LOG_LLM_IO:
         return
     level = _env_level("LOG_LEVEL_LLM", "DEBUG")
-    truncated = prompt[:LOG_LLM_IO_MAX]
-    suffix = f"... [{len(prompt)} chars total]" if len(prompt) > LOG_LLM_IO_MAX else ""
+    body = _maybe_truncate(prompt)
     logger.log(
         level,
-        "[%s] PROMPT >>>>\n%s%s\n<<<< END PROMPT",
-        agent_name,
-        truncated,
-        suffix,
+        "\n%s\n[%s] PROMPT  (%d chars)\n%s\n%s\n%s",
+        _SEPARATOR, agent_name, len(prompt), _SEPARATOR,
+        body, _SEPARATOR,
     )
 
 
@@ -170,14 +182,12 @@ def log_llm_response(logger: logging.Logger, agent_name: str, response: dict) ->
         return
     level = _env_level("LOG_LEVEL_LLM", "DEBUG")
     text = json.dumps(response, indent=2, ensure_ascii=False)
-    truncated = text[:LOG_LLM_IO_MAX]
-    suffix = f"\n... [{len(text)} chars total]" if len(text) > LOG_LLM_IO_MAX else ""
+    body = _maybe_truncate(text)
     logger.log(
         level,
-        "[%s] RESPONSE >>>>\n%s%s\n<<<< END RESPONSE",
-        agent_name,
-        truncated,
-        suffix,
+        "\n%s\n[%s] RESPONSE  (%d chars)\n%s\n%s\n%s",
+        _SEPARATOR, agent_name, len(text), _SEPARATOR,
+        body, _SEPARATOR,
     )
 
 

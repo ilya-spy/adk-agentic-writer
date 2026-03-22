@@ -6,6 +6,7 @@ from google.adk.agents import Agent
 
 from ..formats import list_formats
 from ..tasks import IDEATE
+from ..utils.callbacks import adk_before_agent, adk_after_agent, adk_before_model
 from .base import BaseAgentService
 
 
@@ -103,6 +104,9 @@ def create_ideator(
         description="Brainstorms topic, selects format, and sets optimal parameters.",
         output_key=output_key,
         include_contents="none",
+        before_agent_callback=adk_before_agent,
+        after_agent_callback=adk_after_agent,
+        before_model_callback=adk_before_model,
     )
 
 

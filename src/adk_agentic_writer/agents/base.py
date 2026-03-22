@@ -18,6 +18,7 @@ from google.adk.runners import InMemoryRunner
 from ..models.agent_models import AgentTask
 from ..utils.response import extract_text, parse_json
 from ..utils.validator import validate_and_coerce
+from ..utils.event_bus import emit_event
 from ..utils.log import log_llm_prompt, log_llm_response
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,9 @@ class BaseAgentService:
         self._runners: Dict[str, InMemoryRunner] = {}
         self._tasks: List[AgentTask] = []
         self._task_by_id: Dict[str, AgentTask] = {}
+        cls_name = self.__class__.__name__
+        logger.info("[%s] initialized", cls_name)
+        emit_event("agent.init", f"{cls_name} initialized", agent=cls_name)
 
     def _register_tasks(self, tasks: List[AgentTask]) -> None:
         """Append/update tasks. Duplicate task_ids are replaced."""
@@ -63,6 +67,7 @@ class BaseAgentService:
         if key not in self._runners:
             self._runners[key] = InMemoryRunner(agent=agent)
             logger.info("Created runner: %s", key)
+            emit_event("agent.spawn", f"Runner spawned: {key}", agent=key)
         return self._runners[key]
 
     async def _run(
@@ -108,8 +113,12 @@ class BaseAgentService:
         params: Dict[str, Any],
     ) -> Dict[str, Any]:
         """Convenience: prepare_task -> run_prompt."""
+        cls_name = self.__class__.__name__
+        emit_event("task.start", f"{cls_name} executing {task_id}", agent=cls_name, task=task_id)
         prompt = self.prepare_task(task_id, params)
-        return await self.run_prompt(prompt)
+        result = await self.run_prompt(prompt)
+        emit_event("task.complete", f"{cls_name} completed {task_id}", level="success", agent=cls_name, task=task_id)
+        return result
 
 
 def find_by_task(

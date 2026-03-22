@@ -4,6 +4,7 @@ import logging
 from typing import Any, Dict, List
 
 from ..models.agent_models import AgentTask
+from ..utils.event_bus import emit_event
 from .base import BaseAgentService
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,8 @@ class CoordinatorService(BaseAgentService):
         svc = self._router.get(task_id)
         if not svc:
             raise ValueError(f"Unknown task: {task_id}")
+        svc_name = svc.__class__.__name__
+        emit_event("task.resolve", f"Routed {task_id} -> {svc_name}", agent=svc_name, task=task_id)
         return svc
 
     def prepare_task(

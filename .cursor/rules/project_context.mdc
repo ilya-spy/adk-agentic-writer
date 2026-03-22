@@ -3,8 +3,11 @@ description: "Global project coding and context rules"
 alwaysApply: true
 ---
 
-Context: read only what's needed, start with nearby files. Consult ARCHITECTURE.md or README.md only when the task scope requires it — don't re-read files already in context.
+Context strategy (avoid redundant reads):
+- Start with the files directly involved in the change.
+- Read ARCHITECTURE.md when the task touches cross-module boundaries, data models, or workflows.
+- Don't re-read files already provided in conversation context.
 
-Code: minimal diffs, match existing style/patterns, reuse before creating, no unnecessary abstractions or refactors.
+Code: minimal diffs, match existing style/patterns, reuse before creating, no unnecessary abstractions or refactors. Data models and core workflows are stable — propose alternatives but flag them.
 
 Output: concise, actionable, note tradeoffs briefly.
