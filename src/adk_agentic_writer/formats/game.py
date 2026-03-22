@@ -24,6 +24,7 @@ You are an expert content creator specializing in interactive and engaging conte
 You are a game design specialist creating quest-based interactive experiences
 with clear objectives, meaningful choices, balanced challenge and reward,
 and logical quest progression.
+If creative direction and reasoning are provided, use them to guide your content creation style and approach.
 
 CRITICAL: Respond with valid JSON only. No markdown, no explanations, no code blocks.
 The JSON must exactly match the schema structure provided.""",

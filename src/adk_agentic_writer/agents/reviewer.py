@@ -24,18 +24,60 @@ Analyze the content and respond with ONLY a valid JSON object:
   "suggestions": ["specific improvement suggestion"]
 }
 
-Check for:
+STRUCTURAL checks (all formats):
 - Required fields present and non-empty
 - Data type correctness (strings, numbers, lists, dicts)
 - Logical consistency (e.g. correct_answer index within options bounds)
 - Content quality (engaging titles, non-trivial descriptions)
-- Structural integrity (e.g. story nodes reference valid node IDs)
+
+NARRATIVE CONSISTENCY checks (story, game, narrative formats):
+- Character names are spelled consistently throughout all nodes
+- Timeline and sequence of events do not contradict across branches
+- World rules established in early nodes are not violated in later ones
+- Tone and voice remain consistent across the narrative
+- Choices offered to the player/reader are meaningfully distinct
+
+STRUCTURAL INTEGRITY checks (story, game formats):
+- All branch next_node_id values reference existing nodes
+- No orphaned nodes unreachable from the start node
+- At least 2 ending nodes exist (is_ending=true)
+- Quest/game rewards and requirements are balanced and achievable
+- Victory conditions are logically reachable
+
+QUIZ-SPECIFIC checks:
+- correct_answer index is within options bounds for every question
+- Each tier (low/mid/high) is represented with correct score mapping
+- passing_score is 60-80% of total points
+- Explanations should cite specific verifiable facts, not vague claims
+
+SIMULATION-SPECIFIC checks:
+- Variable ranges have sensible units and bounds
+- Controls reference existing variables
+- Rules MUST express variable relationships using mathematical formulas or
+  equations (e.g., "GDP = GDP * (1 + growth_rate)"), not vague prose.
+  Flag any rule that lacks a formula as an error.
+- Equations are dimensionally consistent (units match on both sides)
 
 Scoring guide:
 - 90-100: Excellent, ready to publish
 - 70-89: Good, minor improvements possible
 - 50-69: Acceptable, needs refinement
 - Below 50: Poor, major issues
+
+SUGGESTION QUALITY:
+Every suggestion MUST be specific and actionable — name the exact field, value,
+or text that should change, and describe how to fix it. Vague suggestions like
+"improve quality" are not acceptable; instead say e.g. "question 3 explanation
+should cite the specific treaty name and date".
+
+NOTE: Factual accuracy is handled by a separate verifier agent.
+Focus on structure, tone, consistency, and quality.
+
+DOMAIN AWARENESS:
+- If domain is "realworld": Penalize vague or unverifiable claims. Expect specific
+  dates, names, sources. Flag any claim that sounds made up.
+- If domain is "fictional": Do not penalize fictional elements. Focus on internal
+  consistency and creative quality instead.
 
 CRITICAL: Respond with valid JSON only. No markdown, no explanations outside the JSON."""
 
@@ -105,7 +147,12 @@ class ReviewerAgentService(BaseAgentService):
             draft_str = str(draft)
         self._last_draft = draft
         self._last_content_type = content_type
-        return f"Content type: {content_type}\n\nContent to review:\n{draft_str}"
+        domain = params.get("domain", "realworld")
+        return (
+            f"Content type: {content_type}\n\n"
+            f"Content to review:\n{draft_str}\n\n"
+            f"DOMAIN: {domain}"
+        )
 
     async def run_prompt(self, prompt: str) -> Dict[str, Any]:
         try:

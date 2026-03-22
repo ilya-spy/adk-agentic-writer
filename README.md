@@ -9,8 +9,9 @@ Generate interactive educational content (quizzes, stories, games, simulations) 
 
 ## Features
 
-- **5 Unified Tasks**: `ideate`, `write`, `review`, `refine`, `publish`
+- **6 Unified Tasks**: `ideate`, `write`, `review`, `verify`, `refine`, `publish`
 - **4 Content Formats with Flavors**: quiz (trivia, test), story (narrative, adventure), game (quest, rpg), simulation (simulator)
+- **Domain Awareness**: `realworld` (fact-checked via Google Search) vs `fictional` (creative freedom, internal consistency only)
 - **Task-driven API**: Single `POST /task/{task_id}` endpoint, auto-discovery via `GET /tasks`
 - **Runtime State Store**: Output keys persist between task invocations
 - **Robust LLM Integration**: JSON parsing with truncation repair, refusal detection, schema validation fallback

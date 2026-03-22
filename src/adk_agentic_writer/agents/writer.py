@@ -4,18 +4,42 @@ import json
 from typing import Any, Dict
 
 from google.adk.agents import Agent
+from google.adk.tools import google_search
 
 from ..formats import FormatSpec, get_format, list_formats
 from ..tasks import WRITE
 from .base import BaseAgentService
 
 
+_PIPELINE_SUFFIX = """
+
+Ideation context (creative direction and reasoning for this content):
+{ideation_result}
+
+Use the creative direction and reasoning above to guide your content creation."""
+
+_SERVICE_SUFFIX = """
+
+The topic, creative direction, and reasoning will be provided in the user message."""
+
+
+_DOMAIN_BLOCK = """
+
+DOMAIN AWARENESS:
+If domain is "realworld": Use Google Search to verify key facts before including
+them. Cite specific dates, names, numbers from search results. Accuracy is critical.
+If domain is "fictional": Do NOT use Google Search. Create freely from imagination.
+Invent names, places, and events without external verification."""
+
+
 def _build_instruction(fmt: FormatSpec) -> str:
+    """Build the common base instruction (shared by pipeline and service)."""
     instruction = fmt.writer_instruction
     if fmt.schema_description:
         instruction += f"\n\n{fmt.schema_description}"
     if fmt.sample_output:
         instruction += f"\n\nExample output:\n{json.dumps(fmt.sample_output, indent=2)}"
+    instruction += _DOMAIN_BLOCK
     return instruction
 
 
@@ -35,6 +59,7 @@ def create_writer(
         instruction=instruction,
         description=f"Generates {fmt.label} content as structured JSON.",
         output_key=output_key,
+        tools=[google_search],
         include_contents="none",
     )
 
@@ -42,15 +67,17 @@ def create_writer(
 def create_writer_pipeline(
     fmt: FormatSpec, model: str = "gemini-2.5-flash",
 ) -> Agent:
-    """Pipeline variant -- writes result to session state via output_key."""
-    return create_writer(fmt, model=model, output_key="draft_content")
+    """Pipeline variant -- reads ideation_result from session state."""
+    instruction = _build_instruction(fmt) + _PIPELINE_SUFFIX
+    return create_writer(fmt, instruction, model=model, output_key="draft_content")
 
 
 def create_writer_service(
     fmt: FormatSpec, model: str = "gemini-2.5-flash",
 ) -> Agent:
-    """Service variant -- no output_key; result returned explicitly."""
-    return create_writer(fmt, model=model, output_key=None)
+    """Service variant -- context provided in user message."""
+    instruction = _build_instruction(fmt) + _SERVICE_SUFFIX
+    return create_writer(fmt, instruction, model=model, output_key=None)
 
 
 class WriterAgentService(BaseAgentService):
@@ -86,9 +113,22 @@ class WriterAgentService(BaseAgentService):
         merged.setdefault("flavor", fmt_name)
 
         try:
-            return fmt.writer_prompt.format(**merged)
+            prompt = fmt.writer_prompt.format(**merged)
         except KeyError:
-            return f"Generate {fmt_name} content about {topic}."
+            prompt = f"Generate {fmt_name} content about {topic}."
+
+        creative_direction = params.get("creative_direction", "")
+        reasoning = params.get("reasoning", "")
+        if creative_direction or reasoning:
+            prompt += "\n\nIdeation context:"
+            if creative_direction:
+                prompt += f"\nCreative direction: {creative_direction}"
+            if reasoning:
+                prompt += f"\nReasoning: {reasoning}"
+
+        domain = params.get("domain", "realworld")
+        prompt += f"\n\nDOMAIN: {domain}"
+        return prompt
 
     async def run_prompt(self, prompt: str) -> Dict[str, Any]:
         fmt = getattr(self, "_last_fmt", None)

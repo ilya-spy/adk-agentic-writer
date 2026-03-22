@@ -32,6 +32,7 @@ class PublisherAgentService(BaseAgentService):
         writers: List[Agent],
         reviewer: Agent,
         refiner: Agent,
+        verifier: Agent,
     ):
         super().__init__()
         self._register_tasks([PUBLISH])
@@ -39,9 +40,10 @@ class PublisherAgentService(BaseAgentService):
         self._writers = _writers_by_format(writers)
         self._reviewer = reviewer
         self._refiner = refiner
+        self._verifier = verifier
         self._pipelines: Dict[str, Any] = {}
         self._pipeline_agents.extend(
-            [ideator, reviewer, refiner, *writers]
+            [ideator, reviewer, refiner, verifier, *writers]
         )
 
     def _get_pipeline(self, fmt_name: str):
@@ -50,7 +52,8 @@ class PublisherAgentService(BaseAgentService):
                 fmt_name, next(iter(self._writers.values())),
             )
             self._pipelines[fmt_name] = create_publish_pipeline(
-                self._ideator, writer, self._reviewer, self._refiner,
+                self._ideator, writer, self._reviewer,
+                self._refiner, self._verifier,
             )
         return self._pipelines[fmt_name]
 
