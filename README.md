@@ -18,20 +18,28 @@ Generate interactive educational content (quizzes, stories, games, simulations) 
 
 ## Quick Start
 
-### 1. Install Dependencies
+### 1. Create a Virtual Environment
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate   # macOS / Linux
+# .venv\Scripts\activate    # Windows
+```
+
+### 2. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Configure API Key
+### 3. Configure API Key
 
 ```bash
 cp .env.example .env
 # Edit .env: GOOGLE_API_KEY=your_key_from_aistudio.google.com
 ```
 
-### 3. Run Server
+### 4. Run Server
 
 ```bash
 python -m uvicorn adk_agentic_writer.backend.api:app --host 127.0.0.1 --port 8000

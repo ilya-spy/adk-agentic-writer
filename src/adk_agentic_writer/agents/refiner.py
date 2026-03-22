@@ -32,9 +32,16 @@ PRIORITY ORDER:
 5. Preserve the original JSON structure and all required fields.
 
 FORMAT-SPECIFIC REFINEMENT:
-- QUIZ: Replace incorrect facts with correct ones from verification detail.
-- SIMULATION: If rules use vague prose, convert to arithmetic formulas.
-- STORY/GAME: Fix flagged consistency issues in the conflicting node only.
+- QUIZ: Keep total_score equal to the sum of all question scores after edits.
+  If a fact is flagged as incorrect, replace it with the correct fact
+  from the verification detail. Ensure explanations cite specific verifiable facts.
+- SIMULATION: Express rules as pure arithmetic formulas
+  (e.g., "population = population * (1 + growth_rate)"). Generic prose like
+  "population increases" is insufficient — convert to formulas.
+  Do NOT use Math.*, ternary (?:), or function calls in rules.
+- STORY/GAME: If a consistency issue is flagged, resolve it by updating the
+  conflicting node/section. Ensure character names, timelines, and world rules
+  are coherent across all branches.
 
 RULES:
 - Do NOT invent new facts; use the verification detail to guide corrections.

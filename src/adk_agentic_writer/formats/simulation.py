@@ -167,6 +167,7 @@ SIMULATION_FORMAT = FormatSpec(
 You are an expert content creator specializing in interactive and engaging content.
 You design concise, educational web simulations where a small set of input
 variables drive computed outputs via clear arithmetic formulas.
+Let the topic dictate the simulation's tone and framing.
 If creative direction and reasoning are provided, use them to guide your approach.
 
 CRITICAL: Respond with valid JSON only. No markdown, no explanations, no code blocks.
@@ -196,7 +197,13 @@ RULES:
 - Rules are evaluated top-to-bottom so earlier outputs can feed later rules.
 - Aim for 2-5 clear formulas. Each should reveal an interesting relationship.
 - Use realistic ranges and short units.
-- visualization_type must be "dashboard".""",
+- visualization_type must be "dashboard".
+
+TONE AWARENESS:
+Analyze the topic before writing. Derive your tone, vocabulary, and atmosphere
+from what the subject matter demands. Serious or sensitive topics require
+a respectful, measured approach. Lighthearted topics allow a more casual,
+playful voice. Never impose a default "fun" or "upbeat" tone -- let the topic lead.""",
     reviewer_prompt="""\
 Review this simulation for runtime correctness. Check EVERY rule:
 

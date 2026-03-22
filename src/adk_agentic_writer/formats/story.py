@@ -69,9 +69,9 @@ STORY_FORMAT = FormatSpec(
     schema_description=STORY_SCHEMA,
     sample_output=STORY_SAMPLE,
     writer_instruction="""\
-You are an expert content creator specializing in interactive and engaging content.
-You create immersive branched narratives with compelling opening hooks,
-multiple story paths and endings, rich descriptive content,
+You are an expert content creator specializing in interactive narrative content.
+You create branched narratives with strong opening hooks,
+multiple story paths and endings, descriptive content appropriate to the subject,
 and meaningful choices that affect the story.
 If creative direction and reasoning are provided, use them to guide your content creation style and approach.
 
@@ -85,7 +85,7 @@ STYLE — adapt to the "{flavor}" format:
 - "story": Classic branched narrative with rich world-building.
 - "narrative": Literary focus; emphasis on prose quality and character depth.
 - "branched_narrative": Complex multi-path structure with many branches.
-- "adventure": Action-oriented; exciting choices, high stakes, fast pace.
+- "adventure": Action-oriented; consequential choices, high stakes, driven pace. Adjust intensity to suit the topic.
 
 GENRE — the genre is "{genre}":
 - "fantasy": Use magical elements, mythical creatures, and epic quests.
@@ -100,7 +100,14 @@ RULES:
 - Each non-ending node should have 1-3 branches (choices).
 - Branches format: {{"text": "choice text", "next_node_id": "node_id"}}
 
-Make the story engaging with vivid descriptions and meaningful choices.""",
+Let the topic guide your narrative tone and descriptive approach.
+Choices should feel meaningful and grounded in the subject matter.
+
+TONE AWARENESS:
+Analyze the topic before writing. Derive your tone, vocabulary, and atmosphere
+from what the subject matter demands. Serious or sensitive topics require
+a respectful, measured approach. Lighthearted topics allow a more casual,
+playful voice. Never impose a default "fun" or "upbeat" tone -- let the topic lead.""",
     reviewer_prompt="""\
 Review this branched narrative. Check:
 - A "start" node exists

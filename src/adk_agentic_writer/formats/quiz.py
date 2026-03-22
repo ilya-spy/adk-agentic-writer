@@ -18,6 +18,7 @@ Output JSON Schema:
       "score": 1
     }
   ],
+  "total_score": 18,
   "passing_score": 6,
   "time_limit": 10
 }
@@ -26,7 +27,8 @@ CRITICAL scoring rules:
 - tier MUST be one of exactly: "low", "mid", "high" (NOT the overall difficulty name)
 - score MUST match the tier: low=1, mid=2, high=3
 - The quiz MUST contain at least one question at EACH tier (low, mid, high)
-- passing_score = integer in range 60-80%% of total points (sum of all question scores).
+- total_score MUST equal the sum of all question score values (verify by adding scores).
+- passing_score = integer in range 60-80%% of total points (same as total_score maximum).
 - time_limit = integer minutes, reasonable for the question count and difficulty.
 - Vary correct_answer index across questions"""
 
@@ -43,6 +45,7 @@ QUIZ_SAMPLE = {
             "score": 2,
         },
     ],
+    "total_score": 2,
     "passing_score": 4,
     "time_limit": 5,
 }
@@ -69,8 +72,8 @@ QUIZ_FORMAT = FormatSpec(
     schema_description=QUIZ_SCHEMA,
     sample_output=QUIZ_SAMPLE,
     writer_instruction="""\
-You are an expert content creator specializing in interactive and engaging content.
-You create engaging educational quizzes with clear, engaging, thought-provoking questions,
+You are an expert content creator specializing in interactive educational content.
+You create well-crafted quizzes with clear, thought-provoking questions,
 helpful explanations, and varying difficulty levels.
 If creative direction and reasoning are provided, use them to guide your content creation style and approach.
 
@@ -82,7 +85,7 @@ Generate an educational {flavor} about "{topic}".
 
 STYLE — adapt to the "{flavor}" format:
 - "quiz": Standard educational quiz with clear learning objectives.
-- "trivia": Fun, surprising facts; snappy and entertaining questions.
+- "trivia": Surprising or lesser-known facts; concise, well-paced questions. Match tone to the subject matter.
 - "test": Rigorous assessment; well-structured, formal tone.
 
 DIFFICULTY — the overall difficulty is "{difficulty}":
@@ -101,19 +104,28 @@ RULES — follow ALL of these precisely:
      - "mid"  tier = 2 points (requires understanding)
      - "high" tier = 3 points (requires analysis / synthesis)
    Include at least one question at EACH tier. Distribute evenly.
-5. Create questions wisely, combining global difficulty with per-question tier.
-6. Try creative question sequences, not simply round-robin from low to high tiers.""",
+5. Set "total_score" to the exact sum of all per-question score values (maximum achievable points).
+6. Create questions wisely, combining global difficulty with per-question tier.
+7. Try creative question sequences, not simply round-robin from low to high tiers.
+
+TONE AWARENESS:
+Analyze the topic before writing. Derive your tone, vocabulary, and atmosphere
+from what the subject matter demands. Serious or sensitive topics require
+a respectful, measured approach. Lighthearted topics allow a more casual,
+playful voice. Never impose a default "fun" or "upbeat" tone -- let the topic lead.""",
     reviewer_prompt="""\
 Review this quiz content. Check:
 - All questions have the correct number of options
 - correct_answer index is within bounds for each question
 - Each tier (low/mid/high) is represented
 - score matches tier (low=1, mid=2, high=3)
+- total_score equals the sum of all question scores
 - passing_score is 60-80%% of total points
 - Questions are engaging and educationally sound""",
     refiner_prompt="""\
 Refine this quiz. Fix any issues from the review. Ensure:
 - Tier distribution is balanced
+- total_score matches the sum of question scores
 - Explanations are clear and educational
 - Questions are engaging and at appropriate difficulty
 - All structural rules are met""",

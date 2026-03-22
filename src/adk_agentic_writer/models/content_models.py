@@ -85,6 +85,10 @@ class Quiz(BaseModel):
         description="Overall quiz difficulty: easy, medium, or hard",
     )
     questions: List[QuizQuestion] = Field(..., description="List of questions")
+    total_score: int = Field(
+        ...,
+        description="Maximum achievable points; must equal the sum of each question's score",
+    )
     time_limit: Optional[int] = Field(None, description="Time limit in minutes")
     passing_score: int = Field(70, description="Minimum percentage to pass")
     metadata: Dict[str, Any] = Field(default_factory=dict)
