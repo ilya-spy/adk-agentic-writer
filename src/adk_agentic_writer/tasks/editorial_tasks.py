@@ -13,9 +13,22 @@ REVIEW = AgentTask(
 REFINE = AgentTask(
     task_id="refine",
     agent_role=AgentRole.REFINER,
-    prompt="Refine content based on review feedback",
+    prompt="Refine content based on review and verification feedback",
     output_key="draft_content",
-    parameters={"format": "", "draft_content": "", "review_result": ""},
+    parameters={
+        "format": "",
+        "draft_content": "",
+        "review_result": "",
+        "verification_result": "",
+    },
+)
+
+VERIFY = AgentTask(
+    task_id="verify",
+    agent_role=AgentRole.VERIFIER,
+    prompt="Fact-check and verify content accuracy and consistency",
+    output_key="verification_result",
+    parameters={"format": "", "draft_content": ""},
 )
 
 PUBLISH = AgentTask(

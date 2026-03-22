@@ -219,20 +219,20 @@ def detect_refusal(text: str) -> Optional[str]:
 def parse_json(text: str, agent_name: str = "agent") -> Dict[str, Any]:
     """Parse JSON from LLM response with progressive fallbacks.
 
-    1. Check for refusal
-    2. Strip code fences
+    1. Strip code fences
+    2. Check for refusal (after stripping so ``{``/``[`` guard works)
     3. Strict parse
     4. Fix escape sequences and retry
     5. Collapse double braces (``{{`` / ``}}``)
     6. Allow control characters (strict=False)
     7. Repair truncated JSON (LLM hit token limit)
     """
-    refusal = detect_refusal(text)
+    cleaned = strip_code_fences(text)
+
+    refusal = detect_refusal(cleaned)
     if refusal:
         logger.warning("[%s] LLM refused request: %s", agent_name, refusal)
         raise ValueError(f"LLM refused to generate content: {refusal}")
-
-    cleaned = strip_code_fences(text)
 
     # --- 1. Strict parse ---
     try:

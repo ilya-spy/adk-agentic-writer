@@ -221,7 +221,7 @@ from adk_agentic_writer.tasks import IDEATE, WRITE, REVIEW, REFINE, PUBLISH, ALL
 class TestUnifiedTasks:
     def test_all_tasks_present(self):
         ids = {t.task_id for t in ALL_TASKS}
-        assert ids == {"ideate", "write", "review", "refine", "publish"}
+        assert ids == {"ideate", "write", "review", "verify", "refine", "publish"}
 
     def test_output_keys(self):
         assert IDEATE.output_key == "ideation_result"
@@ -480,15 +480,17 @@ class TestWorkflowConstruction:
         from adk_agentic_writer.agents.writer import create_writer_pipeline
         from adk_agentic_writer.agents.reviewer import create_reviewer_pipeline
         from adk_agentic_writer.agents.refiner import create_refiner_pipeline
+        from adk_agentic_writer.agents.verifier import create_verifier_pipeline
         from adk_agentic_writer.workflows.tools import exit_loop
 
         ideator = create_ideator_pipeline()
         writer = create_writer_pipeline(GAME_FORMAT)
         reviewer = create_reviewer_pipeline()
         refiner = create_refiner_pipeline(exit_loop)
-        pipeline = create_publish_pipeline(ideator, writer, reviewer, refiner)
+        verifier = create_verifier_pipeline()
+        pipeline = create_publish_pipeline(ideator, writer, reviewer, refiner, verifier)
         assert "PublishPipeline" in pipeline.name
-        assert len(pipeline.sub_agents) == 3
+        assert len(pipeline.sub_agents) == 4
 
 
 # ---------------------------------------------------------------------------
@@ -563,3 +565,132 @@ class TestFindByTask:
         agent = BaseAgentService()
         with pytest.raises(ValueError, match="No agent"):
             find_by_task([agent], "nonexistent")
+
+
+# ---------------------------------------------------------------------------
+# 11. Domain parameter propagation
+# ---------------------------------------------------------------------------
+
+
+class TestDomainPropagation:
+    """Verify that prepare_task includes domain in the prompt for all agents."""
+
+    def test_ideator_prepare_task_includes_domain(self):
+        from adk_agentic_writer.agents.ideator import IdeatorAgentService
+        from adk_agentic_writer.tasks import IDEATE
+
+        svc = IdeatorAgentService.__new__(IdeatorAgentService)
+        svc._tasks = []
+        svc._task_by_id = {}
+        svc._pipeline_agents = []
+        svc._service_agents = []
+        svc._runners = {}
+        svc._register_tasks([IDEATE])
+        prompt = svc.prepare_task("ideate", {"prompt": "test", "domain": "fictional"})
+        assert "DOMAIN: fictional" in prompt
+
+    def test_ideator_defaults_to_realworld(self):
+        from adk_agentic_writer.agents.ideator import IdeatorAgentService
+        from adk_agentic_writer.tasks import IDEATE
+
+        svc = IdeatorAgentService.__new__(IdeatorAgentService)
+        svc._tasks = []
+        svc._task_by_id = {}
+        svc._pipeline_agents = []
+        svc._service_agents = []
+        svc._runners = {}
+        svc._register_tasks([IDEATE])
+        prompt = svc.prepare_task("ideate", {"prompt": "test"})
+        assert "DOMAIN: realworld" in prompt
+
+    def test_writer_prepare_task_includes_domain(self):
+        from adk_agentic_writer.agents.writer import WriterAgentService
+        from adk_agentic_writer.tasks import WRITE
+        from adk_agentic_writer.formats import get_format
+
+        svc = WriterAgentService.__new__(WriterAgentService)
+        svc._tasks = []
+        svc._task_by_id = {}
+        svc._pipeline_agents = []
+        svc._service_agents = []
+        svc._runners = {}
+        svc._pipeline_writers = {}
+        svc._writers = {}
+        svc._register_tasks([WRITE])
+        prompt = svc.prepare_task("write", {"format": "quiz", "topic": "test", "domain": "fictional"})
+        assert "DOMAIN: fictional" in prompt
+
+    def test_reviewer_prepare_task_includes_domain(self):
+        from adk_agentic_writer.agents.reviewer import ReviewerAgentService
+        from adk_agentic_writer.tasks import REVIEW
+
+        svc = ReviewerAgentService.__new__(ReviewerAgentService)
+        svc._tasks = []
+        svc._task_by_id = {}
+        svc._pipeline_agents = []
+        svc._service_agents = []
+        svc._runners = {}
+        svc._register_tasks([REVIEW])
+        prompt = svc.prepare_task("review", {
+            "draft_content": {"title": "Test"},
+            "format": "quiz",
+            "domain": "fictional",
+        })
+        assert "DOMAIN: fictional" in prompt
+
+    def test_verifier_prepare_task_includes_domain(self):
+        from adk_agentic_writer.agents.verifier import VerifierAgentService
+        from adk_agentic_writer.tasks import VERIFY
+
+        svc = VerifierAgentService.__new__(VerifierAgentService)
+        svc._tasks = []
+        svc._task_by_id = {}
+        svc._pipeline_agents = []
+        svc._service_agents = []
+        svc._runners = {}
+        svc._register_tasks([VERIFY])
+        prompt = svc.prepare_task("verify", {
+            "draft_content": {"title": "Test"},
+            "format": "quiz",
+            "domain": "realworld",
+        })
+        assert "DOMAIN: realworld" in prompt
+
+    def test_refiner_prepare_task_includes_domain(self):
+        from adk_agentic_writer.agents.refiner import RefinerAgentService
+        from adk_agentic_writer.tasks import REFINE
+        from adk_agentic_writer.workflows.tools import exit_loop
+        from adk_agentic_writer.agents.reviewer import create_reviewer_pipeline
+
+        reviewer = create_reviewer_pipeline()
+        svc = RefinerAgentService.__new__(RefinerAgentService)
+        svc._tasks = []
+        svc._task_by_id = {}
+        svc._pipeline_agents = []
+        svc._service_agents = []
+        svc._runners = {}
+        svc._register_tasks([REFINE])
+        prompt = svc.prepare_task("refine", {
+            "draft_content": {"title": "Test"},
+            "review_result": {"score": 70},
+            "verification_result": {},
+            "format": "quiz",
+            "domain": "fictional",
+        })
+        assert "DOMAIN: fictional" in prompt
+
+    def test_writer_instruction_contains_domain_block(self):
+        from adk_agentic_writer.agents.writer import _build_instruction
+        from adk_agentic_writer.formats import get_format
+
+        fmt = get_format("quiz")
+        instruction = _build_instruction(fmt)
+        assert "DOMAIN AWARENESS" in instruction
+        assert "Google Search" in instruction
+
+    def test_verifier_instruction_contains_domain_match(self):
+        from adk_agentic_writer.agents.verifier import _INSTRUCTION_BASE
+
+        assert "DOMAIN MATCH CHECK" in _INSTRUCTION_BASE
+        assert "realworld" in _INSTRUCTION_BASE
+        assert "fictional" in _INSTRUCTION_BASE

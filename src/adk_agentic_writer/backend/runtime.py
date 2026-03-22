@@ -11,6 +11,7 @@ from ..agents.ideator import IdeatorAgentService
 from ..agents.writer import WriterAgentService
 from ..agents.reviewer import ReviewerAgentService
 from ..agents.refiner import RefinerAgentService
+from ..agents.verifier import VerifierAgentService
 from ..agents.publisher import PublisherAgentService
 
 logger = logging.getLogger(__name__)
@@ -89,8 +90,10 @@ async def lifespan(app: FastAPI):
         ideator = IdeatorAgentService()
         writer = WriterAgentService()
         reviewer = ReviewerAgentService()
+        verifier = VerifierAgentService()
         [ideator_adk] = ideator.get_agents("pipeline")
         [reviewer_adk] = reviewer.get_agents("pipeline")
+        [verifier_adk] = verifier.get_agents("pipeline")
 
         # -- Composite services (receive pipeline ADK agents) --
         refiner = RefinerAgentService(reviewer_adk)
@@ -101,17 +104,19 @@ async def lifespan(app: FastAPI):
             writer.get_agents("pipeline"),
             reviewer_adk,
             refiner_adk,
+            verifier_adk,
         )
 
         _runtime.services.set("ideator", ideator)
         _runtime.services.set("writer", writer)
         _runtime.services.set("reviewer", reviewer)
+        _runtime.services.set("verifier", verifier)
         _runtime.services.set("refiner", refiner)
         _runtime.services.set("publisher", publisher)
 
         # -- Routing service --
         coordinator = CoordinatorService(
-            sub_agents=[publisher, ideator, writer, reviewer, refiner],
+            sub_agents=[publisher, ideator, writer, reviewer, verifier, refiner],
         )
         _runtime.services.set("coordinator", coordinator)
 

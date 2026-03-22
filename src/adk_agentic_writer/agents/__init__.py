@@ -15,6 +15,9 @@ from .reviewer import (
 from .refiner import (
     RefinerAgentService, create_refiner, create_refiner_pipeline, create_refiner_service,
 )
+from .verifier import (
+    VerifierAgentService, create_verifier, create_verifier_pipeline, create_verifier_service,
+)
 from .publisher import PublisherAgentService
 
 __all__ = [
@@ -25,6 +28,7 @@ __all__ = [
     "WriterAgentService",
     "ReviewerAgentService",
     "RefinerAgentService",
+    "VerifierAgentService",
     "PublisherAgentService",
     "create_ideator",
     "create_ideator_pipeline",
@@ -38,5 +42,8 @@ __all__ = [
     "create_refiner",
     "create_refiner_pipeline",
     "create_refiner_service",
+    "create_verifier",
+    "create_verifier_pipeline",
+    "create_verifier_service",
     "schema_validate",
 ]

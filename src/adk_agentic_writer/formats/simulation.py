@@ -21,6 +21,7 @@ You are an expert content creator specializing in interactive and engaging conte
 You are a simulation design specialist creating educational and engaging
 interactive web simulations with accurate models, intuitive controls,
 and realistic variable interactions.
+If creative direction and reasoning are provided, use them to guide your content creation style and approach.
 
 CRITICAL: Respond with valid JSON only. No markdown, no explanations, no code blocks.
 The JSON must exactly match the schema structure provided.""",

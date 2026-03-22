@@ -61,7 +61,23 @@
         .btn-ideate { background: #f0ad4e; color: white; }
         .btn-write { background: #667eea; color: white; }
         .btn-review { background: #5bc0de; color: white; }
+        .btn-verify { background: #e67e22; color: white; }
         .btn-refine { background: #5cb85c; color: white; }
+
+        /* Side-by-side panels for reviewer + verifier */
+        .dual-panel-row {
+            max-width: 960px; margin: 0 auto 20px; display: flex; gap: 20px;
+        }
+        .dual-panel-row .panel { flex: 1; margin: 0; min-width: 0; }
+
+        /* Result type indicator in list */
+        .result-type-badge {
+            display: inline-block; padding: 1px 6px; border-radius: 8px;
+            font-size: 0.7rem; font-weight: 700; margin-right: 4px;
+            vertical-align: middle; letter-spacing: 0.3px;
+        }
+        .result-type-badge.review { background: #d4f4fa; color: #1a7a8a; }
+        .result-type-badge.verify { background: #fde8d0; color: #a85d1b; }
 
         /* Results panel (reusable) */
         .results-panel { display: flex; gap: 12px; min-height: 60px; }
@@ -141,8 +157,16 @@
     <!-- 1. ADK Agentic Ideator -->
     <div class="panel" id="ideatorPanel">
         <h2><span class="step-num">1</span> ADK Agentic Ideator</h2>
-        <span class="section-label">Select formats (multi-select)</span>
-        <div class="chips" id="ideatorFormats">Loading...</div>
+        <div style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:12px">
+            <div>
+                <span class="section-label">Select formats (multi-select)</span>
+                <div class="chips" id="ideatorFormats">Loading...</div>
+            </div>
+            <div>
+                <span class="section-label">Domain</span>
+                <div class="chips" id="ideatorDomain"></div>
+            </div>
+        </div>
         <div class="prompt-field">
             <span class="section-label">Your creative prompt</span>
             <textarea id="ideatorPrompt" placeholder="Describe your content idea freely..."></textarea>
@@ -179,20 +203,29 @@
 
     <div class="pipeline-arrow">&darr;</div>
 
-    <!-- 5. ADK Agentic Reviewer -->
-    <div class="panel" id="reviewerPanel">
-        <h2><span class="step-num">5</span> ADK Agentic Reviewer</h2>
-        <p style="color:#666;font-size:0.9rem;margin-bottom:8px">
-            Click a draft above, then review it. Format &amp; params inherited from Writer.
-        </p>
-        <button class="btn btn-review" id="btnReview" onclick="runReview()">Review</button>
+    <!-- 5. ADK Agentic Reviewer + Verifier (side by side) -->
+    <div class="dual-panel-row">
+        <div class="panel" id="reviewerPanel">
+            <h2><span class="step-num">5a</span> ADK Agentic Reviewer</h2>
+            <p style="color:#666;font-size:0.85rem;margin-bottom:8px">
+                Structure, tone, consistency checks.
+            </p>
+            <button class="btn btn-review" id="btnReview" onclick="runReview()">Review</button>
+        </div>
+        <div class="panel" id="verifierPanel">
+            <h2><span class="step-num">5b</span> ADK Agentic Verifier</h2>
+            <p style="color:#666;font-size:0.85rem;margin-bottom:8px">
+                Fact-check via Google Search.
+            </p>
+            <button class="btn btn-verify" id="btnVerify" onclick="runVerify()">Verify</button>
+        </div>
     </div>
 
     <div class="pipeline-arrow">&darr;</div>
 
-    <!-- 6. Generated Reviews -->
+    <!-- 6. Reviews & Verifications -->
     <div class="panel" id="reviewsPanel">
-        <h2><span class="step-num">6</span> Generated Reviews</h2>
+        <h2><span class="step-num">6</span> Reviews &amp; Verifications</h2>
         <div id="reviewsResults"></div>
     </div>
 
@@ -201,8 +234,8 @@
     <!-- 7. ADK Agentic Refiner -->
     <div class="panel" id="refinerPanel">
         <h2><span class="step-num">7</span> ADK Agentic Refiner</h2>
-        <p style="color:#666;font-size:0.9rem;margin-bottom:8px">
-            Click a review above to select draft+review pair, then refine.
+        <p style="color:#666;font-size:0.85rem;margin-bottom:8px">
+            Click a review and/or verification above, then refine. Uses both feedback sources.
         </p>
         <button class="btn btn-refine" id="btnRefine" onclick="runRefine()">Refine</button>
     </div>
@@ -212,6 +245,9 @@
     <!-- 8. Generated Results -->
     <div class="panel" id="resultsPanel">
         <h2><span class="step-num">8</span> Generated Results</h2>
+        <p style="color:#666;font-size:0.85rem;margin-bottom:8px">
+            Click a result to promote it as the active draft for another review/verify/refine iteration.
+        </p>
         <div id="finalResults"></div>
     </div>
 
@@ -234,11 +270,13 @@ let writerParamValues = {};
 
 const ideas = [];
 const drafts = [];
-const reviews = [];
+const reviews = [];     // mixed: each item has .resultType = 'review' | 'verify'
 const refined = [];
 
+let selectedDomain = 'realworld';
 let selectedDraft = null;
 let selectedReview = null;
+let selectedVerification = null;
 
 // ---------------------------------------------------------------------------
 // Init
@@ -248,6 +286,7 @@ async function init() {
         const resp = await fetch(`${API}/content-types`);
         formats = (await resp.json()).content_types || [];
         renderIdeatorFormats();
+        renderIdeatorDomain();
         renderWriterFormats();
         initResultsPanels();
     } catch (e) { log('error', 'Init failed: ' + e.message); }
@@ -355,6 +394,18 @@ function renderIdeatorFormats() {
     });
 }
 
+function renderIdeatorDomain() {
+    const c = document.getElementById('ideatorDomain');
+    c.innerHTML = '';
+    [{ value: 'realworld', label: 'Real World' }, { value: 'fictional', label: 'Fictional' }].forEach(d => {
+        const chip = document.createElement('div');
+        chip.className = 'chip' + (selectedDomain === d.value ? ' selected' : '');
+        chip.textContent = d.label;
+        chip.onclick = () => { selectedDomain = d.value; renderIdeatorDomain(); renderWriterParams(); };
+        c.appendChild(chip);
+    });
+}
+
 // ---------------------------------------------------------------------------
 // Writer: single-select format + dynamic params
 // ---------------------------------------------------------------------------
@@ -383,6 +434,15 @@ function renderWriterParams() {
     const fmt = formats.find(f => f.value === writerFormat);
     if (!fmt || !fmt.parameters) return;
 
+    const domainDiv = document.createElement('div');
+    const curDomain = writerParamValues.domain || selectedDomain;
+    domainDiv.innerHTML = `<label>Domain</label>
+        <select id="wparam_domain">
+            <option value="realworld"${curDomain === 'realworld' ? ' selected' : ''}>Real World</option>
+            <option value="fictional"${curDomain === 'fictional' ? ' selected' : ''}>Fictional</option>
+        </select>`;
+    grid.appendChild(domainDiv);
+
     if (fmt.flavors && fmt.flavors.length > 0) {
         const div = document.createElement('div');
         const curFlavor = writerParamValues.flavor || fmt.value;
@@ -406,6 +466,8 @@ function renderWriterParams() {
 
 function collectWriterParams() {
     const params = { format: writerFormat || 'quiz' };
+    const domainEl = document.getElementById('wparam_domain');
+    params.domain = domainEl ? domainEl.value : selectedDomain;
     if (!writerFormat) return params;
     const fmt = formats.find(f => f.value === writerFormat);
     if (fmt && fmt.parameters) {
@@ -430,6 +492,13 @@ function onIdeaSelected(item) {
         if (k !== 'format') writerParamValues[k] = v;
     });
     if (content.topic_statement) writerParamValues.topic = content.topic_statement;
+    if (content.creative_direction) writerParamValues.creative_direction = content.creative_direction;
+    if (content.reasoning) writerParamValues.reasoning = content.reasoning;
+    if (ideaParams.domain) {
+        selectedDomain = ideaParams.domain;
+        writerParamValues.domain = ideaParams.domain;
+        renderIdeatorDomain();
+    }
 
     if (chosenFmt) selectWriterFormat(chosenFmt);
     else renderWriterParams();
@@ -446,11 +515,33 @@ function onDraftSelected(item, idx) {
 }
 
 // ---------------------------------------------------------------------------
-// Review click -> set for refine
+// Review/Verification click -> set for refine
 // ---------------------------------------------------------------------------
 function onReviewSelected(item, idx) {
-    selectedReview = item;
+    if (item.resultType === 'verify') {
+        selectedVerification = item;
+    } else {
+        selectedReview = item;
+    }
     document.getElementById('refinerPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ---------------------------------------------------------------------------
+// Refined result click -> promote to draft for next iteration
+// ---------------------------------------------------------------------------
+function onRefinedSelected(item, idx) {
+    const label = item.label || `Refined ${drafts.length + 1}`;
+    const draftItem = { _raw: item._raw, label: label + ' (refined)', format: item.format, domain: item.domain };
+    drafts.push(draftItem);
+    selectedDraft = draftItem;
+    selectedReview = null;
+    selectedVerification = null;
+    renderResultsList('draftsResults', drafts,
+        (it) => truncate(it.label, 40),
+        onDraftSelected,
+    );
+    log('stage', 'Draft updated from refined result — ready for next iteration');
+    document.getElementById('reviewerPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // ---------------------------------------------------------------------------
@@ -461,7 +552,7 @@ async function runIdeate() {
     if (!prompt) { log('error', 'Please enter a prompt'); return; }
 
     const fmts = Array.from(selectedIdeatorFormats);
-    const params = { prompt, formats: fmts };
+    const params = { prompt, formats: fmts, domain: selectedDomain };
 
     setBusy('btnIdeate', true);
     log('agent', '[Ideator] Running...');
@@ -490,7 +581,7 @@ async function runWrite() {
     if (!data) return;
     const content = data.content || {};
     const title = content.title || content.topic || `Draft ${drafts.length + 1}`;
-    drafts.push({ _raw: content, label: title, format: params.format });
+    drafts.push({ _raw: content, label: title, format: params.format, domain: params.domain });
     selectedDraft = drafts[drafts.length - 1];
     renderResultsList('draftsResults', drafts,
         (it) => truncate(it.label, 40),
@@ -506,6 +597,7 @@ async function runReview() {
     const params = {
         draft_content: selectedDraft._raw,
         format: selectedDraft.format || writerParams.format || 'quiz',
+        domain: selectedDraft.domain || selectedDomain,
     };
 
     setBusy('btnReview', true);
@@ -518,31 +610,89 @@ async function runReview() {
     const score = content.score || 0;
     reviews.push({
         _raw: content,
+        resultType: 'review',
         label: `Score: ${score} — ${content.summary || 'Review'}`,
         score,
         draft: selectedDraft,
     });
     selectedReview = reviews[reviews.length - 1];
-    renderResultsList('reviewsResults', reviews,
-        (it) => {
-            const s = it.score || 0;
-            const cls = s >= 80 ? 'good' : s >= 50 ? 'warn' : 'bad';
-            return `<span class="review-badge ${cls}">${s}</span> ${truncate(it.label, 30)}`;
-        },
-        onReviewSelected,
-    );
+    renderReviewsList();
     log('success', '[Reviewer] Done');
 }
 
-async function runRefine() {
-    if (!selectedReview) { log('error', 'Select a review first'); return; }
+async function runVerify() {
+    if (!selectedDraft) { log('error', 'Select a draft first'); return; }
 
-    const draft = selectedReview.draft || selectedDraft;
+    const writerParams = collectWriterParams();
+    const params = {
+        draft_content: selectedDraft._raw,
+        format: selectedDraft.format || writerParams.format || 'quiz',
+        domain: selectedDraft.domain || selectedDomain,
+    };
+
+    setBusy('btnVerify', true);
+    log('agent', '[Verifier] Running...');
+    const data = await postTask('verify', params);
+    setBusy('btnVerify', false);
+
+    if (!data) return;
+    const content = data.content || {};
+    const confidence = content.confidence || 'unknown';
+    const incorrectFacts = (content.facts_checked || []).filter(f => f.verdict === 'incorrect').length;
+    const consistencyIssues = (content.consistency_issues || []).length;
+    const criticalErrors = (content.errors || []).length;
+    const issueCount = incorrectFacts + consistencyIssues + criticalErrors;
+    reviews.push({
+        _raw: content,
+        resultType: 'verify',
+        label: `${confidence} — ${issueCount} issues`,
+        confidence,
+        errCount: issueCount,
+        draft: selectedDraft,
+    });
+    selectedVerification = reviews[reviews.length - 1];
+    renderReviewsList();
+    log('success', '[Verifier] Done');
+}
+
+function renderReviewsList() {
+    renderResultsList('reviewsResults', reviews,
+        (it) => {
+            if (it.resultType === 'verify') {
+                const confCls = it.confidence === 'high' ? 'good' : it.confidence === 'medium' ? 'warn' : 'bad';
+                return `<span class="result-type-badge verify">VERIFY</span>`
+                     + `<span class="review-badge ${confCls}">${it.confidence}</span> `
+                     + truncate(it.label, 26);
+            }
+            const s = it.score || 0;
+            const cls = s >= 80 ? 'good' : s >= 50 ? 'warn' : 'bad';
+            return `<span class="result-type-badge review">REVIEW</span>`
+                 + `<span class="review-badge ${cls}">${s}</span> `
+                 + truncate(it.label, 26);
+        },
+        onReviewSelected,
+    );
+}
+
+async function runRefine() {
+    if (!selectedReview && !selectedVerification) {
+        log('error', 'Select a review or verification first');
+        return;
+    }
+
+    const draft = (selectedReview && selectedReview.draft)
+               || (selectedVerification && selectedVerification.draft)
+               || selectedDraft;
     if (!draft) { log('error', 'No draft associated with review'); return; }
 
+    const fmt = draft.format || writerFormat || 'quiz';
+    const dom = draft.domain || selectedDomain;
     const params = {
         draft_content: draft._raw,
-        review_result: selectedReview._raw,
+        review_result: selectedReview ? selectedReview._raw : {},
+        verification_result: selectedVerification ? selectedVerification._raw : {},
+        format: fmt,
+        domain: dom,
     };
 
     setBusy('btnRefine', true);
@@ -553,12 +703,12 @@ async function runRefine() {
     if (!data) return;
     const content = data.content || {};
     const title = content.title || `Result ${refined.length + 1}`;
-    refined.push({ _raw: content, label: title });
+    refined.push({ _raw: content, label: title, format: fmt, domain: dom });
     renderResultsList('finalResults', refined,
         (it) => truncate(it.label, 40),
-        null,
+        onRefinedSelected,
     );
-    log('success', '[Refiner] Done');
+    log('success', '[Refiner] Done — click result to use as new draft');
 }
 
 // ---------------------------------------------------------------------------

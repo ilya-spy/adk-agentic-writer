@@ -59,6 +59,13 @@ TASK:
 6. Provide a short creative direction note.
 7. Provide a brief reasoning for the key decisions made.
 
+8. Consider the DOMAIN hint (realworld or fictional):
+   - "realworld": Topic must be grounded in verifiable facts. Suggest topics
+     with rich documented history. The writer will use search to verify claims.
+   - "fictional": Topic is creative fiction. Encourage original worldbuilding,
+     invented characters, and imaginative scenarios. No need for real-world accuracy.
+   Include "domain": "<realworld|fictional>" in the output params.
+
 CRITICAL: Be creative and varied with parameter values. Every idea should feel distinct.
 Avoid the trap of always picking middle-of-the-road values. Surprise the user.
 
@@ -71,6 +78,7 @@ recommended defaults. Your actual values MUST be tailored to the specific idea.
   "params": {
     "format": "<format name>",
     "flavor": "<chosen flavor>",
+    "domain": "<realworld|fictional>",
     ...format-specific params with values from the allowed ranges...
   },
   "creative_direction": "<tone, angle, or unique approach>",
@@ -124,8 +132,10 @@ class IdeatorAgentService(BaseAgentService):
     ) -> str:
         prompt = params.get("prompt", "")
         formats = params.get("formats", [])
+        domain = params.get("domain", "realworld")
         if formats:
             prompt += f"\nREQUESTED FORMATS: {', '.join(formats)}"
+        prompt += f"\nDOMAIN: {domain}"
         return prompt
 
     async def run_prompt(self, prompt: str) -> Dict[str, Any]:

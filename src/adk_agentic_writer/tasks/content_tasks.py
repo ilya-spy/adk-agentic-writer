@@ -19,5 +19,10 @@ WRITE = AgentTask(
     agent_role=AgentRole.WRITER,
     prompt="Write {format} content about {topic}",
     output_key="draft_content",
-    parameters={"format": "", "topic": ""},
+    parameters={
+        "format": "",
+        "topic": "",
+        "creative_direction": "",
+        "reasoning": "",
+    },
 )

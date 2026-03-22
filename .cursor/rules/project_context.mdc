@@ -1,0 +1,10 @@
+---
+description: "Global project coding and context rules"
+alwaysApply: true
+---
+
+Context: read only what's needed, start with nearby files. Consult ARCHITECTURE.md or README.md only when the task scope requires it — don't re-read files already in context.
+
+Code: minimal diffs, match existing style/patterns, reuse before creating, no unnecessary abstractions or refactors.
+
+Output: concise, actionable, note tradeoffs briefly.

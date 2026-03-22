@@ -11,11 +11,51 @@ from ..workflows.tools import exit_loop
 from .base import BaseAgentService
 
 
-_INSTRUCTION_PIPELINE = """\
+_INSTRUCTION_BASE = """\
 You are an expert content refiner.
 
-You receive content JSON (draft) and review feedback.
-Your task is to improve the content OR signal completion.
+You receive content JSON (draft), review feedback, and fact-check verification results.
+Your task is to improve the content by applying ALL feedback.
+
+PRIORITY ORDER:
+1. Fix ALL factual errors flagged by the verification result FIRST.
+   These are accuracy issues (wrong answers, incorrect facts, contradictions).
+2. Fix structural errors listed in the review (schema, missing fields, broken refs).
+3. Address consistency issues from verification (timeline, character, world-rule).
+4. Apply EVERY warning and suggestion from the review — do not skip any.
+5. Preserve the original JSON structure and all required fields.
+
+MANDATORY FEEDBACK APPLICATION:
+You MUST address EVERY error, warning, and suggestion from both review and
+verification feedback. For each piece of feedback, reason about the best way
+to incorporate it while maintaining content coherence, then apply the change.
+Do not ignore suggestions even if they seem minor.
+
+FORMAT-SPECIFIC REFINEMENT:
+- QUIZ: If a fact is flagged as incorrect, replace it with the correct fact
+  from the verification detail. Ensure explanations cite specific verifiable facts.
+- SIMULATION: Express rules/equations using precise mathematical notation
+  (e.g., "population = population * (1 + growth_rate)"). Generic prose like
+  "population increases" is insufficient — convert to formulas.
+- STORY/GAME: If a consistency issue is flagged, resolve it by updating the
+  conflicting node/section. Ensure character names, timelines, and world rules
+  are coherent across all branches.
+
+RULES:
+- Do NOT invent new facts; use the verification detail to guide corrections.
+- Do NOT drop content — only modify or improve existing fields.
+- If a suggestion asks for more specificity (e.g., "use math", "cite sources"),
+  you MUST make the content more specific, not leave it vague.
+
+DOMAIN AWARENESS:
+- If domain is "realworld": When fixing factual errors, use verification details
+  to substitute correct facts. Never invent replacements.
+- If domain is "fictional": When fixing consistency issues, maintain creative
+  freedom. Invented facts are acceptable as long as internally consistent.
+
+CRITICAL: Output the refined content as valid JSON only. No markdown, no explanations."""
+
+_PIPELINE_SUFFIX = """
 
 **Current Content:**
 {draft_content}
@@ -23,31 +63,22 @@ Your task is to improve the content OR signal completion.
 **Review Feedback:**
 {review_result}
 
-TASK:
-- If the review indicates the content is excellent (score >= 90, no errors):
+**Verification Result:**
+{verification_result}
+
+ADDITIONAL RULE:
+- If the review indicates the content is excellent (score >= 90, no errors)
+  AND verification found no factual errors or consistency issues:
   You MUST call the 'exit_loop' function. Do not output any text.
-- Otherwise:
-  1. Fix all errors from the review.
-  2. Address warnings where possible.
-  3. Apply suggestions to improve quality.
-  4. Output the refined content as valid JSON only.
+- Otherwise output refined JSON."""
 
-OUTPUT: Either call exit_loop OR output refined JSON. Nothing else.
-"""
+_SERVICE_SUFFIX = """
 
-_INSTRUCTION_SERVICE = """\
-You are an expert content refiner.
+The draft content, review feedback, and verification results will be provided
+in the user message."""
 
-You receive content JSON (draft) and review feedback in the user message.
-Your task is to improve the content based on the review.
-
-RULES:
-1. Fix all errors listed in the review.
-2. Address warnings where possible.
-3. Apply suggestions to improve quality.
-4. Preserve the original JSON structure and all required fields.
-
-CRITICAL: Output the refined content as valid JSON only. No markdown, no explanations."""
+_INSTRUCTION_PIPELINE = _INSTRUCTION_BASE + _PIPELINE_SUFFIX
+_INSTRUCTION_SERVICE = _INSTRUCTION_BASE + _SERVICE_SUFFIX
 
 
 def create_refiner(
@@ -103,7 +134,7 @@ class RefinerAgentService(BaseAgentService):
         self._register_tasks([REFINE])
         pipe = create_refiner_pipeline(exit_loop)
         self._pipeline_agents.append(pipe)
-        self._pipeline = create_refinement_pipeline(reviewer, pipe)
+        self._pipeline = create_refinement_pipeline(pipe, reviewer)
         self._service_agents.append(create_refiner_service())
 
     def prepare_task(
@@ -113,19 +144,22 @@ class RefinerAgentService(BaseAgentService):
     ) -> str:
         draft = params.get("draft_content", {})
         review = params.get("review_result", {})
+        verification = params.get("verification_result", {})
         fmt = params.get("format", "")
-        if isinstance(draft, dict):
-            draft_str = json.dumps(draft, indent=2, ensure_ascii=False)
-        else:
-            draft_str = str(draft)
-        if isinstance(review, dict):
-            review_str = json.dumps(review, indent=2, ensure_ascii=False)
-        else:
-            review_str = str(review)
-        parts = [f"DRAFT CONTENT:\n{draft_str}", f"REVIEW FEEDBACK:\n{review_str}"]
+
+        draft_str = json.dumps(draft, indent=2, ensure_ascii=False) if isinstance(draft, dict) else str(draft)
+        review_str = json.dumps(review, indent=2, ensure_ascii=False) if isinstance(review, dict) else str(review)
+        verif_str = json.dumps(verification, indent=2, ensure_ascii=False) if isinstance(verification, dict) else str(verification)
+
+        domain = params.get("domain", "realworld")
+        parts = [
+            f"DRAFT CONTENT:\n{draft_str}",
+            f"REVIEW FEEDBACK:\n{review_str}",
+            f"VERIFICATION RESULT:\n{verif_str}",
+        ]
         if fmt:
-            parts.append(f"Content format: {fmt}")
-        parts.append("Refine the draft based on the review feedback above.")
+            parts.append(f"CONTENT FORMAT: {fmt}")
+        parts.append(f"DOMAIN: {domain}")
         return "\n\n".join(parts)
 
     async def run_prompt(self, prompt: str) -> Dict[str, Any]:
