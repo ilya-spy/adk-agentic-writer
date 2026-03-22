@@ -3,6 +3,7 @@
 from typing import Any, Dict
 
 from google.adk.agents import Agent
+from google.adk.tools import google_search
 
 from ..formats import list_formats
 from ..tasks import IDEATE
@@ -49,18 +50,30 @@ AVAILABLE FORMATS:
 
 TASK:
 1. Read the user prompt and understand the user's intent.
-2. Check for REQUESTED FORMATS at the end of the prompt, and decide the best fit for user goal.
-3. Craft a refined topic statement that is specific and engaging.
-4. Choose a flavor from the format's available flavors that best matches the user's intent.
-5. Set parameter values that best serve this SPECIFIC idea.
+2. TOPIC RESEARCH (before ideating):
+   - If domain is "realworld": Use Google Search to research the user's topic.
+     Search for key facts, recent events, and specific context related to the
+     prompt. Use those findings to ground your topic_statement in reality.
+     Do NOT substitute a tangentially related subject for the one the user asked about.
+   - If domain is "fictional": Ensure the topic is clear and imaginable. Sharpen
+     it to highlight distinctive elements that steer creative attention, but keep
+     it rooted in recognizable themes the audience can relate to.
+3. Check for REQUESTED FORMATS at the end of the prompt, and decide the best fit for user goal.
+4. Craft a refined topic statement that directly addresses the user's prompt.
+   Do not generalize or drift to a loosely related subject.
+5. Choose a flavor from the format's available flavors that best matches the user's intent.
+6. Set parameter values that best serve this SPECIFIC idea.
    USE THE FULL RANGE of each parameter — do NOT default to middle/average values.
    A challenging trivia quiz might have 10-15 questions; a quick warm-up quiz might have 3-4.
    A sprawling adventure story might need 12-20 nodes; a tight mystery might need 5-6.
    Match the parameters to the content concept, not to generic defaults.
-6. Provide a short creative direction note.
-7. Provide a brief reasoning for the key decisions made.
+7. Provide a short creative direction note.
+   The creative direction MUST include explicit tone guidance derived from the topic
+   (e.g., reverent for historical tragedies, playful for pop culture, analytical for
+   scientific subjects). Do not default to "fun" or "upbeat" -- let the topic dictate.
+8. Provide a brief reasoning for the key decisions made.
 
-8. Consider the DOMAIN hint (realworld or fictional):
+9. Consider the DOMAIN hint (realworld or fictional):
    - "realworld": Topic must be grounded in verifiable facts. Suggest topics
      with rich documented history. The writer will use search to verify claims.
    - "fictional": Topic is creative fiction. Encourage original worldbuilding,
@@ -103,6 +116,7 @@ def create_ideator(
         instruction=instruction,
         description="Brainstorms topic, selects format, and sets optimal parameters.",
         output_key=output_key,
+        tools=[google_search],
         include_contents="none",
         before_agent_callback=adk_before_agent,
         after_agent_callback=adk_after_agent,

@@ -39,6 +39,7 @@ You receive content JSON and its format type. Your job is to:
    "What is the hardest natural substance?" or "When was the 96th Academy Awards?"
 
 3. CHECK INTERNAL CONSISTENCY (no search needed):
+   - For quizzes: total_score must equal the sum of per-question score fields
    - Character names used consistently throughout
    - Timeline/sequence of events does not contradict
    - World rules established early are not violated later

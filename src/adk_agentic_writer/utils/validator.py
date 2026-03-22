@@ -159,6 +159,17 @@ def _validate_quiz(
     questions = content.get("questions", [])
     if not questions:
         errors.append("Quiz has no questions")
+    computed = 0
+    for q in questions:
+        if isinstance(q, dict) and isinstance(q.get("score"), int):
+            computed += q["score"]
+    ts = content.get("total_score")
+    if ts is None:
+        errors.append("Quiz missing total_score (must equal sum of question scores)")
+    elif isinstance(ts, int) and ts != computed:
+        errors.append(
+            f"total_score {ts} does not match sum of question scores ({computed})"
+        )
     for i, q in enumerate(questions):
         if not isinstance(q, dict):
             continue

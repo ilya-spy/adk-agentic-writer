@@ -33,7 +33,8 @@ to incorporate it while maintaining content coherence, then apply the change.
 Do not ignore suggestions even if they seem minor.
 
 FORMAT-SPECIFIC REFINEMENT:
-- QUIZ: If a fact is flagged as incorrect, replace it with the correct fact
+- QUIZ: Keep total_score equal to the sum of all question scores after edits.
+  If a fact is flagged as incorrect, replace it with the correct fact
   from the verification detail. Ensure explanations cite specific verifiable facts.
 - SIMULATION: Express rules/equations using precise mathematical notation
   (e.g., "population = population * (1 + growth_rate)"). Generic prose like

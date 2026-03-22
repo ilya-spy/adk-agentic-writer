@@ -317,6 +317,7 @@ class TestSchemaValidation:
                     "score": 1,
                 }
             ],
+            "total_score": 1,
             "passing_score": 70,
         }
         result = schema_validate(quiz, "quiz")
@@ -337,6 +338,7 @@ class TestSchemaValidation:
                     "score": 1,
                 }
             ],
+            "total_score": 1,
             "passing_score": 70,
         }
         result = schema_validate(quiz, "quiz")
@@ -358,10 +360,52 @@ class TestSchemaValidation:
                     "score": 1,
                 }
             ],
+            "total_score": 1,
             "passing_score": 50,
         }
         result = schema_validate(quiz, "trivia")
         assert result["valid"] is True
+
+    def test_quiz_missing_total_score(self):
+        quiz = {
+            "title": "No Total",
+            "description": "x",
+            "difficulty": "easy",
+            "questions": [
+                {
+                    "question": "Q?",
+                    "options": ["A", "B"],
+                    "correct_answer": 0,
+                    "tier": "low",
+                    "score": 1,
+                }
+            ],
+            "passing_score": 1,
+        }
+        result = schema_validate(quiz, "quiz")
+        assert result["valid"] is False
+        assert any("total_score" in e.lower() for e in result["errors"])
+
+    def test_quiz_total_score_mismatch(self):
+        quiz = {
+            "title": "Bad Total",
+            "description": "x",
+            "difficulty": "easy",
+            "questions": [
+                {
+                    "question": "Q?",
+                    "options": ["A", "B"],
+                    "correct_answer": 0,
+                    "tier": "mid",
+                    "score": 2,
+                }
+            ],
+            "total_score": 99,
+            "passing_score": 1,
+        }
+        result = schema_validate(quiz, "quiz")
+        assert result["valid"] is False
+        assert any("total_score" in e.lower() for e in result["errors"])
 
     def test_story_missing_start(self):
         story = {

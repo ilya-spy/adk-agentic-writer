@@ -20,10 +20,9 @@ GAME_FORMAT = FormatSpec(
     ],
     schema_description=build_schema_instruction(QuestGame),
     writer_instruction="""\
-You are an expert content creator specializing in interactive and engaging content.
 You are a game design specialist creating quest-based interactive experiences
 with clear objectives, meaningful choices, balanced challenge and reward,
-and logical quest progression.
+and logical quest progression. Adapt atmosphere and stakes to what the topic demands.
 If creative direction and reasoning are provided, use them to guide your content creation style and approach.
 
 CRITICAL: Respond with valid JSON only. No markdown, no explanations, no code blocks.
@@ -45,7 +44,13 @@ RULES:
 - Create approximately {num_nodes} structural content nodes.
 - Include a start node and victory condition.
 - Each node should have title, description, choices, and rewards.
-- Design clear progression path with optional side quests.""",
+- Design clear progression path with optional side quests.
+
+TONE AWARENESS:
+Analyze the topic before writing. Derive your tone, vocabulary, and atmosphere
+from what the subject matter demands. Serious or sensitive topics require
+a respectful, measured approach. Lighthearted topics allow a more casual,
+playful voice. Never impose a default "fun" or "upbeat" tone -- let the topic lead.""",
     reviewer_prompt="""\
 Review this quest game. Check:
 - A start node exists and is referenced by start_node

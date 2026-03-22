@@ -29,7 +29,7 @@ STRUCTURAL checks (all formats):
 - Required fields present and non-empty
 - Data type correctness (strings, numbers, lists, dicts)
 - Logical consistency (e.g. correct_answer index within options bounds)
-- Content quality (engaging titles, non-trivial descriptions)
+- Content quality (clear, topic-appropriate titles; non-trivial descriptions)
 
 NARRATIVE CONSISTENCY checks (story, game, narrative formats):
 - Character names are spelled consistently throughout all nodes
@@ -48,6 +48,7 @@ STRUCTURAL INTEGRITY checks (story, game formats):
 QUIZ-SPECIFIC checks:
 - correct_answer index is within options bounds for every question
 - Each tier (low/mid/high) is represented with correct score mapping
+- total_score is present and equals the sum of all question score values
 - passing_score is 60-80% of total points
 - Explanations should cite specific verifiable facts, not vague claims
 
@@ -64,6 +65,11 @@ Scoring guide:
 - 70-89: Good, minor improvements possible
 - 50-69: Acceptable, needs refinement
 - Below 50: Poor, major issues
+
+TONE APPROPRIATENESS:
+Flag content whose tone clashes with the subject matter (e.g., cheerful language
+for a somber topic, or overly grim treatment of a lighthearted subject). Tone
+should be derived from the topic, not imposed by default.
 
 SUGGESTION QUALITY:
 Every suggestion MUST be specific and actionable — name the exact field, value,

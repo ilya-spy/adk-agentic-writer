@@ -17,10 +17,9 @@ SIMULATION_FORMAT = FormatSpec(
     ],
     schema_description=build_schema_instruction(WebSimulation),
     writer_instruction="""\
-You are an expert content creator specializing in interactive and engaging content.
-You are a simulation design specialist creating educational and engaging
+You are a simulation design specialist creating educational
 interactive web simulations with accurate models, intuitive controls,
-and realistic variable interactions.
+and realistic variable interactions. Let the topic dictate the simulation's tone and framing.
 If creative direction and reasoning are provided, use them to guide your content creation style and approach.
 
 CRITICAL: Respond with valid JSON only. No markdown, no explanations, no code blocks.
@@ -43,7 +42,13 @@ RULES:
 - Define key variables with realistic ranges.
 - Create intuitive controls (sliders, buttons, toggles).
 - Define rules/equations for variable interactions.
-- Specify visualization type (chart, animation, 3d).""",
+- Specify visualization type (chart, animation, 3d).
+
+TONE AWARENESS:
+Analyze the topic before writing. Derive your tone, vocabulary, and atmosphere
+from what the subject matter demands. Serious or sensitive topics require
+a respectful, measured approach. Lighthearted topics allow a more casual,
+playful voice. Never impose a default "fun" or "upbeat" tone -- let the topic lead.""",
     reviewer_prompt="""\
 Review this simulation. Check:
 - Variables have realistic ranges and units
