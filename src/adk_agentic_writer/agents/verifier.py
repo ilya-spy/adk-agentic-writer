@@ -14,6 +14,7 @@ from google.adk.agents import Agent
 from google.adk.tools import google_search
 
 from ..tasks import VERIFY
+from ..utils.callbacks import adk_before_agent, adk_after_agent, adk_before_model
 from .base import BaseAgentService
 
 logger = logging.getLogger(__name__)
@@ -111,6 +112,9 @@ def create_verifier(
         output_key=output_key,
         tools=[google_search],
         include_contents="none",
+        before_agent_callback=adk_before_agent,
+        after_agent_callback=adk_after_agent,
+        before_model_callback=adk_before_model,
     )
 
 

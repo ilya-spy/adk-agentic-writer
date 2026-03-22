@@ -6,6 +6,7 @@ from typing import Any, Dict
 from google.adk.agents import Agent
 
 from ..tasks import REVIEW
+from ..utils.callbacks import adk_before_agent, adk_after_agent, adk_before_model
 from ..utils.validator import schema_validate
 from .base import BaseAgentService
 
@@ -108,6 +109,9 @@ def create_reviewer(
         description="Reviews and validates generated content for quality and correctness.",
         output_key=output_key,
         include_contents="none",
+        before_agent_callback=adk_before_agent,
+        after_agent_callback=adk_after_agent,
+        before_model_callback=adk_before_model,
     )
 
 

@@ -4,6 +4,8 @@ from ..utils.proxy import clear_proxy_env
 
 clear_proxy_env()
 
+import asyncio
+import json as _json
 import logging
 import pathlib
 import time
@@ -15,9 +17,11 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
+from starlette.responses import StreamingResponse
 
 load_dotenv()
 
+from ..utils.event_bus import get_event_bus
 from ..utils.log import configure_logging, log_settings_summary
 
 configure_logging()
@@ -166,6 +170,35 @@ async def get_outputs():
 async def clear_outputs():
     get_runtime().outputs.clear()
     return {"status": "cleared"}
+
+
+# ---------------------------------------------------------------------------
+# Server-Sent Events (SSE) for real-time agent activity
+# ---------------------------------------------------------------------------
+
+async def _sse_generator(request: Request):
+    bus = get_event_bus()
+    async with bus.subscribe() as queue:
+        while True:
+            if await request.is_disconnected():
+                break
+            try:
+                event = await asyncio.wait_for(queue.get(), timeout=15)
+                yield f"data: {_json.dumps(event, default=str)}\n\n"
+            except asyncio.TimeoutError:
+                yield ": keepalive\n\n"
+
+
+@app.get("/events")
+async def sse_events(request: Request):
+    return StreamingResponse(
+        _sse_generator(request),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -8,6 +8,7 @@ from google.adk.tools import google_search
 
 from ..formats import FormatSpec, get_format, list_formats
 from ..tasks import WRITE
+from ..utils.callbacks import adk_before_agent, adk_after_agent, adk_before_model
 from .base import BaseAgentService
 
 
@@ -61,6 +62,9 @@ def create_writer(
         output_key=output_key,
         tools=[google_search],
         include_contents="none",
+        before_agent_callback=adk_before_agent,
+        after_agent_callback=adk_after_agent,
+        before_model_callback=adk_before_model,
     )
 
 

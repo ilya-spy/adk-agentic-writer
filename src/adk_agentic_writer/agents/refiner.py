@@ -6,6 +6,7 @@ from typing import Any, Dict
 from google.adk.agents import Agent
 
 from ..tasks import REFINE
+from ..utils.callbacks import adk_before_agent, adk_after_agent, adk_before_model
 from ..workflows.refine import create_refinement_pipeline
 from ..workflows.tools import exit_loop
 from .base import BaseAgentService
@@ -99,6 +100,9 @@ def create_refiner(
         output_key=output_key,
         include_contents="none",
         tools=tools or [],
+        before_agent_callback=adk_before_agent,
+        after_agent_callback=adk_after_agent,
+        before_model_callback=adk_before_model,
     )
 
 
