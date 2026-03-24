@@ -6,57 +6,51 @@ from typing import Any, Dict
 from google.adk.agents import Agent
 
 from ..tasks import REFINE
-from ..utils.callbacks import adk_before_agent, adk_after_agent, adk_before_model
-from ..workflows.refine import create_refinement_pipeline
+from ..utils.callbacks import adk_before_agent, adk_after_agent, adk_before_model, adk_after_model
 from ..workflows.tools import exit_loop
 from .base import BaseAgentService
 
 
 _INSTRUCTION_BASE = """\
-You are an expert content refiner.
+You are an expert content refiner that makes MINIMAL, SURGICAL changes.
 
 You receive content JSON (draft), review feedback, and fact-check verification results.
-Your task is to improve the content by applying ALL feedback.
+Your goal is to fix ONLY the specific issues flagged, while preserving everything else verbatim.
+
+CONSERVATIVE APPROACH (most important):
+- Make the MINIMUM changes necessary to address each flagged issue.
+- Do NOT rewrite content that was not flagged — preserve working text verbatim.
+- Do NOT rephrase, reorganize, or "improve" sections that have no errors or warnings.
+- Each change should be surgical: fix the specific problem without altering surrounding content.
+- When in doubt, make FEWER changes rather than more.
 
 PRIORITY ORDER:
-1. Fix ALL factual errors flagged by the verification result FIRST.
-   These are accuracy issues (wrong answers, incorrect facts, contradictions).
+1. Fix factual errors flagged by the verification result FIRST.
 2. Fix structural errors listed in the review (schema, missing fields, broken refs).
 3. Address consistency issues from verification (timeline, character, world-rule).
-4. Apply EVERY warning and suggestion from the review — do not skip any.
+4. Address high-severity warnings only — skip minor stylistic suggestions.
 5. Preserve the original JSON structure and all required fields.
 
-MANDATORY FEEDBACK APPLICATION:
-You MUST address EVERY error, warning, and suggestion from both review and
-verification feedback. For each piece of feedback, reason about the best way
-to incorporate it while maintaining content coherence, then apply the change.
-Do not ignore suggestions even if they seem minor.
-
 FORMAT-SPECIFIC REFINEMENT:
-- QUIZ: If a fact is flagged as incorrect, replace it with the correct fact
-  from the verification detail. Ensure explanations cite specific verifiable facts.
-- SIMULATION: Express rules/equations using precise mathematical notation
-  (e.g., "population = population * (1 + growth_rate)"). Generic prose like
-  "population increases" is insufficient — convert to formulas.
-- STORY/GAME: If a consistency issue is flagged, resolve it by updating the
-  conflicting node/section. Ensure character names, timelines, and world rules
-  are coherent across all branches.
+- QUIZ: Replace incorrect facts with correct ones from verification detail.
+- SIMULATION: If rules use vague prose, convert to arithmetic formulas.
+- STORY/GAME: Fix flagged consistency issues in the conflicting node only.
 
 RULES:
 - Do NOT invent new facts; use the verification detail to guide corrections.
 - Do NOT drop content — only modify or improve existing fields.
-- If a suggestion asks for more specificity (e.g., "use math", "cite sources"),
-  you MUST make the content more specific, not leave it vague.
 
 DOMAIN AWARENESS:
-- If domain is "realworld": When fixing factual errors, use verification details
-  to substitute correct facts. Never invent replacements.
-- If domain is "fictional": When fixing consistency issues, maintain creative
-  freedom. Invented facts are acceptable as long as internally consistent.
+- If domain is "realworld": use the verification detail section to find correct facts
+  and substitute them precisely. Trust the verifier's citations over your own knowledge.
+- If domain is "fictional": maintain creative freedom if internally consistent.
 
 CRITICAL: Output the refined content as valid JSON only. No markdown, no explanations."""
 
 _PIPELINE_SUFFIX = """
+
+**Ideation Context (format, domain, creative direction):**
+{ideation_result}
 
 **Current Content:**
 {draft_content}
@@ -103,6 +97,7 @@ def create_refiner(
         before_agent_callback=adk_before_agent,
         after_agent_callback=adk_after_agent,
         before_model_callback=adk_before_model,
+        after_model_callback=adk_after_model,
     )
 
 
@@ -129,16 +124,14 @@ class RefinerAgentService(BaseAgentService):
     """Refines content based on review feedback.
 
     Creates its own refiner ADK agents internally.
-    Receives the reviewer ADK agent to compose the loop pipeline
-    (used by publisher); service calls use a standalone agent.
+    The pipeline agent (with exit_loop) is available for extraction
+    by the publisher; service calls use a standalone agent.
     """
 
-    def __init__(self, reviewer: Agent):
+    def __init__(self):
         super().__init__()
         self._register_tasks([REFINE])
-        pipe = create_refiner_pipeline(exit_loop)
-        self._pipeline_agents.append(pipe)
-        self._pipeline = create_refinement_pipeline(pipe, reviewer)
+        self._pipeline_agents.append(create_refiner_pipeline(exit_loop))
         self._service_agents.append(create_refiner_service())
 
     def prepare_task(

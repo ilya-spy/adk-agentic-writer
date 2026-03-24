@@ -1,14 +1,15 @@
-"""Writer agent -- creates one LlmAgent per content format/flavor."""
+"""Writer agent -- format-specific writers + lead writer with AgentTool routing."""
 
 import json
 from typing import Any, Dict
 
 from google.adk.agents import Agent
 from google.adk.tools import google_search
+from google.adk.tools.agent_tool import AgentTool
 
 from ..formats import FormatSpec, get_format, list_formats
 from ..tasks import WRITE
-from ..utils.callbacks import adk_before_agent, adk_after_agent, adk_before_model
+from ..utils.callbacks import adk_before_agent, adk_after_agent, adk_before_model, adk_after_model
 from .base import BaseAgentService
 
 
@@ -65,6 +66,7 @@ def create_writer(
         before_agent_callback=adk_before_agent,
         after_agent_callback=adk_after_agent,
         before_model_callback=adk_before_model,
+        after_model_callback=adk_after_model,
     )
 
 
@@ -82,6 +84,86 @@ def create_writer_service(
     """Service variant -- context provided in user message."""
     instruction = _build_instruction(fmt) + _SERVICE_SUFFIX
     return create_writer(fmt, instruction, model=model, output_key=None)
+
+
+# ---------------------------------------------------------------------------
+# Lead Writer -- single agent routing to format-specific AgentTools
+# ---------------------------------------------------------------------------
+
+def _build_tool_list_docs() -> str:
+    """Build a description of available writer tools for the lead instruction."""
+    lines = []
+    for fmt in list_formats():
+        lines.append(f"- {fmt.name.capitalize()}Writer: use for '{fmt.name}' format ({fmt.label})")
+    return "\n".join(lines)
+
+
+_LEAD_INSTRUCTION = """\
+You are the Lead Writer agent. Your job is to analyze the ideation result,
+determine the correct content format, and delegate writing to the appropriate
+format-specific writer tool.
+
+IDEATION RESULT (from previous pipeline step):
+{ideation_result}
+
+AVAILABLE WRITER TOOLS:
+{tool_list}
+
+STEPS:
+1. Parse the ideation result to extract chosen_format, topic_statement,
+   params (including domain, flavor, and format-specific parameters),
+   creative_direction, and reasoning.
+2. Select the writer tool whose name matches the chosen_format.
+3. Call that tool with a detailed writing brief that includes ALL of:
+   - The topic statement
+   - All format-specific parameters (num_questions, num_nodes, difficulty, etc.)
+   - The creative direction and reasoning
+   - The domain (realworld or fictional)
+   - The flavor
+4. Return the tool's JSON output EXACTLY as-is. Do NOT modify, summarize,
+   or wrap the output. The raw JSON from the writer tool is your final answer.
+
+CRITICAL: You MUST call exactly one writer tool. Do not generate content yourself.
+Output the writer tool's response verbatim as valid JSON."""
+
+
+def create_lead_writer_pipeline(model: str = "gemini-2.5-flash") -> Agent:
+    """Create lead writer that routes to format-specific writer AgentTools.
+
+    Used in the publish pipeline. Reads {ideation_result} from session state
+    and delegates to the matching format writer.
+    """
+    format_tools = []
+    for fmt in list_formats():
+        writer_instruction = _build_instruction(fmt)
+        writer = Agent(
+            name=f"{fmt.name.capitalize()}Writer",
+            model=model,
+            instruction=writer_instruction,
+            description=f"Generates {fmt.label} content as structured JSON. Call this for '{fmt.name}' format.",
+            tools=[google_search],
+            include_contents="none",
+            before_agent_callback=adk_before_agent,
+            after_agent_callback=adk_after_agent,
+            before_model_callback=adk_before_model,
+            after_model_callback=adk_after_model,
+        )
+        format_tools.append(AgentTool(agent=writer, skip_summarization=True))
+
+    instruction = _LEAD_INSTRUCTION.replace("{tool_list}", _build_tool_list_docs())
+    return Agent(
+        name="LeadWriter",
+        model=model,
+        instruction=instruction,
+        description="Routes to the correct format-specific writer based on ideation result.",
+        output_key="draft_content",
+        tools=format_tools,
+        include_contents="none",
+        before_agent_callback=adk_before_agent,
+        after_agent_callback=adk_after_agent,
+        before_model_callback=adk_before_model,
+        after_model_callback=adk_after_model,
+    )
 
 
 class WriterAgentService(BaseAgentService):

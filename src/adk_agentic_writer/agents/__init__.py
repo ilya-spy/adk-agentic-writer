@@ -7,6 +7,7 @@ from .ideator import (
 )
 from .writer import (
     WriterAgentService, create_writer, create_writer_pipeline, create_writer_service,
+    create_lead_writer_pipeline,
 )
 from .reviewer import (
     ReviewerAgentService, create_reviewer, create_reviewer_pipeline,
@@ -36,6 +37,7 @@ __all__ = [
     "create_writer",
     "create_writer_pipeline",
     "create_writer_service",
+    "create_lead_writer_pipeline",
     "create_reviewer",
     "create_reviewer_pipeline",
     "create_reviewer_service",

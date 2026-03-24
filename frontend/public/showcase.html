@@ -63,6 +63,7 @@
         .btn-review { background: #5bc0de; color: white; }
         .btn-verify { background: #e67e22; color: white; }
         .btn-refine { background: #5cb85c; color: white; }
+        .btn-publish { background: #9b59b6; color: white; }
 
         /* Side-by-side panels for reviewer + verifier */
         .dual-panel-row {
@@ -157,6 +158,11 @@
         .log-model .log-badge { background: rgba(187,134,252,0.2); color: #bb86fc; }
         .log-info { color: #c8c8c8; }
         .log-info .log-badge { background: rgba(200,200,200,0.15); color: #999; }
+        .log-tool { color: #26c6da; }
+        .log-tool .log-badge { background: rgba(38,198,218,0.2); color: #26c6da; }
+        .log-pipeline { color: #ab47bc; }
+        .log-pipeline .log-badge { background: rgba(171,71,188,0.2); color: #ab47bc; }
+        .log-tokens { color: #888; font-size: 0.75rem; margin-left: 4px; }
         .log-sse-dot {
             display: inline-block; width: 6px; height: 6px; border-radius: 50%;
             margin-right: 4px; vertical-align: middle;
@@ -200,6 +206,7 @@
             <textarea id="ideatorPrompt" placeholder="Describe your content idea freely..."></textarea>
         </div>
         <button class="btn btn-ideate" id="btnIdeate" onclick="runIdeate()">Ideate</button>
+        <button class="btn btn-publish" id="btnPublish" onclick="runPublish()" style="margin-left:8px">Publish</button>
     </div>
 
     <div class="pipeline-arrow">&darr;</div>
@@ -279,10 +286,28 @@
         <div id="finalResults"></div>
     </div>
 
-    <!-- 9. Content Renderer -->
+    <!-- 9. Published Results -->
+    <div class="panel" id="publishedPanel" style="display:none">
+        <h2><span class="step-num" style="background:#9b59b6">P</span> Published Results</h2>
+        <p style="color:#666;font-size:0.85rem;margin-bottom:8px">
+            Full pipeline output. Click to render.
+        </p>
+        <div id="publishedResults"></div>
+    </div>
+
+    <!-- Render action bar -->
+    <div class="panel" id="renderActionPanel" style="display:none">
+        <button class="btn" id="renderBtn"
+            style="background:#667eea;color:white;padding:10px 28px;font-size:1rem;width:100%;cursor:pointer"
+            onclick="renderContent(_lastPreviewItem)">
+            Render Selected Content
+        </button>
+    </div>
+
+    <!-- 10. Content Renderer -->
     <div class="panel" id="rendererPanel" style="display:none">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-            <h2 style="margin:0"><span class="step-num">9</span> Content Preview</h2>
+            <h2 style="margin:0"><span class="step-num">10</span> Content Preview</h2>
             <button class="btn" style="background:#667eea;color:white;margin:0;padding:6px 16px;font-size:0.82rem" onclick="closeRenderer()">Close Preview</button>
         </div>
         <div id="rendererContainer"></div>
@@ -323,6 +348,7 @@ const ideas = [];
 const drafts = [];
 const reviews = [];     // mixed: each item has .resultType = 'review' | 'verify'
 const refined = [];
+const published = [];
 
 let selectedDomain = 'realworld';
 let selectedDraft = null;
@@ -362,6 +388,7 @@ function initResultsPanels() {
     createResultsPanel('draftsResults');
     createResultsPanel('reviewsResults');
     createResultsPanel('finalResults');
+    createResultsPanel('publishedResults');
 }
 
 function renderResultsList(containerId, items, labelFn, onSelect) {
@@ -392,14 +419,13 @@ function showResultPreview(containerId, item) {
     const data = item._raw || item;
     preview.innerHTML = '';
 
-    if ((containerId === 'finalResults' || containerId === 'draftsResults') && ContentRenderer.detectFormat(data)) {
+    const renderPanel = document.getElementById('renderActionPanel');
+    const renderBtn = document.getElementById('renderBtn');
+    if ((containerId === 'finalResults' || containerId === 'draftsResults' || containerId === 'publishedResults') && ContentRenderer.detectFormat(data)) {
         _lastPreviewItem = item;
-        const btn = document.createElement('button');
-        btn.className = 'btn';
-        btn.style.cssText = 'background:#667eea;color:white;margin:0 0 10px;padding:6px 16px;font-size:0.82rem;display:inline-block';
-        btn.textContent = 'Render Preview';
-        btn.onclick = () => renderContent(_lastPreviewItem);
-        preview.appendChild(btn);
+        const label = item.label || 'Selected Content';
+        renderBtn.textContent = `Render: ${truncate(label, 50)}`;
+        renderPanel.style.display = '';
     }
 
     const pre = document.createElement('pre');
@@ -599,6 +625,7 @@ function onReviewSelected(item, idx) {
 // Refined result click -> promote to draft for next iteration
 // ---------------------------------------------------------------------------
 function onRefinedSelected(item, idx) {
+    if (drafts.some(d => d._raw === item._raw)) return;
     const label = item.label || `Refined ${drafts.length + 1}`;
     const draftItem = { _raw: item._raw, label: label + ' (refined)', format: item.format, domain: item.domain };
     drafts.push(draftItem);
@@ -614,6 +641,7 @@ function onRefinedSelected(item, idx) {
 }
 
 function renderContent(item) {
+    if (!item) return;
     const data = item._raw || item;
     const panel = document.getElementById('rendererPanel');
     panel.style.display = '';
@@ -810,6 +838,54 @@ async function runRefine() {
     log('success', '[Refiner] Done — click result to use as new draft');
 }
 
+async function runPublish() {
+    const prompt = document.getElementById('ideatorPrompt').value.trim();
+    if (!prompt) { log('error', 'Please enter a prompt'); return; }
+
+    const fmts = Array.from(selectedIdeatorFormats);
+    const params = { prompt, formats: fmts, domain: selectedDomain };
+
+    setBusy('btnPublish', true);
+    log('agent', '[Publisher] Running full pipeline...');
+    const data = await postTask('publish', params, true);
+    setBusy('btnPublish', false);
+
+    if (!data) return;
+    if (data.status === 'error') {
+        const errMsg = data.content?.error || 'Pipeline failed';
+        log('error', '[Publisher] Error: ' + errMsg);
+        published.push({ _raw: { error: errMsg }, label: 'Error: ' + truncate(errMsg, 30) });
+    } else {
+        const content = data.content || {};
+        const title = content.title || content.topic || `Published ${published.length + 1}`;
+        published.push({ _raw: content, label: title });
+        log('success', '[Publisher] Pipeline complete');
+    }
+
+    const panel = document.getElementById('publishedPanel');
+    panel.style.display = '';
+    renderResultsList('publishedResults', published,
+        (it) => truncate(it.label, 40),
+        onPublishedSelected,
+    );
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function onPublishedSelected(item) {
+    if (!item._raw || item._raw.error) return;
+    if (drafts.some(d => d._raw === item._raw)) return;
+    const content = item._raw;
+    const title = content.title || content.topic || item.label || `Draft ${drafts.length + 1}`;
+    const draftItem = { _raw: content, label: title + ' (published)', format: item.format, domain: item.domain };
+    drafts.push(draftItem);
+    selectedDraft = draftItem;
+    renderResultsList('draftsResults', drafts,
+        (it) => truncate(it.label, 40),
+        onDraftSelected,
+    );
+    log('stage', 'Published result added to drafts');
+}
+
 // ---------------------------------------------------------------------------
 // API helper
 // ---------------------------------------------------------------------------
@@ -848,14 +924,14 @@ function setBusy(btnId, busy) {
         : (btn.dataset.origText || btn.textContent);
 }
 
-const LOG_LEVEL_ORDER = { error: 3, warning: 2, warn: 2, success: 1, agent: 1, stage: 1, model: 1, info: 0 };
+const LOG_LEVEL_ORDER = { error: 3, warning: 2, warn: 2, success: 1, agent: 1, stage: 1, model: 1, tool: 1, pipeline: 1, info: 0 };
 let currentLogFilter = 'all';
 
-function log(type, msg) {
+function log(type, msg, extra) {
     const panel = document.getElementById('logPanel');
     const now = new Date().toLocaleTimeString();
-    const clsMap = { error: 'log-error', success: 'log-success', agent: 'log-agent', stage: 'log-stage', model: 'log-model', warn: 'log-warn', warning: 'log-warn', info: 'log-info' };
-    const badgeMap = { error: 'ERR', success: 'OK', agent: 'AGENT', stage: 'TASK', model: 'LLM', warn: 'WARN', warning: 'WARN', info: 'INFO' };
+    const clsMap = { error: 'log-error', success: 'log-success', agent: 'log-agent', stage: 'log-stage', model: 'log-model', tool: 'log-tool', pipeline: 'log-pipeline', warn: 'log-warn', warning: 'log-warn', info: 'log-info' };
+    const badgeMap = { error: 'ERR', success: 'OK', agent: 'AGENT', stage: 'TASK', model: 'LLM', tool: 'TOOL', pipeline: 'PIPE', warn: 'WARN', warning: 'WARN', info: 'INFO' };
     const cls = clsMap[type] || 'log-info';
     const badge = badgeMap[type] || type.toUpperCase();
     const lvl = LOG_LEVEL_ORDER[type] ?? 0;
@@ -864,7 +940,11 @@ function log(type, msg) {
         || (currentLogFilter === 'warning' && lvl >= 2)
         || (currentLogFilter === 'error' && lvl >= 3);
     const display = visible ? '' : ' style="display:none"';
-    panel.innerHTML += `<div class="log-entry ${cls}" data-level="${lvl}"${display}><span class="log-time">${now}</span> <span class="log-badge">${badge}</span> ${escHtml(msg)}</div>`;
+    let suffix = '';
+    if (extra && extra.tokens) suffix += `<span class="log-tokens">(${extra.tokens.toLocaleString()} tok)</span>`;
+    if (extra && extra.score != null) suffix += `<span class="log-tokens"> score: ${extra.score}</span>`;
+    if (extra && extra.confidence) suffix += `<span class="log-tokens"> confidence: ${extra.confidence}</span>`;
+    panel.innerHTML += `<div class="log-entry ${cls}" data-level="${lvl}"${display}><span class="log-time">${now}</span> <span class="log-badge">${badge}</span> ${escHtml(msg)}${suffix}</div>`;
     panel.scrollTop = panel.scrollHeight;
 }
 
@@ -901,13 +981,19 @@ function connectSSE() {
             const evt = JSON.parse(e.data);
             const cat = evt.category || '';
             let type = 'info';
-            if (cat.startsWith('agent.') || cat === 'task.resolve') type = 'agent';
+            if (cat === 'model.tool_call') type = 'tool';
+            else if (cat === 'pipeline.complete') type = 'pipeline';
+            else if (cat.startsWith('agent.') || cat === 'task.resolve') type = 'agent';
             else if (cat.startsWith('model.')) type = 'model';
             else if (cat.startsWith('task.')) type = 'stage';
             if (evt.level === 'success') type = 'success';
             if (evt.level === 'error') type = 'error';
             if (evt.level === 'warning') type = 'warn';
-            log(type, evt.message || cat);
+            const extra = {};
+            if (evt.tokens) extra.tokens = evt.tokens;
+            if (evt.score != null) extra.score = evt.score;
+            if (evt.confidence) extra.confidence = evt.confidence;
+            log(type, evt.message || cat, extra);
         } catch (_) {}
     };
 }

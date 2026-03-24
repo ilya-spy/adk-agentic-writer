@@ -466,31 +466,33 @@ class TestWorkflowConstruction:
         from adk_agentic_writer.workflows import create_refinement_pipeline
         from adk_agentic_writer.agents.reviewer import create_reviewer_pipeline
         from adk_agentic_writer.agents.refiner import create_refiner_pipeline
+        from adk_agentic_writer.agents.verifier import create_verifier_pipeline
         from adk_agentic_writer.workflows.tools import exit_loop
 
         reviewer = create_reviewer_pipeline()
+        verifier = create_verifier_pipeline()
         refiner = create_refiner_pipeline(exit_loop)
-        pipeline = create_refinement_pipeline(reviewer, refiner)
+        pipeline = create_refinement_pipeline(reviewer, verifier, refiner)
         assert "RefinementLoop" in pipeline.name
         assert len(pipeline.sub_agents) == 2
 
     def test_publish_creates_full_pipeline(self):
         from adk_agentic_writer.workflows import create_publish_pipeline
         from adk_agentic_writer.agents.ideator import create_ideator_pipeline
-        from adk_agentic_writer.agents.writer import create_writer_pipeline
+        from adk_agentic_writer.agents.writer import create_lead_writer_pipeline
         from adk_agentic_writer.agents.reviewer import create_reviewer_pipeline
         from adk_agentic_writer.agents.refiner import create_refiner_pipeline
         from adk_agentic_writer.agents.verifier import create_verifier_pipeline
         from adk_agentic_writer.workflows.tools import exit_loop
 
         ideator = create_ideator_pipeline()
-        writer = create_writer_pipeline(GAME_FORMAT)
+        writer = create_lead_writer_pipeline()
         reviewer = create_reviewer_pipeline()
         refiner = create_refiner_pipeline(exit_loop)
         verifier = create_verifier_pipeline()
         pipeline = create_publish_pipeline(ideator, writer, reviewer, refiner, verifier)
         assert "PublishPipeline" in pipeline.name
-        assert len(pipeline.sub_agents) == 4
+        assert len(pipeline.sub_agents) == 3
 
 
 # ---------------------------------------------------------------------------
@@ -659,10 +661,7 @@ class TestDomainPropagation:
     def test_refiner_prepare_task_includes_domain(self):
         from adk_agentic_writer.agents.refiner import RefinerAgentService
         from adk_agentic_writer.tasks import REFINE
-        from adk_agentic_writer.workflows.tools import exit_loop
-        from adk_agentic_writer.agents.reviewer import create_reviewer_pipeline
 
-        reviewer = create_reviewer_pipeline()
         svc = RefinerAgentService.__new__(RefinerAgentService)
         svc._tasks = []
         svc._task_by_id = {}
