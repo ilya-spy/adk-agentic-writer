@@ -1,7 +1,28 @@
-"""Quiz format specification."""
+"""Quiz format specification and normalization."""
+
+import math
+from typing import Dict
 
 from ..models.content_models import Quiz
 from .base import FormatSpec, ParamSpec
+
+_QUESTION_ALLOWED_KEYS = {"question", "options", "correct_answer", "explanation", "tier", "score"}
+_TIER_FROM_SCORE = {1: "low", 2: "mid", 3: "high"}
+
+
+def normalize_quiz(data: Dict) -> Dict:
+    """Strip non-schema fields and default missing tier / passing_score."""
+    for q in data.get("questions", []):
+        if "tier" not in q:
+            q["tier"] = _TIER_FROM_SCORE.get(q.get("score", 1), "mid")
+        for k in set(q.keys()) - _QUESTION_ALLOWED_KEYS:
+            del q[k]
+
+    total = data.get("total_score", 0)
+    if not data.get("passing_score") and total:
+        data["passing_score"] = math.ceil(total * 0.7)
+
+    return data
 
 QUIZ_SCHEMA = """\
 Output JSON Schema:
@@ -22,6 +43,15 @@ Output JSON Schema:
   "passing_score": 6,
   "time_limit": 10
 }
+
+STRICT FIELD RULES (violating these is an error):
+- Output ONLY the fields shown above. Do NOT add "id", "answer", "category",
+  "question_text", or any other field not in the schema.
+- correct_answer MUST be a zero-based INTEGER index
+  (0 = first option, 1 = second, …). NEVER a letter ("B"), NEVER the answer text.
+- Every question MUST include "tier" with value "low", "mid", or "high".
+- passing_score MUST be present as an integer (60-80%% of total_score).
+- options MUST be plain strings, NOT objects.
 
 CRITICAL scoring rules:
 - tier MUST be one of exactly: "low", "mid", "high" (NOT the overall difficulty name)

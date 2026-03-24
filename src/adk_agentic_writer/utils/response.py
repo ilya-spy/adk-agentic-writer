@@ -305,9 +305,39 @@ def parse_json(text: str, agent_name: str = "agent") -> Dict[str, Any]:
     )
 
 
+# ---------------------------------------------------------------------------
+# Content normalization (post-parse)
+# ---------------------------------------------------------------------------
+
+
+def normalize_content(data: dict, caller: str = "Pipeline") -> dict:
+    """Normalize and validate parsed content based on detected format.
+
+    Applies format-specific fixups (e.g. strip extra quiz fields, default
+    missing ``passing_score``) then runs Pydantic coercion when a
+    ``model_class`` is available.
+    """
+    from ..formats import detect_content_format, get_format
+    from ..formats.quiz import normalize_quiz
+    from .validator import validate_and_coerce
+
+    fmt_name = detect_content_format(data)
+    if fmt_name == "quiz":
+        data = normalize_quiz(data)
+
+    fmt = get_format(fmt_name) if fmt_name else None
+    if fmt and fmt.model_class:
+        data, changes = validate_and_coerce(data, fmt.model_class, caller)
+        if changes:
+            logger.info("[%s] output coerced: %s", caller, "; ".join(changes))
+
+    return data
+
+
 __all__ = [
     "extract_text",
     "strip_code_fences",
     "parse_json",
     "detect_refusal",
+    "normalize_content",
 ]

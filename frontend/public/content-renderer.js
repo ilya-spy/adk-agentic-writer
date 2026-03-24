@@ -232,6 +232,7 @@ const ContentRenderer = (() => {
     const d = unwrapContent(data);
     if (Array.isArray(d.questions)) return 'quiz';
     if (d.variables && (d.controls || d.rules)) return 'simulation';
+    if (d.parameters && (d.rules || d.metrics || d.initial_state)) return 'simulation';
     if ((d.variables || d.parameters) && d.variables && d.variables.some && d.variables.some(v => v.rule)) return 'simulation';
     if (d.nodes && d.victory_conditions) return 'game';
     if (d.nodes) {
@@ -269,7 +270,7 @@ const ContentRenderer = (() => {
 
   function renderQuiz(root, data) {
     const totalScore = data.questions.reduce((s, q) => s + (q.score || 1), 0);
-    const passNeeded = quizPassPoints(totalScore, data.passing_score);
+    const passNeeded = quizPassPoints(totalScore, data.passing_score ?? Math.ceil(totalScore * 0.7));
     const state = { current: 0, score: 0, answered: new Array(data.questions.length).fill(false) };
 
     root.appendChild(titleBlock(data.title, data.description));
@@ -314,15 +315,12 @@ const ContentRenderer = (() => {
 
       const rawOpts = q.options || [];
       const isObjOpts = rawOpts.length > 0 && typeof rawOpts[0] === 'object';
-      const optTexts = isObjOpts ? rawOpts.map(o => o.text || String(o)) : rawOpts;
+      const optTexts = isObjOpts
+        ? rawOpts.map(o => o.text || o.option_text || o.label || o.content || o.value || o.answer || (typeof o === 'object' ? JSON.stringify(o) : String(o)))
+        : rawOpts;
       let correctIdx = q.correct_answer;
-      if (typeof correctIdx === 'string') {
-        const needle = correctIdx.trim().toLowerCase();
-        correctIdx = optTexts.findIndex(t => t.trim().toLowerCase() === needle);
-      }
-      if (correctIdx == null || correctIdx < 0) {
-        correctIdx = isObjOpts ? rawOpts.findIndex(o => o.is_correct) : -1;
-      }
+      if (typeof correctIdx === 'string') correctIdx = parseInt(correctIdx, 10);
+      if (correctIdx == null || isNaN(correctIdx) || correctIdx < 0) correctIdx = -1;
 
       const opts = optionList(optTexts, (chosenIdx, li, ul) => {
         if (state.answered[idx]) return;
@@ -687,17 +685,55 @@ const ContentRenderer = (() => {
     });
   }
 
+  function normalizeSimData(data) {
+    if (data.parameters && !data.variables) {
+      data.variables = data.parameters.map(p => ({
+        name: p.name,
+        initial_value: p.default_value ?? p.initial_value ?? 0,
+        min_value: p.min_value ?? 0,
+        max_value: p.max_value ?? 100,
+        unit: p.unit || '',
+      }));
+    }
+    if (data.parameters && !data.controls) {
+      const ruleOutputs = new Set();
+      (data.rules || []).forEach(r => {
+        if (typeof r === 'object' && r.operations) {
+          r.operations.forEach(op => ruleOutputs.add(op.variable));
+        } else if (typeof r === 'string') {
+          const eq = r.indexOf('=');
+          if (eq > 0) ruleOutputs.add(r.slice(0, eq).trim());
+        }
+      });
+      const inputParams = (data.parameters || data.variables || []).filter(
+        p => !ruleOutputs.has(p.name)
+      );
+      data.controls = inputParams.map((p, i) => ({
+        control_id: `c${i + 1}`,
+        label: p.label || p.display_name || humanLabel(p.name),
+        type: 'slider',
+        affects: [p.name],
+        parameters: { min: p.min_value, max: p.max_value },
+      }));
+    }
+    if (Array.isArray(data.rules) && data.rules.length > 0 && typeof data.rules[0] === 'object') {
+      const flat = [];
+      data.rules.forEach(r => {
+        if (r.operations) {
+          r.operations.forEach(op => {
+            if (op.variable && op.operation) flat.push(`${op.variable} = ${op.operation}`);
+          });
+        } else if (r.formula || r.expression || r.rule) {
+          flat.push(r.formula || r.expression || r.rule);
+        }
+      });
+      data.rules = flat;
+    }
+  }
+
   function renderSimulation(root, data) {
     if (!data.title && data.simulation_name) data.title = data.simulation_name;
-    if (data.parameters && !data.controls) {
-      data.controls = data.parameters.filter(p => p.type === 'controllable').map((p, i) => ({
-        control_id: `c${i + 1}`, label: p.label || p.name, type: 'slider',
-        affects: [p.name], parameters: { min: p.min_value, max: p.max_value }
-      }));
-      const params = data.parameters.filter(p => p.type === 'controllable');
-      const existing = new Set((data.variables || []).map(v => v.name));
-      params.forEach(p => { if (!existing.has(p.name)) { (data.variables = data.variables || []).unshift(p); } });
-    }
+    normalizeSimData(data);
     if (!data.rules && data.variables) {
       data.rules = data.variables.filter(v => v.rule).map(v => v.rule);
     }

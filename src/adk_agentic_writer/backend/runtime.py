@@ -16,8 +16,6 @@ from ..agents.publisher import PublisherAgentService
 
 logger = logging.getLogger(__name__)
 
-BACKEND_LLM = "gemini-2.5-flash"
-
 
 class NamedStore:
     """Simple typed key-value store."""

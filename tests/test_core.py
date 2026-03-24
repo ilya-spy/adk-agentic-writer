@@ -731,9 +731,9 @@ class TestDomainPropagation:
         assert "DOMAIN AWARENESS" in instruction
         assert "Google Search" in instruction
 
-    def test_verifier_instruction_contains_domain_match(self):
+    def test_verifier_instruction_contains_domain_awareness(self):
         from adk_agentic_writer.agents.verifier import _INSTRUCTION_BASE
 
-        assert "DOMAIN MATCH CHECK" in _INSTRUCTION_BASE
+        assert "DOMAIN AWARENESS" in _INSTRUCTION_BASE
         assert "realworld" in _INSTRUCTION_BASE
         assert "fictional" in _INSTRUCTION_BASE

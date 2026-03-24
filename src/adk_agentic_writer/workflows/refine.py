@@ -19,7 +19,7 @@ def create_refinement_pipeline(
     reviewer: Agent,
     verifier: Agent,
     refiner: Agent,
-    max_iterations: int = 3,
+    max_iterations: int = 2,
 ) -> LoopAgent:
     """Compose a Parallel(Reviewer, Verifier) -> Refiner loop."""
     parallel = create_review_verify_parallel(reviewer, verifier)

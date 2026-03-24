@@ -11,6 +11,7 @@ from ..formats import FormatSpec, get_format, list_formats
 from ..tasks import WRITE
 from ..utils.callbacks import adk_before_agent, adk_after_agent, adk_before_model, adk_after_model
 from .base import BaseAgentService
+from .model_config import get_generate_content_config, get_model
 
 
 _PIPELINE_SUFFIX = """
@@ -49,12 +50,13 @@ def create_writer(
     fmt: FormatSpec,
     instruction: str | None = None,
     *,
-    model: str = "gemini-2.5-flash",
+    model: str | None = None,
     output_key: str | None = "draft_content",
 ) -> Agent:
     """Base factory -- accepts explicit instruction and output_key."""
     if instruction is None:
         instruction = _build_instruction(fmt)
+    model = model or get_model("writer")
     return Agent(
         name=f"{fmt.name.capitalize()}Writer",
         model=model,
@@ -63,6 +65,9 @@ def create_writer(
         output_key=output_key,
         tools=[google_search],
         include_contents="none",
+        generate_content_config=get_generate_content_config(
+            "writer", temperature=fmt.temperature,
+        ),
         before_agent_callback=adk_before_agent,
         after_agent_callback=adk_after_agent,
         before_model_callback=adk_before_model,
@@ -71,7 +76,7 @@ def create_writer(
 
 
 def create_writer_pipeline(
-    fmt: FormatSpec, model: str = "gemini-2.5-flash",
+    fmt: FormatSpec, model: str | None = None,
 ) -> Agent:
     """Pipeline variant -- reads ideation_result from session state."""
     instruction = _build_instruction(fmt) + _PIPELINE_SUFFIX
@@ -79,7 +84,7 @@ def create_writer_pipeline(
 
 
 def create_writer_service(
-    fmt: FormatSpec, model: str = "gemini-2.5-flash",
+    fmt: FormatSpec, model: str | None = None,
 ) -> Agent:
     """Service variant -- context provided in user message."""
     instruction = _build_instruction(fmt) + _SERVICE_SUFFIX
@@ -127,22 +132,26 @@ CRITICAL: You MUST call exactly one writer tool. Do not generate content yoursel
 Output the writer tool's response verbatim as valid JSON."""
 
 
-def create_lead_writer_pipeline(model: str = "gemini-2.5-flash") -> Agent:
+def create_lead_writer_pipeline(model: str | None = None) -> Agent:
     """Create lead writer that routes to format-specific writer AgentTools.
 
     Used in the publish pipeline. Reads {ideation_result} from session state
     and delegates to the matching format writer.
     """
+    writer_model = model or get_model("writer")
     format_tools = []
     for fmt in list_formats():
         writer_instruction = _build_instruction(fmt)
         writer = Agent(
             name=f"{fmt.name.capitalize()}Writer",
-            model=model,
+            model=writer_model,
             instruction=writer_instruction,
             description=f"Generates {fmt.label} content as structured JSON. Call this for '{fmt.name}' format.",
             tools=[google_search],
             include_contents="none",
+            generate_content_config=get_generate_content_config(
+                "writer", temperature=fmt.temperature,
+            ),
             before_agent_callback=adk_before_agent,
             after_agent_callback=adk_after_agent,
             before_model_callback=adk_before_model,
@@ -150,15 +159,17 @@ def create_lead_writer_pipeline(model: str = "gemini-2.5-flash") -> Agent:
         )
         format_tools.append(AgentTool(agent=writer, skip_summarization=True))
 
+    lead_model = model or get_model("lead_writer")
     instruction = _LEAD_INSTRUCTION.replace("{tool_list}", _build_tool_list_docs())
     return Agent(
         name="LeadWriter",
-        model=model,
+        model=lead_model,
         instruction=instruction,
         description="Routes to the correct format-specific writer based on ideation result.",
         output_key="draft_content",
         tools=format_tools,
         include_contents="none",
+        generate_content_config=get_generate_content_config("lead_writer"),
         before_agent_callback=adk_before_agent,
         after_agent_callback=adk_after_agent,
         before_model_callback=adk_before_model,
