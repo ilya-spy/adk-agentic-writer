@@ -147,6 +147,8 @@ def configure_logging(
 
     if LOG_LLM_IO:
         logging.getLogger("adk_agentic_writer.agents").setLevel(logging.DEBUG)
+        logging.getLogger("google_adk").setLevel(logging.DEBUG)
+        logging.getLogger("google_genai").setLevel(logging.INFO)
 
 
 # ---------------------------------------------------------------------------

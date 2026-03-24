@@ -147,9 +147,9 @@ const ContentRenderer = (() => {
 
   function scoreDisplay(score, total, passingScore) {
     let html = `<strong>${score}</strong> / ${total} pts`;
-    if (passingScore != null) {
-      const needed = Math.ceil(total * passingScore / 100);
-      html += ` &nbsp;(need ${needed} to pass)`;
+    if (passingScore != null && total > 0) {
+      const needed = quizPassPoints(total, passingScore);
+      if (needed != null) html += ` &nbsp;(need ${needed} to pass)`;
     }
     return el('span', 'cr-score', html);
   }
@@ -215,13 +215,31 @@ const ContentRenderer = (() => {
   // Format detection
   // ---------------------------------------------------------------------------
 
+  const FORMAT_KEYS = new Set(['quiz', 'story', 'game', 'simulation']);
+
+  function unwrapContent(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return data;
+    const keys = Object.keys(data);
+    if (keys.length === 1 && FORMAT_KEYS.has(keys[0].toLowerCase())) {
+      const inner = data[keys[0]];
+      if (inner && typeof inner === 'object' && !Array.isArray(inner)) return inner;
+    }
+    return data;
+  }
+
   function detectFormat(data) {
     if (!data || typeof data !== 'object') return null;
-    if (Array.isArray(data.questions)) return 'quiz';
-    if (data.variables && data.controls && data.rules) return 'simulation';
-    if (data.nodes && data.victory_conditions) return 'game';
-    if (data.nodes && (data.synopsis || data.genre)) return 'story';
-    if (data.nodes) return 'story';
+    const d = unwrapContent(data);
+    if (Array.isArray(d.questions)) return 'quiz';
+    if (d.variables && (d.controls || d.rules)) return 'simulation';
+    if ((d.variables || d.parameters) && d.variables && d.variables.some && d.variables.some(v => v.rule)) return 'simulation';
+    if (d.nodes && d.victory_conditions) return 'game';
+    if (d.nodes) {
+      const arr = Array.isArray(d.nodes) ? d.nodes : Object.values(d.nodes);
+      if (arr.some(n => n && (n.rewards || n.penalties || n.requirements))) return 'game';
+    }
+    if (d.nodes && (d.synopsis || d.genre)) return 'story';
+    if (d.nodes) return 'story';
     return null;
   }
 
@@ -229,8 +247,29 @@ const ContentRenderer = (() => {
   // Quiz renderer
   // ---------------------------------------------------------------------------
 
+  /**
+   * Quiz passing_score in JSON is usually minimum POINTS (per format schema:
+   * "60-80% of total" expressed as the integer point threshold, e.g. 6 of 9).
+   * If value > max points and <= 100, treat as percentage (e.g. 70 = 70%).
+   */
+  function quizPassPoints(total, passingScore) {
+    if (passingScore == null || total <= 0) return null;
+    const ps = Number(passingScore);
+    if (!isFinite(ps) || ps < 0) return null;
+    if (ps <= total) return Math.min(total, Math.max(1, Math.round(ps)));
+    if (ps <= 100) return Math.max(1, Math.ceil((total * ps) / 100));
+    return Math.min(total, Math.max(1, Math.round(ps)));
+  }
+
+  function quizScoreLineHtml(score, total, passNeeded) {
+    let html = `<strong>${score}</strong> / ${total} pts`;
+    if (passNeeded != null) html += ` &nbsp;(need ${passNeeded} to pass)`;
+    return html;
+  }
+
   function renderQuiz(root, data) {
     const totalScore = data.questions.reduce((s, q) => s + (q.score || 1), 0);
+    const passNeeded = quizPassPoints(totalScore, data.passing_score);
     const state = { current: 0, score: 0, answered: new Array(data.questions.length).fill(false) };
 
     root.appendChild(titleBlock(data.title, data.description));
@@ -245,7 +284,7 @@ const ContentRenderer = (() => {
     progressEl.appendChild(progressLabel);
     progressEl.appendChild(progressTrack);
     topbar.appendChild(progressEl);
-    topbar.appendChild(scoreDisplay(0, totalScore, data.passing_score));
+    topbar.appendChild(el('span', 'cr-score', quizScoreLineHtml(0, totalScore, passNeeded)));
     root.appendChild(topbar);
 
     const questionsContainer = el('div', '');
@@ -254,9 +293,7 @@ const ContentRenderer = (() => {
       const answeredCount = state.answered.filter(Boolean).length;
       progressLabel.textContent = `Question ${Math.min(answeredCount + 1, data.questions.length)} / ${data.questions.length}`;
       progressFill.style.width = `${Math.round((answeredCount / data.questions.length) * 100)}%`;
-      topbar.querySelector('.cr-score').innerHTML =
-        `<strong>${state.score}</strong> / ${totalScore} pts` +
-        (data.passing_score != null ? ` &nbsp;(need ${Math.ceil(totalScore * data.passing_score / 100)} to pass)` : '');
+      topbar.querySelector('.cr-score').innerHTML = quizScoreLineHtml(state.score, totalScore, passNeeded);
     }
 
     function renderQuestion(idx) {
@@ -273,17 +310,29 @@ const ContentRenderer = (() => {
       headerRow.appendChild(badgeBlock(`${q.score || 1} pt${(q.score || 1) > 1 ? 's' : ''}`, 'purple'));
       card.appendChild(headerRow);
 
-      card.appendChild(el('p', 'cr-text', `<strong>${esc(q.question)}</strong>`));
+      card.appendChild(el('p', 'cr-text', `<strong>${esc(q.question || q.question_text)}</strong>`));
 
-      const opts = optionList(q.options, (chosenIdx, li, ul) => {
+      const rawOpts = q.options || [];
+      const isObjOpts = rawOpts.length > 0 && typeof rawOpts[0] === 'object';
+      const optTexts = isObjOpts ? rawOpts.map(o => o.text || String(o)) : rawOpts;
+      let correctIdx = q.correct_answer;
+      if (typeof correctIdx === 'string') {
+        const needle = correctIdx.trim().toLowerCase();
+        correctIdx = optTexts.findIndex(t => t.trim().toLowerCase() === needle);
+      }
+      if (correctIdx == null || correctIdx < 0) {
+        correctIdx = isObjOpts ? rawOpts.findIndex(o => o.is_correct) : -1;
+      }
+
+      const opts = optionList(optTexts, (chosenIdx, li, ul) => {
         if (state.answered[idx]) return;
         state.answered[idx] = true;
-        const correct = chosenIdx === q.correct_answer;
+        const correct = chosenIdx === correctIdx;
         if (correct) state.score += (q.score || 1);
 
         ul.querySelectorAll('.cr-option').forEach((o, oi) => {
           o.classList.add('cr-opt-locked');
-          if (oi === q.correct_answer) o.classList.add('cr-opt-correct');
+          if (oi === correctIdx) o.classList.add('cr-opt-correct');
           if (oi === chosenIdx && !correct) o.classList.add('cr-opt-incorrect');
         });
 
@@ -303,13 +352,12 @@ const ContentRenderer = (() => {
     }
 
     function showSummary() {
-      const needed = data.passing_score != null ? Math.ceil(totalScore * data.passing_score / 100) : null;
-      const passed = needed != null ? state.score >= needed : true;
+      const passed = passNeeded != null ? state.score >= passNeeded : true;
       const summary = el('div', `cr-summary ${passed ? 'cr-summary-pass' : 'cr-summary-fail'}`);
       summary.innerHTML = `
         <h3>${passed ? 'Passed!' : 'Not Passed'}</h3>
         <p>Score: <strong>${state.score}</strong> / ${totalScore} pts</p>
-        ${needed != null ? `<p>Passing threshold: ${needed} pts (${data.passing_score}%)</p>` : ''}
+        ${passNeeded != null ? `<p>Passing threshold: <strong>${passNeeded}</strong> pts</p>` : ''}
       `;
       const restart = el('button', 'cr-restart-btn', 'Restart Quiz');
       restart.onclick = () => {
@@ -333,7 +381,40 @@ const ContentRenderer = (() => {
   // Quest Game renderer
   // ---------------------------------------------------------------------------
 
+  function normalizeNodes(raw) {
+    if (!raw) return {};
+    if (Array.isArray(raw)) {
+      const map = {};
+      raw.forEach(n => {
+        const key = n && (n.id || n.node_id);
+        if (key) { n.id = key; map[key] = n; }
+      });
+      return map;
+    }
+    return raw;
+  }
+
   function renderGame(root, data) {
+    data.nodes = normalizeNodes(data.nodes);
+    Object.values(data.nodes).forEach(n => {
+      if (!n.description && n.text) n.description = n.text;
+      if (!n.title && n.id) n.title = n.id;
+      if (n.choices) {
+        n.choices = n.choices.map(c => ({
+          ...c,
+          next_node_id: c.next_node_id || c.next_node || c.target_node || c.next,
+        }));
+      }
+      if (n.rewards && !Array.isArray(n.rewards)) {
+        const flat = [];
+        if (n.rewards.gold) flat.push(`${n.rewards.gold} Gold`);
+        if (n.rewards.status) flat.push(n.rewards.status);
+        if (Array.isArray(n.rewards.items)) n.rewards.items.forEach(i => flat.push(typeof i === 'object' ? (i.item || i.name || String(i)) : i));
+        n.rewards = flat;
+      } else if (n.rewards && n.rewards.length && typeof n.rewards[0] === 'object') {
+        n.rewards = n.rewards.map(r => r.item || r.name || String(r));
+      }
+    });
     const nodeKeys = Object.keys(data.nodes || {});
     const state = { currentNode: data.start_node || nodeKeys[0], rewards: [], visited: new Set() };
 
@@ -433,6 +514,17 @@ const ContentRenderer = (() => {
   // ---------------------------------------------------------------------------
 
   function renderStory(root, data) {
+    data.nodes = normalizeNodes(data.nodes);
+    Object.values(data.nodes).forEach(n => {
+      if (!n.content && n.text) n.content = n.text;
+      if (!n.branches && n.choices) {
+        n.branches = n.choices.map(c => ({
+          text: c.text,
+          next_node_id: c.next_node_id || c.next_node || c.next,
+        }));
+      }
+      if (n.type === 'ending' || ((!n.branches || !n.branches.length) && !n.choices)) n.is_ending = true;
+    });
     const nodeKeys = Object.keys(data.nodes || {});
     const state = { currentNode: data.start_node || nodeKeys[0], history: [], showAll: false };
 
@@ -572,7 +664,10 @@ const ContentRenderer = (() => {
 
   function buildEvaluators(rules, varNames) {
     const sorted = [...varNames].sort((a, b) => b.length - a.length);
-    return (rules || []).map(raw => {
+    return (rules || []).map(rawInput => {
+      const raw = (typeof rawInput === 'object' && rawInput !== null)
+        ? (rawInput.formula || rawInput.expression || rawInput.rule || JSON.stringify(rawInput))
+        : String(rawInput);
       let clean = raw.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').trim();
       if (!clean) return { text: raw };
       const eqIdx = clean.indexOf('=');
@@ -585,7 +680,7 @@ const ContentRenderer = (() => {
         expr = expr.replace(new RegExp('\\b' + escRe(n) + '\\b', 'g'), `s["${n}"]`);
       });
       try {
-        const fn = new Function('s', `"use strict"; const Math=globalThis.Math; return (${expr});`);
+        const fn = new Function('s', `"use strict"; const Math=globalThis.Math; function CLAMP(v,lo,hi){return Math.max(lo,Math.min(hi,v));} return (${expr});`);
         fn({});
         return { output: lhs, evaluate: fn, raw, formula: clean };
       } catch { return { text: raw }; }
@@ -593,6 +688,19 @@ const ContentRenderer = (() => {
   }
 
   function renderSimulation(root, data) {
+    if (!data.title && data.simulation_name) data.title = data.simulation_name;
+    if (data.parameters && !data.controls) {
+      data.controls = data.parameters.filter(p => p.type === 'controllable').map((p, i) => ({
+        control_id: `c${i + 1}`, label: p.label || p.name, type: 'slider',
+        affects: [p.name], parameters: { min: p.min_value, max: p.max_value }
+      }));
+      const params = data.parameters.filter(p => p.type === 'controllable');
+      const existing = new Set((data.variables || []).map(v => v.name));
+      params.forEach(p => { if (!existing.has(p.name)) { (data.variables = data.variables || []).unshift(p); } });
+    }
+    if (!data.rules && data.variables) {
+      data.rules = data.variables.filter(v => v.rule).map(v => v.rule);
+    }
     const vars = data.variables || [];
     const controls = data.controls || [];
     const rules = data.rules || [];
@@ -600,8 +708,6 @@ const ContentRenderer = (() => {
 
     const inputNames = new Set();
     controls.forEach(c => (c.affects || []).forEach(n => inputNames.add(n)));
-    const inputVars = vars.filter(v => inputNames.has(v.name));
-    const outputVars = vars.filter(v => !inputNames.has(v.name));
 
     const state = {};
     vars.forEach(v => { state[v.name] = v.initial_value; });
@@ -611,7 +717,15 @@ const ContentRenderer = (() => {
     const textEvs = allEvs.filter(e => e.text);
     const outputDisplays = {};
 
-    root.appendChild(titleBlock(data.title, data.description));
+    if (controls.length === 0 && vars.length > 0) {
+      const ruleOutputs = new Set(allEvs.filter(e => e.output).map(e => e.output));
+      vars.forEach(v => { if (!ruleOutputs.has(v.name)) inputNames.add(v.name); });
+    }
+
+    const inputVars = vars.filter(v => inputNames.has(v.name));
+    const outputVars = vars.filter(v => !inputNames.has(v.name));
+
+    root.appendChild(titleBlock(data.title || data.name, data.description));
 
     // --- Inputs card ---
     if (inputVars.length) {
@@ -729,8 +843,9 @@ const ContentRenderer = (() => {
       if (!container) { console.error('ContentRenderer: container not found'); return; }
       container.innerHTML = '';
 
+      const d = unwrapContent(data);
       const root = el('div', 'cr-root');
-      const fmt = detectFormat(data);
+      const fmt = detectFormat(d);
       if (!fmt) {
         root.appendChild(el('p', 'cr-text', 'Unknown content format — cannot render.'));
         container.appendChild(root);
@@ -738,10 +853,10 @@ const ContentRenderer = (() => {
       }
 
       switch (fmt) {
-        case 'quiz': renderQuiz(root, data); break;
-        case 'game': renderGame(root, data); break;
-        case 'story': renderStory(root, data); break;
-        case 'simulation': renderSimulation(root, data); break;
+        case 'quiz': renderQuiz(root, d); break;
+        case 'game': renderGame(root, d); break;
+        case 'story': renderStory(root, d); break;
+        case 'simulation': renderSimulation(root, d); break;
       }
 
       container.appendChild(root);

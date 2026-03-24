@@ -225,7 +225,8 @@ def parse_json(text: str, agent_name: str = "agent") -> Dict[str, Any]:
     4. Fix escape sequences and retry
     5. Collapse double braces (``{{`` / ``}}``)
     6. Allow control characters (strict=False)
-    7. Repair truncated JSON (LLM hit token limit)
+    7. Extract JSON object from surrounding prose
+    8. Repair truncated JSON (LLM hit token limit)
     """
     cleaned = strip_code_fences(text)
 
@@ -267,7 +268,19 @@ def parse_json(text: str, agent_name: str = "agent") -> Dict[str, Any]:
     except json.JSONDecodeError:
         pass
 
-    # --- 5. Truncated JSON repair ---
+    # --- 5. Extract JSON from surrounding prose ---
+    json_start = fixed.find('{')
+    json_end = fixed.rfind('}')
+    if json_start >= 0 and json_end > json_start:
+        substr = fixed[json_start:json_end + 1]
+        try:
+            result = json.loads(substr, strict=False)
+            logger.warning("[%s] JSON extracted from surrounding text", agent_name)
+            return result
+        except json.JSONDecodeError:
+            pass
+
+    # --- 6. Truncated JSON repair ---
     repaired = _repair_truncated_json(fixed)
     if repaired:
         try:
@@ -280,7 +293,7 @@ def parse_json(text: str, agent_name: str = "agent") -> Dict[str, Any]:
         except json.JSONDecodeError:
             pass
 
-    # --- 6. Give up ---
+    # --- 7. Give up ---
     logger.error(
         "[%s] JSON parse failed after all recovery attempts.\nRaw (first 500): %s",
         agent_name,

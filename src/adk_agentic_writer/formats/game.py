@@ -27,7 +27,8 @@ and logical quest progression.
 If creative direction and reasoning are provided, use them to guide your content creation style and approach.
 
 CRITICAL: Respond with valid JSON only. No markdown, no explanations, no code blocks.
-The JSON must exactly match the schema structure provided.""",
+Do NOT include any commentary, analysis, or discussion of search results.
+Your entire response must be a single JSON object matching the schema structure provided.""",
     writer_prompt="""\
 Create an interactive gamified {flavor} about "{topic}".
 

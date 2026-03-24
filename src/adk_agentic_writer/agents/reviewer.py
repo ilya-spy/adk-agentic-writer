@@ -6,7 +6,7 @@ from typing import Any, Dict
 from google.adk.agents import Agent
 
 from ..tasks import REVIEW
-from ..utils.callbacks import adk_before_agent, adk_after_agent, adk_before_model
+from ..utils.callbacks import adk_before_agent, adk_after_agent, adk_before_model, adk_after_model
 from ..utils.validator import schema_validate
 from .base import BaseAgentService
 
@@ -84,6 +84,9 @@ CRITICAL: Respond with valid JSON only. No markdown, no explanations outside the
 
 _INSTRUCTION_PIPELINE = _INSTRUCTION_BASE + """
 
+Ideation context (format, domain, creative direction):
+{ideation_result}
+
 Review the following content:
 {draft_content}
 """
@@ -112,6 +115,7 @@ def create_reviewer(
         before_agent_callback=adk_before_agent,
         after_agent_callback=adk_after_agent,
         before_model_callback=adk_before_model,
+        after_model_callback=adk_after_model,
     )
 
 

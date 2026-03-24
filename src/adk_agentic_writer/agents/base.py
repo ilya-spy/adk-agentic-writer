@@ -19,6 +19,7 @@ from ..models.agent_models import AgentTask
 from ..utils.response import extract_text, parse_json
 from ..utils.validator import validate_and_coerce
 from ..utils.event_bus import emit_event
+from ..utils import log as _log_cfg
 from ..utils.log import log_llm_prompt, log_llm_response
 
 logger = logging.getLogger(__name__)
@@ -79,7 +80,7 @@ class BaseAgentService:
         model_class: Optional[type] = None,
     ) -> Dict[str, Any]:
         log_llm_prompt(logger, agent_name, prompt)
-        response = await runner.run_debug(prompt, quiet=True)
+        response = await runner.run_debug(prompt, quiet=not _log_cfg.LOG_LLM_IO)
         text = extract_text(response)
         result = parse_json(text, agent_name=agent_name)
         if model_class is not None:

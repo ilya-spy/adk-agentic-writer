@@ -3,10 +3,16 @@
 from typing import Any, Dict
 
 from google.adk.agents import Agent
+from google.adk.tools import google_search
 
 from ..formats import list_formats
 from ..tasks import IDEATE
-from ..utils.callbacks import adk_before_agent, adk_after_agent, adk_before_model
+from ..utils.callbacks import (
+    adk_after_agent,
+    adk_after_model,
+    adk_before_agent,
+    adk_before_model,
+)
 from .base import BaseAgentService
 
 
@@ -67,6 +73,11 @@ TASK:
      invented characters, and imaginative scenarios. No need for real-world accuracy.
    Include "domain": "<realworld|fictional>" in the output params.
 
+SEARCH TOOL:
+- For "realworld" domain, ALWAYS use google_search at least once to gather recent,
+  accurate information about the topic before finalizing your ideation.
+  Ground your ideation in current, verifiable information.
+
 CRITICAL: Be creative and varied with parameter values. Every idea should feel distinct.
 Avoid the trap of always picking middle-of-the-road values. Surprise the user.
 
@@ -103,10 +114,12 @@ def create_ideator(
         instruction=instruction,
         description="Brainstorms topic, selects format, and sets optimal parameters.",
         output_key=output_key,
+        tools=[google_search],
         include_contents="none",
         before_agent_callback=adk_before_agent,
         after_agent_callback=adk_after_agent,
         before_model_callback=adk_before_model,
+        after_model_callback=adk_after_model,
     )
 
 

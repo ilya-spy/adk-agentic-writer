@@ -91,20 +91,23 @@ async def lifespan(app: FastAPI):
         writer = WriterAgentService()
         reviewer = ReviewerAgentService()
         verifier = VerifierAgentService()
-        [ideator_adk] = ideator.get_agents("pipeline")
-        [reviewer_adk] = reviewer.get_agents("pipeline")
-        [verifier_adk] = verifier.get_agents("pipeline")
+        refiner = RefinerAgentService()
 
-        # -- Composite services (receive pipeline ADK agents) --
-        refiner = RefinerAgentService(reviewer_adk)
-        [refiner_adk] = refiner.get_agents("pipeline")
+        # -- Publish pipeline needs dedicated agent instances (ADK agents
+        #    can only belong to one parent) --
+        from ..agents.ideator import create_ideator_pipeline
+        from ..agents.writer import create_lead_writer_pipeline
+        from ..agents.reviewer import create_reviewer_pipeline
+        from ..agents.refiner import create_refiner_pipeline
+        from ..agents.verifier import create_verifier_pipeline
+        from ..workflows.tools import exit_loop
 
         publisher = PublisherAgentService(
-            ideator_adk,
-            writer.get_agents("pipeline"),
-            reviewer_adk,
-            refiner_adk,
-            verifier_adk,
+            ideator=create_ideator_pipeline(),
+            writer=create_lead_writer_pipeline(),
+            reviewer=create_reviewer_pipeline(),
+            refiner=create_refiner_pipeline(exit_loop),
+            verifier=create_verifier_pipeline(),
         )
 
         _runtime.services.set("ideator", ideator)
@@ -125,7 +128,7 @@ async def lifespan(app: FastAPI):
             _runtime.services.keys(),
         )
     except Exception as e:
-        logger.error("Failed to initialize agent system: %s", e)
+        logger.error("Failed to initialize agent system: %s", e, exc_info=True)
     yield
     logger.info("Shutting down ADK agent system...")
     _runtime.services.clear()

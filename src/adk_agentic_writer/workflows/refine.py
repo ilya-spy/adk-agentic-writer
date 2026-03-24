@@ -1,26 +1,30 @@
 """Refinement loop workflow.
 
-Pure composer: accepts pre-built ADK refiner and reviewer agents,
-returns a LoopAgent that iteratively refines then re-reviews content.
-The refiner calls exit_loop when quality is sufficient.
+Pure composer: accepts pre-built ADK agents, returns a LoopAgent:
+  Loop(Parallel(Reviewer, Verifier), Refiner)
 
-Loop order: Refiner -> Reviewer
-  - Refiner applies fixes from both review_result and verification_result
-  - Reviewer re-evaluates the updated draft
+Each iteration:
+  1. Parallel reviewer + verifier evaluate the current draft
+  2. Refiner applies fixes based on both review_result and verification_result
+  3. Refiner calls exit_loop when quality is sufficient
 """
 
 from google.adk.agents import Agent
 from google.adk.agents.loop_agent import LoopAgent
 
+from .verify import create_review_verify_parallel
+
 
 def create_refinement_pipeline(
-    refiner: Agent,
     reviewer: Agent,
+    verifier: Agent,
+    refiner: Agent,
     max_iterations: int = 3,
 ) -> LoopAgent:
-    """Compose a Refiner -> Reviewer loop from pre-built ADK agents."""
+    """Compose a Parallel(Reviewer, Verifier) -> Refiner loop."""
+    parallel = create_review_verify_parallel(reviewer, verifier)
     return LoopAgent(
         name="RefinementLoop",
-        sub_agents=[refiner, reviewer],
+        sub_agents=[parallel, refiner],
         max_iterations=max_iterations,
     )
