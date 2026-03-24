@@ -9,6 +9,7 @@ from ..tasks import REFINE
 from ..utils.callbacks import adk_before_agent, adk_after_agent, adk_before_model, adk_after_model
 from ..workflows.tools import exit_loop
 from .base import BaseAgentService
+from .model_config import get_generate_content_config, get_model
 
 
 _INSTRUCTION_BASE = """\
@@ -86,13 +87,14 @@ _INSTRUCTION_SERVICE = _INSTRUCTION_BASE + _SERVICE_SUFFIX
 def create_refiner(
     instruction: str | None = None,
     *,
-    model: str = "gemini-2.5-flash",
+    model: str | None = None,
     output_key: str | None = "draft_content",
     tools: list | None = None,
 ) -> Agent:
     """Base factory -- accepts explicit instruction, output_key, and tools."""
     if instruction is None:
         instruction = _INSTRUCTION_PIPELINE
+    model = model or get_model("refiner")
     return Agent(
         name="RefinerAgent",
         model=model,
@@ -101,6 +103,7 @@ def create_refiner(
         output_key=output_key,
         include_contents="none",
         tools=tools or [],
+        generate_content_config=get_generate_content_config("refiner"),
         before_agent_callback=adk_before_agent,
         after_agent_callback=adk_after_agent,
         before_model_callback=adk_before_model,
@@ -109,7 +112,7 @@ def create_refiner(
 
 
 def create_refiner_pipeline(
-    exit_loop_tool, model: str = "gemini-2.5-flash",
+    exit_loop_tool, model: str | None = None,
 ) -> Agent:
     """Pipeline variant -- loop-aware with exit_loop tool and output_key."""
     return create_refiner(
@@ -120,7 +123,7 @@ def create_refiner_pipeline(
     )
 
 
-def create_refiner_service(model: str = "gemini-2.5-flash") -> Agent:
+def create_refiner_service(model: str | None = None) -> Agent:
     """Service variant -- no output_key, no tools; result returned explicitly."""
     return create_refiner(
         _INSTRUCTION_SERVICE, model=model, output_key=None, tools=None,

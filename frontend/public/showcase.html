@@ -421,11 +421,19 @@ function showResultPreview(containerId, item) {
 
     const renderPanel = document.getElementById('renderActionPanel');
     const renderBtn = document.getElementById('renderBtn');
-    if ((containerId === 'finalResults' || containerId === 'draftsResults' || containerId === 'publishedResults') && ContentRenderer.detectFormat(data)) {
+    const renderableContainer = containerId === 'finalResults' || containerId === 'draftsResults' || containerId === 'publishedResults';
+
+    if (renderableContainer && ContentRenderer.detectFormat(data)) {
         _lastPreviewItem = item;
         const label = item.label || 'Selected Content';
         renderBtn.textContent = `Render: ${truncate(label, 50)}`;
         renderPanel.style.display = '';
+        if (document.getElementById('rendererPanel').style.display !== 'none') {
+            renderContent(item);
+        }
+    } else if (renderableContainer) {
+        renderPanel.style.display = 'none';
+        _lastPreviewItem = null;
     }
 
     const pre = document.createElement('pre');

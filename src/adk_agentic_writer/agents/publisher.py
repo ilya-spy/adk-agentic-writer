@@ -10,11 +10,19 @@ from ..tasks import PUBLISH
 from ..utils import log as _log_cfg
 from ..utils.event_bus import emit_event
 from ..utils.log import log_llm_prompt, log_llm_response
-from ..utils.response import parse_json, strip_code_fences
+from ..utils.response import normalize_content, parse_json, strip_code_fences
 from ..workflows.publish import create_publish_pipeline
 from .base import BaseAgentService
 
 logger = logging.getLogger(__name__)
+
+
+def _is_json_like(text) -> bool:
+    """Quick check whether *text* plausibly starts with JSON."""
+    if isinstance(text, dict):
+        return True
+    s = strip_code_fences(str(text).strip()) if isinstance(text, str) else ""
+    return s.startswith("{") or s.startswith("[")
 
 
 def _extract_state_from_events(events: list, key: str) -> Optional[str]:
@@ -23,6 +31,20 @@ def _extract_state_from_events(events: list, key: str) -> Optional[str]:
         if event.actions and event.actions.state_delta:
             val = event.actions.state_delta.get(key)
             if val:
+                return val
+    return None
+
+
+def _extract_valid_json_from_events(events: list, key: str) -> Optional[str]:
+    """Walk events in reverse to find the last *JSON-like* state_delta for *key*.
+
+    Unlike ``_extract_state_from_events`` this skips values that are clearly
+    not JSON (e.g. a refiner that output prose instead of content).
+    """
+    for event in reversed(events):
+        if event.actions and event.actions.state_delta:
+            val = event.actions.state_delta.get(key)
+            if val and _is_json_like(val):
                 return val
     return None
 
@@ -131,6 +153,7 @@ class PublisherAgentService(BaseAgentService):
         if draft:
             result = draft if isinstance(draft, dict) else parse_json(strip_code_fences(draft), agent_name=pipeline.name)
             result = _unwrap_format(result)
+            result = normalize_content(result, caller="PublishPipeline")
             log_llm_response(logger, pipeline.name, result)
             emit_event("pipeline.complete",
                        f"Pipeline finished — {len(events)} events",
@@ -143,7 +166,13 @@ class PublisherAgentService(BaseAgentService):
         return {"error": "Pipeline produced no output"}
 
     async def _extract_draft(self, runner, events, session_id) -> Optional[str]:
-        """Try session state first, then events, then tool output fallback."""
+        """Try session state first, then events, then tool output fallback.
+
+        Validates that the candidate is JSON-like before accepting it.  If
+        the refiner overwrote ``draft_content`` with prose (e.g. an error
+        explanation) we fall back to the last valid JSON snapshot in the
+        event stream.
+        """
         session = await runner.session_service.get_session(
             app_name=runner.app_name,
             user_id="debug_user_id",
@@ -153,10 +182,16 @@ class PublisherAgentService(BaseAgentService):
             draft = session.state.get("draft_content")
             if draft:
                 logger.debug("draft_content from session state (%d chars)", len(str(draft)))
-                return draft
+                if _is_json_like(draft):
+                    return draft
+                logger.warning(
+                    "draft_content in session state is not JSON – "
+                    "falling back to last valid snapshot in events"
+                )
 
-        draft = _extract_state_from_events(events, "draft_content")
+        draft = _extract_valid_json_from_events(events, "draft_content")
         if draft:
+            logger.debug("draft_content from events fallback (%d chars)", len(str(draft)))
             return draft
 
         draft = _extract_writer_tool_output(events)

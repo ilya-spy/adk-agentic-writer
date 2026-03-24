@@ -14,6 +14,7 @@ from ..utils.callbacks import (
     adk_before_model,
 )
 from .base import BaseAgentService
+from .model_config import get_generate_content_config, get_model
 
 
 _PARAM_RANGES = {
@@ -114,12 +115,13 @@ recommended defaults. Your actual values MUST be tailored to the specific idea.
 def create_ideator(
     instruction: str | None = None,
     *,
-    model: str = "gemini-2.5-flash",
+    model: str | None = None,
     output_key: str | None = "ideation_result",
 ) -> Agent:
     """Base factory -- accepts explicit instruction and output_key."""
     if instruction is None:
         instruction = _INSTRUCTION.replace("{format_list}", _build_format_list())
+    model = model or get_model("ideator")
     return Agent(
         name="IdeatorAgent",
         model=model,
@@ -128,6 +130,7 @@ def create_ideator(
         output_key=output_key,
         tools=[google_search],
         include_contents="none",
+        generate_content_config=get_generate_content_config("ideator"),
         before_agent_callback=adk_before_agent,
         after_agent_callback=adk_after_agent,
         before_model_callback=adk_before_model,
@@ -135,12 +138,12 @@ def create_ideator(
     )
 
 
-def create_ideator_pipeline(model: str = "gemini-2.5-flash") -> Agent:
+def create_ideator_pipeline(model: str | None = None) -> Agent:
     """Pipeline variant -- writes result to session state via output_key."""
     return create_ideator(model=model, output_key="ideation_result")
 
 
-def create_ideator_service(model: str = "gemini-2.5-flash") -> Agent:
+def create_ideator_service(model: str | None = None) -> Agent:
     """Service variant -- no output_key; result returned explicitly."""
     return create_ideator(model=model, output_key=None)
 

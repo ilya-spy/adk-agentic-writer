@@ -16,7 +16,7 @@ def create_publish_pipeline(
     reviewer: Agent,
     refiner: Agent,
     verifier: Agent,
-    max_iterations: int = 3,
+    max_iterations: int = 2,
 ) -> SequentialAgent:
     """Compose a full publish pipeline from pre-built ADK agents.
 

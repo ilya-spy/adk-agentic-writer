@@ -44,7 +44,12 @@ CRITICAL structural rules:
 1. VARIABLES — split into INPUT and OUTPUT:
    - INPUT variables: user-controllable. Each MUST have exactly one matching control.
    - OUTPUT variables: computed from rules. MUST NOT have controls.
-   - Use snake_case names. Keep units short (kg, %, m/s, people, units).
+   - Use snake_case names.
+   - UNITS must be SHORT standard abbreviations (1-5 chars).
+     GOOD: "%", "kg", "km/h", "level", "index", "units", "USD"
+     BAD: "level_0-100", "impact index 0-100", "score out of 100",
+          "percentage_value", "units per capita"
+     NEVER encode ranges or descriptions into the unit string.
    - All variables MUST have min_value and max_value set.
    - Output initial_value should be 0 (will be computed by rules).
 
@@ -196,7 +201,8 @@ RULES:
   DO NOT use Math.max, Math.min, ternary (?:), comments, or any function calls.
 - Rules are evaluated top-to-bottom so earlier outputs can feed later rules.
 - Aim for 2-5 clear formulas. Each should reveal an interesting relationship.
-- Use realistic ranges and short units.
+- Units MUST be short abbreviations (1-5 chars): "%", "kg", "km/h", "level", "index".
+  NEVER use descriptive unit strings like "level_0-100" or "impact index 0-100".
 - visualization_type must be "dashboard".
 
 TONE AWARENESS:
@@ -223,7 +229,10 @@ STRUCTURAL CHECKS:
 - Total variable count is within limits (max 9)
 - Rules only reference defined variable names
 - Controls parameters.min/max match variable min_value/max_value
+- Controls affects[] names MUST exactly match variable names (snake_case)
 - visualization_type is "dashboard"
+- UNITS: reject any unit longer than 5 characters or containing numbers/ranges.
+  Good: "%", "kg", "level". Bad: "level_0-100", "impact index 0-100".
 
 Be strict. Simpler formulas are better. Provide concrete fix suggestions.""",
     refiner_prompt="""\
@@ -237,9 +246,12 @@ Refine this simulation based on the review feedback. Priority actions:
    if needed, but keep total output count under 4.
 3. Remove excess variables — keep only the essentials.
 4. Ensure 1:1 mapping between input variables and controls.
+   Controls affects[] names MUST exactly match variable names.
 5. Ensure rule ordering: if output A feeds into rule for output B, A comes first.
 6. Verify all variable names in rules match defined variables.
-7. Set visualization_type to "dashboard".""",
+7. Fix any unit longer than 5 chars — replace with a short abbreviation
+   (e.g. "level_0-100" → "%", "impact index" → "index").
+8. Set visualization_type to "dashboard".""",
     flavors=["web_simulation", "interactive", "simulator"],
     temperature=0.65,
     max_tokens=2048,

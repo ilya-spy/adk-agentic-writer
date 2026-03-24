@@ -7,6 +7,7 @@ with execution (always return None).
 
 import json
 import logging
+import time
 from typing import Optional
 
 from google.adk.agents.callback_context import CallbackContext
@@ -17,12 +18,15 @@ from .event_bus import emit_event
 
 logger = logging.getLogger("adk_agentic_writer.agents.callbacks")
 
+_agent_start_times: dict[str, float] = {}
+
 
 def adk_before_agent(
     callback_context: CallbackContext,
 ) -> Optional[types.Content]:
     """Fired when an ADK agent begins processing a request."""
     name = callback_context.agent_name
+    _agent_start_times[name] = time.monotonic()
     logger.info("[%s] agent started", name)
     emit_event("agent.start", f"{name} started processing", agent=name)
     return None
@@ -33,8 +37,19 @@ def adk_after_agent(
 ) -> Optional[types.Content]:
     """Fired when an ADK agent finishes processing a request."""
     name = callback_context.agent_name
-    logger.info("[%s] agent completed", name)
-    emit_event("agent.complete", f"{name} finished", level="success", agent=name)
+    start = _agent_start_times.pop(name, None)
+    duration_ms = int((time.monotonic() - start) * 1000) if start else None
+
+    extra: dict = {"agent": name}
+    msg = f"{name} finished"
+    if duration_ms is not None:
+        extra["duration_ms"] = duration_ms
+        msg = f"{name} finished ({duration_ms / 1000:.1f}s)"
+        logger.info("[%s] agent completed in %dms", name, duration_ms)
+    else:
+        logger.info("[%s] agent completed", name)
+
+    emit_event("agent.complete", msg, level="success", **extra)
     return None
 
 

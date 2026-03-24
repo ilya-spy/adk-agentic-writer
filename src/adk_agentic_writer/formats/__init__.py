@@ -45,12 +45,28 @@ def list_formats() -> List[FormatSpec]:
     return result
 
 
+def detect_content_format(data: dict) -> Optional[str]:
+    """Detect which content format *data* represents based on its keys."""
+    if not isinstance(data, dict):
+        return None
+    if "questions" in data and isinstance(data["questions"], list):
+        return "quiz"
+    if "variables" in data or "parameters" in data:
+        return "simulation"
+    if "nodes" in data and "victory_conditions" in data:
+        return "game"
+    if "nodes" in data:
+        return "story"
+    return None
+
+
 __all__ = [
     "FormatSpec",
     "ParamSpec",
     "FORMAT_REGISTRY",
     "get_format",
     "list_formats",
+    "detect_content_format",
     "QUIZ_FORMAT",
     "STORY_FORMAT",
     "GAME_FORMAT",

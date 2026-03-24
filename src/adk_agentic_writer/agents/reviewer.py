@@ -9,6 +9,7 @@ from ..tasks import REVIEW
 from ..utils.callbacks import adk_before_agent, adk_after_agent, adk_before_model, adk_after_model
 from ..utils.validator import schema_validate
 from .base import BaseAgentService
+from .model_config import get_generate_content_config, get_model
 
 _INSTRUCTION_BASE = """\
 You are a strict content quality reviewer.
@@ -105,12 +106,13 @@ The content to review will be provided in the user message."""
 def create_reviewer(
     instruction: str | None = None,
     *,
-    model: str = "gemini-2.5-flash",
+    model: str | None = None,
     output_key: str | None = "review_result",
 ) -> Agent:
     """Base factory -- accepts explicit instruction and output_key."""
     if instruction is None:
         instruction = _INSTRUCTION_PIPELINE
+    model = model or get_model("reviewer")
     return Agent(
         name="ReviewerAgent",
         model=model,
@@ -118,6 +120,7 @@ def create_reviewer(
         description="Reviews and validates generated content for quality and correctness.",
         output_key=output_key,
         include_contents="none",
+        generate_content_config=get_generate_content_config("reviewer"),
         before_agent_callback=adk_before_agent,
         after_agent_callback=adk_after_agent,
         before_model_callback=adk_before_model,
@@ -125,14 +128,14 @@ def create_reviewer(
     )
 
 
-def create_reviewer_pipeline(model: str = "gemini-2.5-flash") -> Agent:
+def create_reviewer_pipeline(model: str | None = None) -> Agent:
     """Pipeline variant -- reads draft_content from session state."""
     return create_reviewer(
         _INSTRUCTION_PIPELINE, model=model, output_key="review_result",
     )
 
 
-def create_reviewer_service(model: str = "gemini-2.5-flash") -> Agent:
+def create_reviewer_service(model: str | None = None) -> Agent:
     """Service variant -- receives content via user prompt, no output_key."""
     return create_reviewer(
         _INSTRUCTION_SERVICE, model=model, output_key=None,

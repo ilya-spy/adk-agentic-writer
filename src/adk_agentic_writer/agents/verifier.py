@@ -16,69 +16,48 @@ from google.adk.tools import google_search
 from ..tasks import VERIFY
 from ..utils.callbacks import adk_before_agent, adk_after_agent, adk_before_model, adk_after_model
 from .base import BaseAgentService
+from .model_config import get_generate_content_config, get_model
 
 logger = logging.getLogger(__name__)
 
 
 _INSTRUCTION_BASE = """\
-You are a rigorous fact-checker and consistency verifier for generated content.
+You are a fact-checker and consistency verifier for generated content.
 
-You receive content JSON and its format type. Your job is to:
+You receive content JSON and its format type. Your job:
 
-1. IDENTIFY verifiable claims in the content:
-   - For quizzes: correct answers, explanations, factual statements in questions
-   - For stories/narratives: historical, scientific, or cultural references;
-     internal consistency of characters, timeline, and world rules
-   - For games/RPGs: any real-world references; internal quest logic and
-     node reachability; reward/requirement consistency
-   - For simulations: scientific accuracy of variables, units, ranges,
-     and described interactions
+1. CHECK INTERNAL CONSISTENCY (no search needed):
+   - Quizzes: total_score == sum of per-question scores; correct_answer indices valid
+   - Stories/games: node/branch references exist; no dead-end links
+   - Simulations: rule variable names match defined variables; units plausible
+   - Character names, timeline, world rules self-consistent
 
-2. FACT-CHECK verifiable claims using Google Search.
-   Search for specific queries to verify factual claims, e.g.:
-   "What is the hardest natural substance?" or "When was the 96th Academy Awards?"
+2. FACT-CHECK the TOP 5 most critical/dubious claims via Google Search.
+   Prioritize claims that, if wrong, would make the content misleading.
+   Skip obvious/trivial facts. Keep each search query focused.
 
-3. CHECK INTERNAL CONSISTENCY (no search needed):
-   - For quizzes: total_score must equal the sum of per-question score fields
-   - Character names used consistently throughout
-   - Timeline/sequence of events does not contradict
-   - World rules established early are not violated later
-   - Node/branch references point to existing elements
-   - Variable ranges and units are physically plausible
-   - For simulations: verify that rules/equations are dimensionally consistent
-     (units on both sides match) and that variable references in rules match
-     defined variable names. Flag prose rules that lack mathematical formulas.
-
-4. Return a JSON report:
+3. Return a CONCISE JSON report:
 {
   "facts_checked": [
-    {"claim": "...", "verdict": "correct|incorrect|unverifiable", "detail": "..."}
+    {"claim": "...", "verdict": "correct|incorrect|unverifiable", "detail": "1-2 sentences max"}
   ],
-  "consistency_issues": ["..."],
-  "errors": ["critical issues that must be fixed"],
+  "consistency_issues": ["short description"],
+  "errors": ["critical issues only"],
   "warnings": ["minor concerns"],
   "confidence": "high|medium|low",
-  "suggestions": ["specific improvements based on findings"]
+  "suggestions": ["specific fix, naming the exact field"]
 }
 
-RULES:
-- Focus on ACCURACY over style (style is the reviewer's job).
-- If search fails or returns ambiguous results, mark claim as "unverifiable"
-  rather than guessing.
-- Always check internal consistency regardless of content type.
-- Every suggestion MUST be specific and actionable — name the exact field
-  or claim that needs correction, and provide the correct information.
+BREVITY RULES:
+- facts_checked: MAX 5 entries. Only the most important claims.
+- detail: 1-2 sentences. No lengthy explanations.
+- suggestions: MAX 3 entries. Actionable and specific.
+- Keep total response under 2000 tokens.
 
 DOMAIN AWARENESS:
-- If domain is "realworld": Rigorously fact-check ALL claims via Google Search.
-  Every factual statement must be verified.
-- If domain is "fictional": Do NOT fact-check fictional elements via search.
-  Only check internal consistency (characters, timeline, world rules).
-  However, if the content references REAL entities (real people, real places,
-  real events), those references must still be accurate.
-- DOMAIN MATCH CHECK: If the content appears to be entirely fictional but
-  domain is "realworld", flag this as an error. Conversely, if content contains
-  entirely real-world facts but domain is "fictional", note this as a warning.
+- "realworld": fact-check top 5 claims via search.
+- "fictional": skip search for fictional elements; only check internal
+  consistency and verify any real-world references.
 
 CRITICAL: Respond with valid JSON only. No markdown, no explanations outside JSON."""
 
@@ -102,12 +81,13 @@ _INSTRUCTION_SERVICE = _INSTRUCTION_BASE + _SERVICE_SUFFIX
 def create_verifier(
     instruction: str | None = None,
     *,
-    model: str = "gemini-2.5-flash",
+    model: str | None = None,
     output_key: str | None = "verification_result",
 ) -> Agent:
     """Factory -- google_search is the sole tool (ADK single-tool constraint)."""
     if instruction is None:
         instruction = _INSTRUCTION_PIPELINE
+    model = model or get_model("verifier")
     return Agent(
         name="VerifierAgent",
         model=model,
@@ -116,6 +96,7 @@ def create_verifier(
         output_key=output_key,
         tools=[google_search],
         include_contents="none",
+        generate_content_config=get_generate_content_config("verifier"),
         before_agent_callback=adk_before_agent,
         after_agent_callback=adk_after_agent,
         before_model_callback=adk_before_model,
@@ -123,14 +104,14 @@ def create_verifier(
     )
 
 
-def create_verifier_pipeline(model: str = "gemini-2.5-flash") -> Agent:
+def create_verifier_pipeline(model: str | None = None) -> Agent:
     """Pipeline variant -- reads draft_content from session state."""
     return create_verifier(
         _INSTRUCTION_PIPELINE, model=model, output_key="verification_result",
     )
 
 
-def create_verifier_service(model: str = "gemini-2.5-flash") -> Agent:
+def create_verifier_service(model: str | None = None) -> Agent:
     """Service variant -- no output_key; result returned explicitly."""
     return create_verifier(
         _INSTRUCTION_SERVICE, model=model, output_key=None,
