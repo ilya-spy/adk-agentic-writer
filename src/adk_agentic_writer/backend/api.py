@@ -10,7 +10,7 @@ import logging
 import pathlib
 import time
 import uuid
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
@@ -28,8 +28,9 @@ configure_logging()
 logger = logging.getLogger(__name__)
 log_settings_summary()
 
+from ..agents.base import SESSION_APP_NAME
 from ..agents.coordinator import CoordinatorService
-from .runtime import get_runtime, get_coordinator, lifespan
+from .runtime import get_runtime, get_coordinator, get_session_service, lifespan
 
 
 # ---------------------------------------------------------------------------
@@ -39,6 +40,7 @@ from .runtime import get_runtime, get_coordinator, lifespan
 class AgentRequest(BaseModel):
     """All task parameters go here."""
     parameters: Dict[str, Any] = {}
+    session_id: Optional[str] = None
 
 
 class AgentResponse(BaseModel):
@@ -48,6 +50,7 @@ class AgentResponse(BaseModel):
     content: Dict[str, Any] = {}
     stages: List[Dict[str, Any]] = []
     status: str = "completed"
+    session_id: Optional[str] = None
 
 
 app = FastAPI(
@@ -212,6 +215,74 @@ async def sse_events(request: Request):
 
 
 # ---------------------------------------------------------------------------
+# Session management
+# ---------------------------------------------------------------------------
+
+@app.get("/sessions")
+async def list_sessions():
+    """List active sessions in the shared InMemorySessionService."""
+    svc = get_session_service()
+    result = await svc.list_sessions(app_name=SESSION_APP_NAME, user_id="default")
+    return {
+        "sessions": [
+            {"session_id": s.id, "app_name": s.app_name, "events": len(s.events)}
+            for s in result.sessions
+        ]
+    }
+
+
+@app.get("/sessions/{session_id}")
+async def get_session_detail(session_id: str):
+    """Return session events for debugging / session viewer."""
+    svc = get_session_service()
+    session = await svc.get_session(
+        app_name=SESSION_APP_NAME, user_id="default", session_id=session_id,
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail=f"Session not found: {session_id}")
+
+    events_out = []
+    for ev in session.events:
+        text_parts = []
+        role = ""
+        if ev.content:
+            role = ev.content.role or ""
+            for p in (ev.content.parts or []):
+                if p.text:
+                    text_parts.append(p.text)
+                elif p.function_call:
+                    text_parts.append(f"[tool_call: {p.function_call.name}]")
+                elif p.function_response:
+                    text_parts.append(f"[tool_response: {p.function_response.name}]")
+        events_out.append({
+            "id": ev.id,
+            "author": ev.author,
+            "role": role,
+            "text": "\n".join(text_parts) if text_parts else None,
+            "timestamp": ev.timestamp,
+            "turn_complete": ev.turn_complete,
+        })
+    return {
+        "session_id": session.id,
+        "app_name": session.app_name,
+        "event_count": len(session.events),
+        "state": dict(session.state) if session.state else {},
+        "events": events_out,
+    }
+
+
+@app.post("/sessions")
+async def create_session(name: Optional[str] = None):
+    """Create a new named session (or auto-generate an id)."""
+    svc = get_session_service()
+    session_id = name or f"session_{uuid.uuid4().hex[:8]}"
+    session = await svc.create_session(
+        app_name=SESSION_APP_NAME, user_id="default", session_id=session_id,
+    )
+    return {"session_id": session.id, "app_name": session.app_name}
+
+
+# ---------------------------------------------------------------------------
 # Generic task execution
 # ---------------------------------------------------------------------------
 
@@ -225,6 +296,9 @@ async def run_task(task_id: str, request: AgentRequest):
         raise HTTPException(status_code=404, detail=f"Unknown task: {task_id}")
 
     params = dict(request.parameters)
+    session_id = request.session_id
+    if session_id:
+        params["session_id"] = session_id
 
     try:
         result = await coordinator.process_task(task_id, params)
@@ -232,6 +306,8 @@ async def run_task(task_id: str, request: AgentRequest):
         output_key = task.output_key or ""
         content = result
         stages: List[Dict[str, Any]] = []
+        if isinstance(result, dict) and "session_id" in result:
+            session_id = result.pop("session_id")
 
         if isinstance(result, dict) and "stages" in result:
             stages = result.get("stages", [])
@@ -248,6 +324,7 @@ async def run_task(task_id: str, request: AgentRequest):
             content=content if isinstance(content, dict) else {"result": content},
             stages=stages,
             status="completed",
+            session_id=session_id,
         )
     except Exception as e:
         logger.error("Task %s error: %s", task_id, e)

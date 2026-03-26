@@ -183,10 +183,95 @@
             max-width: 960px; margin: 0 auto 8px; text-align: center;
             font-size: 1.4rem; color: rgba(255,255,255,0.5); line-height: 1;
         }
+
+        /* Session bar */
+        .session-bar {
+            max-width: 960px; margin: 0 auto 16px; background: rgba(255,255,255,0.12);
+            border-radius: 10px; padding: 10px 18px; display: flex;
+            align-items: center; gap: 12px; backdrop-filter: blur(6px);
+            color: rgba(255,255,255,0.85); font-size: 0.85rem;
+        }
+        .session-bar .session-label { font-weight: 600; white-space: nowrap; }
+        .session-bar .session-id {
+            font-family: 'Consolas', monospace; background: rgba(255,255,255,0.12);
+            padding: 3px 10px; border-radius: 6px; font-size: 0.82rem;
+        }
+        .session-bar .session-id.active { background: rgba(92,184,92,0.3); color: #a6f0a6; }
+        .session-bar button {
+            background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25);
+            color: white; padding: 4px 14px; border-radius: 6px; cursor: pointer;
+            font-size: 0.8rem; transition: background 0.2s;
+        }
+        .session-bar button:hover { background: rgba(255,255,255,0.25); }
+        .session-bar .spacer { flex: 1; }
+
+        /* Session viewer modal */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+            z-index: 1000; justify-content: center; align-items: center;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal {
+            background: #fff; border-radius: 14px; width: 700px; max-width: 92vw;
+            max-height: 82vh; display: flex; flex-direction: column;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .modal-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 16px 20px; border-bottom: 1px solid #eee;
+        }
+        .modal-header h3 { font-size: 1rem; color: #333; }
+        .modal-close {
+            background: none; border: none; font-size: 1.3rem; cursor: pointer;
+            color: #888; padding: 4px 8px; border-radius: 4px;
+        }
+        .modal-close:hover { background: #f0f0f0; }
+        .modal-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
+        .session-event {
+            padding: 10px 12px; border-radius: 8px; margin-bottom: 8px;
+            font-size: 0.85rem; line-height: 1.5; font-family: 'Consolas', monospace;
+        }
+        .session-event.user { background: #e8f0fe; border-left: 3px solid #4285f4; }
+        .session-event.model { background: #f0f8e8; border-left: 3px solid #34a853; }
+        .session-event.tool { background: #fef7e0; border-left: 3px solid #fbbc04; }
+        .session-event .ev-meta {
+            font-size: 0.75rem; color: #888; margin-bottom: 4px;
+            display: flex; gap: 10px;
+        }
+        .session-event .ev-meta .ev-author { font-weight: 600; color: #555; }
+        .session-event .ev-text { white-space: pre-wrap; word-break: break-word; }
+        .session-state-block {
+            background: #f5f5f5; border-radius: 8px; padding: 12px; margin-bottom: 12px;
+            font-family: 'Consolas', monospace; font-size: 0.82rem;
+        }
+        .session-state-block summary { cursor: pointer; font-weight: 600; color: #555; }
     </style>
 </head>
 <body>
     <a href="/" class="home-link">Home</a>
+
+    <!-- Session bar -->
+    <div class="session-bar" id="sessionBar">
+        <span class="session-label">Session:</span>
+        <span class="session-id" id="sessionDisplay">none</span>
+        <span class="spacer"></span>
+        <button onclick="viewSession()">View</button>
+        <button onclick="newSession()">New Session</button>
+        <button onclick="clearSession()">Clear</button>
+    </div>
+
+    <!-- Session viewer modal -->
+    <div class="modal-overlay" id="sessionModal" onclick="if(event.target===this)closeSessionModal()">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="sessionModalTitle">Session Events</h3>
+                <button class="modal-close" onclick="closeSessionModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="sessionModalBody">
+                <p style="color:#999;font-style:italic">Loading...</p>
+            </div>
+        </div>
+    </div>
 
     <!-- 1. ADK Agentic Ideator -->
     <div class="panel" id="ideatorPanel">
@@ -355,6 +440,9 @@ let selectedDraft = null;
 let selectedReview = null;
 let selectedVerification = null;
 
+// Session state
+let currentSessionId = null;
+
 // ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
@@ -367,6 +455,86 @@ async function init() {
         renderWriterFormats();
         initResultsPanels();
     } catch (e) { log('error', 'Init failed: ' + e.message); }
+}
+
+// ---------------------------------------------------------------------------
+// Session management
+// ---------------------------------------------------------------------------
+function updateSessionDisplay() {
+    const el = document.getElementById('sessionDisplay');
+    if (currentSessionId) {
+        el.textContent = currentSessionId;
+        el.classList.add('active');
+    } else {
+        el.textContent = 'none';
+        el.classList.remove('active');
+    }
+}
+
+async function newSession() {
+    try {
+        const resp = await fetch(`${API}/sessions`, { method: 'POST' });
+        const data = await resp.json();
+        currentSessionId = data.session_id;
+        updateSessionDisplay();
+        log('info', 'New session: ' + currentSessionId);
+    } catch (e) { log('error', 'Failed to create session: ' + e.message); }
+}
+
+function clearSession() {
+    currentSessionId = null;
+    updateSessionDisplay();
+    log('info', 'Session cleared — next publish will start a fresh session');
+}
+
+async function viewSession() {
+    if (!currentSessionId) { log('warn', 'No active session to view'); return; }
+    const modal = document.getElementById('sessionModal');
+    const body = document.getElementById('sessionModalBody');
+    const title = document.getElementById('sessionModalTitle');
+    title.textContent = `Session: ${currentSessionId}`;
+    body.innerHTML = '<p style="color:#999;font-style:italic">Loading...</p>';
+    modal.classList.add('open');
+    try {
+        const resp = await fetch(`${API}/sessions/${currentSessionId}`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        let html = '';
+        if (data.state && Object.keys(data.state).length > 0) {
+            html += `<details class="session-state-block"><summary>Session State (${Object.keys(data.state).length} keys)</summary><pre>${escapeHtml(JSON.stringify(data.state, null, 2))}</pre></details>`;
+        }
+        html += `<div style="font-size:0.8rem;color:#888;margin-bottom:10px">${data.event_count} event(s)</div>`;
+        for (const ev of data.events) {
+            const role = ev.role || 'model';
+            const cls = role === 'user' ? 'user' : (ev.text && ev.text.includes('[tool_')) ? 'tool' : 'model';
+            const ts = ev.timestamp ? new Date(ev.timestamp * 1000).toLocaleTimeString() : '';
+            html += `<div class="session-event ${cls}">`;
+            html += `<div class="ev-meta"><span class="ev-author">${escapeHtml(ev.author || '?')}</span><span>${escapeHtml(role)}</span><span>${ts}</span>`;
+            if (ev.turn_complete) html += `<span style="color:#34a853">&#10003; turn_complete</span>`;
+            html += `</div>`;
+            if (ev.text) {
+                const truncated = ev.text.length > 800 ? ev.text.slice(0, 800) + '\n...truncated...' : ev.text;
+                html += `<div class="ev-text">${escapeHtml(truncated)}</div>`;
+            } else {
+                html += `<div class="ev-text" style="color:#aaa">(no text content)</div>`;
+            }
+            html += `</div>`;
+        }
+        if (data.events.length === 0) html += '<p style="color:#999;font-style:italic">No events in session</p>';
+        body.innerHTML = html;
+    } catch (e) {
+        body.innerHTML = `<p style="color:#ff6b6b">Failed to load session: ${escapeHtml(e.message)}</p>`;
+    }
+}
+
+function closeSessionModal() {
+    document.getElementById('sessionModal').classList.remove('open');
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
 }
 
 // ---------------------------------------------------------------------------
@@ -854,11 +1022,18 @@ async function runPublish() {
     const params = { prompt, formats: fmts, domain: selectedDomain };
 
     setBusy('btnPublish', true);
-    log('agent', '[Publisher] Running full pipeline...');
+    log('agent', '[Publisher] Running full pipeline...'
+        + (currentSessionId ? ` (session: ${currentSessionId})` : ''));
     const data = await postTask('publish', params, true);
     setBusy('btnPublish', false);
 
     if (!data) return;
+
+    if (data.session_id) {
+        currentSessionId = data.session_id;
+        updateSessionDisplay();
+    }
+
     if (data.status === 'error') {
         const errMsg = data.content?.error || 'Pipeline failed';
         log('error', '[Publisher] Error: ' + errMsg);
@@ -866,8 +1041,9 @@ async function runPublish() {
     } else {
         const content = data.content || {};
         const title = content.title || content.topic || `Published ${published.length + 1}`;
-        published.push({ _raw: content, label: title });
-        log('success', '[Publisher] Pipeline complete');
+        published.push({ _raw: content, label: title, session_id: data.session_id });
+        log('success', '[Publisher] Pipeline complete'
+            + (data.session_id ? ` — session: ${data.session_id}` : ''));
     }
 
     const panel = document.getElementById('publishedPanel');
@@ -900,12 +1076,20 @@ function onPublishedSelected(item) {
 async function postTask(taskId, params, returnErrors) {
     log('stage', `POST /task/${taskId}`);
     try {
+        const body = { parameters: params };
+        if (currentSessionId) {
+            body.session_id = currentSessionId;
+        }
         const resp = await fetch(`${API}/task/${taskId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ parameters: params }),
+            body: JSON.stringify(body),
         });
         const data = await resp.json();
+        if (data.session_id && !currentSessionId) {
+            currentSessionId = data.session_id;
+            updateSessionDisplay();
+        }
         if (data.status === 'error') {
             if (returnErrors) return data;
             log('error', data.content?.error || 'Task failed');

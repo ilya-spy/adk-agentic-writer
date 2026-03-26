@@ -90,6 +90,7 @@ def create_refiner(
     model: str | None = None,
     output_key: str | None = "draft_content",
     tools: list | None = None,
+    include_contents: str = "none",
 ) -> Agent:
     """Base factory -- accepts explicit instruction, output_key, and tools."""
     if instruction is None:
@@ -101,7 +102,7 @@ def create_refiner(
         instruction=instruction,
         description="Refines content or exits the loop when quality is sufficient.",
         output_key=output_key,
-        include_contents="none",
+        include_contents=include_contents,
         tools=tools or [],
         generate_content_config=get_generate_content_config("refiner"),
         before_agent_callback=adk_before_agent,
@@ -124,9 +125,10 @@ def create_refiner_pipeline(
 
 
 def create_refiner_service(model: str | None = None) -> Agent:
-    """Service variant -- no output_key, no tools; result returned explicitly."""
+    """Service variant -- includes session history for context."""
     return create_refiner(
         _INSTRUCTION_SERVICE, model=model, output_key=None, tools=None,
+        include_contents="default",
     )
 
 
@@ -138,8 +140,8 @@ class RefinerAgentService(BaseAgentService):
     by the publisher; service calls use a standalone agent.
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, session_service=None):
+        super().__init__(session_service=session_service)
         self._register_tasks([REFINE])
         self._pipeline_agents.append(create_refiner_pipeline(exit_loop))
         self._service_agents.append(create_refiner_service())
@@ -171,5 +173,4 @@ class RefinerAgentService(BaseAgentService):
 
     async def run_prompt(self, prompt: str) -> Dict[str, Any]:
         agent = self._service_agents[0]
-        runner = self._ensure_runner("refiner_svc", agent)
-        return await self._run(runner, "RefinerAgent", prompt)
+        return await self._run_agent("refiner_svc", agent, "RefinerAgent", prompt)

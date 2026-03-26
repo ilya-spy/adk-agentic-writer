@@ -108,6 +108,7 @@ def create_reviewer(
     *,
     model: str | None = None,
     output_key: str | None = "review_result",
+    include_contents: str = "none",
 ) -> Agent:
     """Base factory -- accepts explicit instruction and output_key."""
     if instruction is None:
@@ -119,7 +120,7 @@ def create_reviewer(
         instruction=instruction,
         description="Reviews and validates generated content for quality and correctness.",
         output_key=output_key,
-        include_contents="none",
+        include_contents=include_contents,
         generate_content_config=get_generate_content_config("reviewer"),
         before_agent_callback=adk_before_agent,
         after_agent_callback=adk_after_agent,
@@ -136,17 +137,18 @@ def create_reviewer_pipeline(model: str | None = None) -> Agent:
 
 
 def create_reviewer_service(model: str | None = None) -> Agent:
-    """Service variant -- receives content via user prompt, no output_key."""
+    """Service variant -- includes session history for context."""
     return create_reviewer(
         _INSTRUCTION_SERVICE, model=model, output_key=None,
+        include_contents="default",
     )
 
 
 class ReviewerAgentService(BaseAgentService):
     """Reviews content quality and validates against schema."""
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, session_service=None):
+        super().__init__(session_service=session_service)
         self._register_tasks([REVIEW])
         self._pipeline_agents.append(create_reviewer_pipeline())
         self._service_agents.append(create_reviewer_service())
@@ -174,8 +176,7 @@ class ReviewerAgentService(BaseAgentService):
     async def run_prompt(self, prompt: str) -> Dict[str, Any]:
         try:
             agent = self._service_agents[0]
-            runner = self._ensure_runner("reviewer", agent)
-            result = await self._run(runner, "ReviewerAgent", prompt)
+            result = await self._run_agent("reviewer", agent, "ReviewerAgent", prompt)
             result.setdefault("valid", len(result.get("errors", [])) == 0)
             result.setdefault("score", 100 if result["valid"] else 50)
             result.setdefault("errors", [])

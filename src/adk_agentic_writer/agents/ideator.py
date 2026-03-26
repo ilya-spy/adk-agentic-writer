@@ -117,6 +117,7 @@ def create_ideator(
     *,
     model: str | None = None,
     output_key: str | None = "ideation_result",
+    include_contents: str = "none",
 ) -> Agent:
     """Base factory -- accepts explicit instruction and output_key."""
     if instruction is None:
@@ -129,7 +130,7 @@ def create_ideator(
         description="Brainstorms topic, selects format, and sets optimal parameters.",
         output_key=output_key,
         tools=[google_search],
-        include_contents="none",
+        include_contents=include_contents,
         generate_content_config=get_generate_content_config("ideator"),
         before_agent_callback=adk_before_agent,
         after_agent_callback=adk_after_agent,
@@ -144,15 +145,15 @@ def create_ideator_pipeline(model: str | None = None) -> Agent:
 
 
 def create_ideator_service(model: str | None = None) -> Agent:
-    """Service variant -- no output_key; result returned explicitly."""
-    return create_ideator(model=model, output_key=None)
+    """Service variant -- no output_key; includes session history for context."""
+    return create_ideator(model=model, output_key=None, include_contents="default")
 
 
 class IdeatorAgentService(BaseAgentService):
     """Brainstorms topic, selects format, sets optimal parameters."""
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, session_service=None):
+        super().__init__(session_service=session_service)
         self._register_tasks([IDEATE])
         self._pipeline_agents.append(create_ideator_pipeline())
         self._service_agents.append(create_ideator_service())
@@ -172,5 +173,4 @@ class IdeatorAgentService(BaseAgentService):
 
     async def run_prompt(self, prompt: str) -> Dict[str, Any]:
         agent = self._service_agents[0]
-        runner = self._ensure_runner("ideator", agent)
-        return await self._run(runner, "IdeatorAgent", prompt)
+        return await self._run_agent("ideator", agent, "IdeatorAgent", prompt)

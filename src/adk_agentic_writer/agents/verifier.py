@@ -83,6 +83,7 @@ def create_verifier(
     *,
     model: str | None = None,
     output_key: str | None = "verification_result",
+    include_contents: str = "none",
 ) -> Agent:
     """Factory -- google_search is the sole tool (ADK single-tool constraint)."""
     if instruction is None:
@@ -95,7 +96,7 @@ def create_verifier(
         description="Fact-checks content accuracy and verifies internal consistency.",
         output_key=output_key,
         tools=[google_search],
-        include_contents="none",
+        include_contents=include_contents,
         generate_content_config=get_generate_content_config("verifier"),
         before_agent_callback=adk_before_agent,
         after_agent_callback=adk_after_agent,
@@ -112,17 +113,18 @@ def create_verifier_pipeline(model: str | None = None) -> Agent:
 
 
 def create_verifier_service(model: str | None = None) -> Agent:
-    """Service variant -- no output_key; result returned explicitly."""
+    """Service variant -- includes session history for context."""
     return create_verifier(
         _INSTRUCTION_SERVICE, model=model, output_key=None,
+        include_contents="default",
     )
 
 
 class VerifierAgentService(BaseAgentService):
     """Fact-checks content using Google Search and consistency analysis."""
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, session_service=None):
+        super().__init__(session_service=session_service)
         self._register_tasks([VERIFY])
         self._pipeline_agents.append(create_verifier_pipeline())
         self._service_agents.append(create_verifier_service())
@@ -148,8 +150,7 @@ class VerifierAgentService(BaseAgentService):
     async def run_prompt(self, prompt: str) -> Dict[str, Any]:
         try:
             agent = self._service_agents[0]
-            runner = self._ensure_runner("verifier", agent)
-            result = await self._run(runner, "VerifierAgent", prompt)
+            result = await self._run_agent("verifier", agent, "VerifierAgent", prompt)
             result.setdefault("facts_checked", [])
             result.setdefault("consistency_issues", [])
             result.setdefault("errors", [])

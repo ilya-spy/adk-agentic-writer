@@ -5,9 +5,9 @@ import uuid
 from typing import Any, Dict, Optional
 
 from google.adk.agents import Agent
+from google.adk.sessions import InMemorySessionService
 
 from ..tasks import PUBLISH
-from ..utils import log as _log_cfg
 from ..utils.event_bus import emit_event
 from ..utils.log import log_llm_prompt, log_llm_response
 from ..utils.response import normalize_content, parse_json, strip_code_fences
@@ -102,8 +102,9 @@ class PublisherAgentService(BaseAgentService):
         reviewer: Agent,
         refiner: Agent,
         verifier: Agent,
+        session_service: Optional[InMemorySessionService] = None,
     ):
-        super().__init__()
+        super().__init__(session_service=session_service)
         self._register_tasks([PUBLISH])
         self._ideator = ideator
         self._writer = writer
@@ -141,19 +142,23 @@ class PublisherAgentService(BaseAgentService):
 
     async def run_prompt(self, prompt: str) -> Dict[str, Any]:
         pipeline = self._get_pipeline()
-        runner = self._ensure_runner("publish", pipeline)
-        session_id = f"publish_{uuid.uuid4().hex[:8]}"
+        runner = self._ensure_session_runner("publish", pipeline)
+        session_id = getattr(self, "_current_session_id", None)
+        if not session_id:
+            session_id = f"publish_{uuid.uuid4().hex[:8]}"
 
         log_llm_prompt(logger, pipeline.name, prompt)
-        events = await runner.run_debug(
-            prompt, session_id=session_id, quiet=not _log_cfg.LOG_LLM_IO,
-        )
+        events, session = await self.run_session(runner, prompt, session_id)
 
-        draft = await self._extract_draft(runner, events, session_id)
+        draft = self._extract_draft(session, events)
         if draft:
-            result = draft if isinstance(draft, dict) else parse_json(strip_code_fences(draft), agent_name=pipeline.name)
+            result = (
+                draft if isinstance(draft, dict)
+                else parse_json(strip_code_fences(draft), agent_name=pipeline.name)
+            )
             result = _unwrap_format(result)
             result = normalize_content(result, caller="PublishPipeline")
+            result["session_id"] = session_id
             log_llm_response(logger, pipeline.name, result)
             emit_event("pipeline.complete",
                        f"Pipeline finished — {len(events)} events",
@@ -163,9 +168,9 @@ class PublisherAgentService(BaseAgentService):
         emit_event("pipeline.complete", "Pipeline produced no output",
                    level="error", events_count=len(events))
         logger.error("Publish pipeline produced no draft_content")
-        return {"error": "Pipeline produced no output"}
+        return {"error": "Pipeline produced no output", "session_id": session_id}
 
-    async def _extract_draft(self, runner, events, session_id) -> Optional[str]:
+    def _extract_draft(self, session, events: list) -> Optional[str]:
         """Try session state first, then events, then tool output fallback.
 
         Validates that the candidate is JSON-like before accepting it.  If
@@ -173,11 +178,6 @@ class PublisherAgentService(BaseAgentService):
         explanation) we fall back to the last valid JSON snapshot in the
         event stream.
         """
-        session = await runner.session_service.get_session(
-            app_name=runner.app_name,
-            user_id="debug_user_id",
-            session_id=session_id,
-        )
         if session and session.state:
             draft = session.state.get("draft_content")
             if draft:

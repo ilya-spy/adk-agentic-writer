@@ -52,6 +52,7 @@ def create_writer(
     *,
     model: str | None = None,
     output_key: str | None = "draft_content",
+    include_contents: str = "none",
 ) -> Agent:
     """Base factory -- accepts explicit instruction and output_key."""
     if instruction is None:
@@ -64,7 +65,7 @@ def create_writer(
         description=f"Generates {fmt.label} content as structured JSON.",
         output_key=output_key,
         tools=[google_search],
-        include_contents="none",
+        include_contents=include_contents,
         generate_content_config=get_generate_content_config(
             "writer", temperature=fmt.temperature,
         ),
@@ -86,9 +87,10 @@ def create_writer_pipeline(
 def create_writer_service(
     fmt: FormatSpec, model: str | None = None,
 ) -> Agent:
-    """Service variant -- context provided in user message."""
+    """Service variant -- includes session history for context."""
     instruction = _build_instruction(fmt) + _SERVICE_SUFFIX
-    return create_writer(fmt, instruction, model=model, output_key=None)
+    return create_writer(fmt, instruction, model=model, output_key=None,
+                         include_contents="default")
 
 
 # ---------------------------------------------------------------------------
@@ -180,8 +182,8 @@ def create_lead_writer_pipeline(model: str | None = None) -> Agent:
 class WriterAgentService(BaseAgentService):
     """Routes write requests to the correct per-format ADK writer agent."""
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, session_service=None):
+        super().__init__(session_service=session_service)
         self._register_tasks([WRITE])
         self._pipeline_writers: Dict[str, Agent] = {}
         self._writers: Dict[str, Agent] = {}
@@ -231,6 +233,8 @@ class WriterAgentService(BaseAgentService):
         fmt = getattr(self, "_last_fmt", None)
         fmt_name = fmt.name if fmt else "quiz"
         writer = self._writers.get(fmt_name) or next(iter(self._writers.values()))
-        runner = self._ensure_runner(f"writer_{fmt_name}", writer)
         model_class = fmt.model_class if fmt else None
-        return await self._run(runner, writer.name, prompt, model_class=model_class)
+        return await self._run_agent(
+            f"writer_{fmt_name}", writer, writer.name, prompt,
+            model_class=model_class,
+        )

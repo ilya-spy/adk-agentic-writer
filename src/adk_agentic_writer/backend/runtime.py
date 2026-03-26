@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI
+from google.adk.sessions import InMemorySessionService
 
 from ..agents.coordinator import CoordinatorService
 from ..agents.ideator import IdeatorAgentService
@@ -70,10 +71,15 @@ class RuntimeStore:
 # ---------------------------------------------------------------------------
 
 _runtime = RuntimeStore()
+_session_service = InMemorySessionService()
 
 
 def get_runtime() -> RuntimeStore:
     return _runtime
+
+
+def get_session_service() -> InMemorySessionService:
+    return _session_service
 
 
 def get_coordinator() -> Optional[CoordinatorService]:
@@ -85,11 +91,11 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing ADK agent system...")
     try:
         # -- Leaf services (create their own ADK agents internally) --
-        ideator = IdeatorAgentService()
-        writer = WriterAgentService()
-        reviewer = ReviewerAgentService()
-        verifier = VerifierAgentService()
-        refiner = RefinerAgentService()
+        ideator = IdeatorAgentService(session_service=_session_service)
+        writer = WriterAgentService(session_service=_session_service)
+        reviewer = ReviewerAgentService(session_service=_session_service)
+        verifier = VerifierAgentService(session_service=_session_service)
+        refiner = RefinerAgentService(session_service=_session_service)
 
         # -- Publish pipeline needs dedicated agent instances (ADK agents
         #    can only belong to one parent) --
@@ -106,6 +112,7 @@ async def lifespan(app: FastAPI):
             reviewer=create_reviewer_pipeline(),
             refiner=create_refiner_pipeline(exit_loop),
             verifier=create_verifier_pipeline(),
+            session_service=_session_service,
         )
 
         _runtime.services.set("ideator", ideator)
