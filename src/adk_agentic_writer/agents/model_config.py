@@ -20,8 +20,8 @@ PIPELINE_MODELS: dict[str, dict] = {
     "ideator":     {"model": _DEFAULT_MODEL, "thinking_budget": None},
     "writer":      {"model": _DEFAULT_MODEL, "thinking_budget": None},
     "lead_writer": {"model": _DEFAULT_MODEL, "thinking_budget": 0},
-    "reviewer":    {"model": _DEFAULT_MODEL, "thinking_budget": 1024, "max_output_tokens": 2048},
-    "verifier":    {"model": _DEFAULT_MODEL, "thinking_budget": 4096, "max_output_tokens": 2048},
+    "reviewer":    {"model": _DEFAULT_MODEL, "thinking_budget": 1024, "max_output_tokens": 2048, "json_output": True},
+    "verifier":    {"model": _DEFAULT_MODEL, "thinking_budget": 4096, "max_output_tokens": 4096},
     "refiner":     {"model": _DEFAULT_MODEL, "thinking_budget": 2048},
 }
 
@@ -41,10 +41,14 @@ def get_generate_content_config(
     thinking_budget = cfg.get("thinking_budget")
     mot = max_output_tokens or cfg.get("max_output_tokens")
 
-    if thinking_budget is None and temperature is None and mot is None:
+    json_output = cfg.get("json_output", False)
+    if thinking_budget is None and temperature is None and mot is None and not json_output:
         return None
 
     kwargs: dict = {}
+    if json_output:
+        kwargs["response_mime_type"] = "application/json"
+
     if thinking_budget is not None:
         kwargs["thinking_config"] = types.ThinkingConfig(
             thinking_budget=thinking_budget,

@@ -10,7 +10,7 @@ from google.adk.sessions import InMemorySessionService
 from ..tasks import PUBLISH
 from ..utils.event_bus import emit_event
 from ..utils.log import log_llm_prompt, log_llm_response
-from ..utils.response import normalize_content, parse_json, strip_code_fences
+from ..utils.response import normalize_content, parse_and_validate, strip_code_fences
 from ..workflows.publish import create_publish_pipeline
 from .base import BaseAgentService
 
@@ -154,7 +154,7 @@ class PublisherAgentService(BaseAgentService):
         if draft:
             result = (
                 draft if isinstance(draft, dict)
-                else parse_json(strip_code_fences(draft), agent_name=pipeline.name)
+                else parse_and_validate(draft, agent_name=pipeline.name)
             )
             result = _unwrap_format(result)
             result = normalize_content(result, caller="PublishPipeline")

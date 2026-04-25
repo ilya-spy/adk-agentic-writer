@@ -130,7 +130,9 @@ def _repair_truncated_json(text: str) -> Optional[str]:
     depth_stack: list[str] = []
     in_string = False
     escape_next = False
-    last_structural_pos = 0
+    # Positions right after a structurally complete element (value end)
+    # where we could safely truncate and close remaining brackets.
+    checkpoints: list[tuple[int, list[str]]] = []
 
     for i, ch in enumerate(text):
         if escape_next:
@@ -146,31 +148,42 @@ def _repair_truncated_json(text: str) -> Optional[str]:
             continue
         if ch in ("{", "["):
             depth_stack.append("}" if ch == "{" else "]")
-            last_structural_pos = i
         elif ch in ("}", "]"):
             if depth_stack:
                 depth_stack.pop()
-            last_structural_pos = i
+            if depth_stack:
+                checkpoints.append((i + 1, list(depth_stack)))
+        elif ch == "," and depth_stack:
+            checkpoints.append((i, list(depth_stack)))
 
     if not depth_stack:
         return None
 
-    # Cut back to the last cleanly-closed element
+    closers = "".join(reversed(depth_stack))
+
+    # --- Strategy A: close at current position (preserves most content) ---
     candidate = text
     if in_string:
-        # Close the dangling string
         candidate += '"'
-
-    # Remove trailing partial tokens (comma, colon, whitespace, partial key)
     candidate = re.sub(r"[,:\s]+$", "", candidate)
-    # If we ended inside a string that we just closed, the above won't help
-    # much — try stripping the last incomplete key-value pair
-    candidate = re.sub(r',\s*"[^"]*"?\s*:?\s*"?[^"]*$', "", candidate)
-    candidate = re.sub(r"[,\s]+$", "", candidate)
+    candidate += closers
+    try:
+        json.loads(candidate, strict=False)
+        return candidate
+    except json.JSONDecodeError:
+        pass
 
-    # Append closers in reverse order
-    candidate += "".join(reversed(depth_stack))
-    return candidate
+    # --- Strategy B: roll back to safe checkpoints (newest first) ---
+    for pos, stack_snapshot in reversed(checkpoints):
+        prefix = text[:pos].rstrip(", \t\n\r")
+        candidate = prefix + "".join(reversed(stack_snapshot))
+        try:
+            json.loads(candidate, strict=False)
+            return candidate
+        except json.JSONDecodeError:
+            continue
+
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -216,6 +229,33 @@ def detect_refusal(text: str) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 
+def parse_and_validate(
+    text: str,
+    agent_name: str = "agent",
+    model_class: Optional[type] = None,
+) -> Dict[str, Any]:
+    """Parse JSON from LLM text with graceful fallback, then optionally validate."""
+    try:
+        result = parse_json(text, agent_name=agent_name)
+    except ValueError as exc:
+        logger.warning(
+            "[%s] returning partial result – parse failed: %s",
+            agent_name,
+            exc,
+        )
+        return {
+            "_parse_error": str(exc),
+            "_raw_truncated": text[:2000],
+        }
+
+    if model_class is not None:
+        from .validator import validate_and_coerce
+
+        result, _ = validate_and_coerce(result, model_class, agent_name)
+
+    return result
+
+
 def parse_json(text: str, agent_name: str = "agent") -> Dict[str, Any]:
     """Parse JSON from LLM response with progressive fallbacks.
 
@@ -258,7 +298,7 @@ def parse_json(text: str, agent_name: str = "agent") -> Dict[str, Any]:
             logger.warning("[%s] JSON required double-brace collapse", agent_name)
             return result
         except json.JSONDecodeError:
-            fixed = debraced  # carry forward for subsequent steps
+            pass  # don't carry forward — collapse corrupts valid nested brackets
 
     # --- 4. Lenient parse (allow control chars) ---
     try:
@@ -269,10 +309,10 @@ def parse_json(text: str, agent_name: str = "agent") -> Dict[str, Any]:
         pass
 
     # --- 5. Extract JSON from surrounding prose ---
-    json_start = fixed.find('{')
-    json_end = fixed.rfind('}')
+    json_start = fixed.find("{")
+    json_end = fixed.rfind("}")
     if json_start >= 0 and json_end > json_start:
-        substr = fixed[json_start:json_end + 1]
+        substr = fixed[json_start : json_end + 1]
         try:
             result = json.loads(substr, strict=False)
             logger.warning("[%s] JSON extracted from surrounding text", agent_name)
@@ -338,6 +378,7 @@ __all__ = [
     "extract_text",
     "strip_code_fences",
     "parse_json",
+    "parse_and_validate",
     "detect_refusal",
     "normalize_content",
 ]

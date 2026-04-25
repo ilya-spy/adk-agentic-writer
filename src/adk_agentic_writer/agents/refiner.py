@@ -78,7 +78,12 @@ ADDITIONAL RULE:
 _SERVICE_SUFFIX = """
 
 The draft content, review feedback, and verification results will be provided
-in the user message."""
+in the user message.
+
+SESSION CONTEXT (multi-turn conversations):
+You may be operating inside a session with previous refinement rounds visible. If
+prior refinements exist, ensure you do not re-introduce issues that were previously
+fixed. Focus only on the newly flagged issues from the latest review and verification."""
 
 _INSTRUCTION_PIPELINE = _INSTRUCTION_BASE + _PIPELINE_SUFFIX
 _INSTRUCTION_SERVICE = _INSTRUCTION_BASE + _SERVICE_SUFFIX

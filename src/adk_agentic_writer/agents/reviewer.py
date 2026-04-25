@@ -100,7 +100,13 @@ Review the following content:
 
 _INSTRUCTION_SERVICE = _INSTRUCTION_BASE + """
 
-The content to review will be provided in the user message."""
+The content to review will be provided in the user message.
+
+SESSION CONTEXT (multi-turn conversations):
+You may be operating inside a session with previous reviews and drafts visible.
+If you previously reviewed an earlier version of this content, compare against
+your prior feedback: note which issues were fixed, which persist, and any new
+issues introduced. This helps the user understand iterative progress."""
 
 
 def create_reviewer(

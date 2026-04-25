@@ -21,8 +21,7 @@ from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
 from ..models.agent_models import AgentTask
-from ..utils.response import extract_text, parse_json
-from ..utils.validator import validate_and_coerce
+from ..utils.response import extract_text, parse_and_validate
 from ..utils.event_bus import emit_event
 from ..utils import log as _log_cfg
 from ..utils.log import log_llm_prompt, log_llm_response
@@ -141,6 +140,18 @@ class BaseAgentService:
         )
         return events, session
 
+    def _parse_and_validate(
+        self,
+        text: str,
+        agent_name: str,
+        model_class: Optional[type] = None,
+    ) -> Dict[str, Any]:
+        """Thin wrapper around :func:`~utils.response.parse_and_validate`
+        that adds structured LLM-response logging."""
+        result = parse_and_validate(text, agent_name, model_class)
+        log_llm_response(logger, agent_name, result)
+        return result
+
     async def _run(
         self,
         runner: InMemoryRunner,
@@ -152,11 +163,7 @@ class BaseAgentService:
         log_llm_prompt(logger, agent_name, prompt)
         response = await runner.run_debug(prompt, quiet=not _log_cfg.LOG_LLM_IO)
         text = extract_text(response)
-        result = parse_json(text, agent_name=agent_name)
-        if model_class is not None:
-            result, _ = validate_and_coerce(result, model_class, agent_name)
-        log_llm_response(logger, agent_name, result)
-        return result
+        return self._parse_and_validate(text, agent_name, model_class)
 
     async def _run_in_session(
         self,
@@ -173,11 +180,7 @@ class BaseAgentService:
         session_runner = self._ensure_session_runner(runner_key, agent)
         events, _session = await self.run_session(session_runner, prompt, session_id)
         text = extract_text(events)
-        result = parse_json(text, agent_name=agent_name)
-        if model_class is not None:
-            result, _ = validate_and_coerce(result, model_class, agent_name)
-        log_llm_response(logger, agent_name, result)
-        return result
+        return self._parse_and_validate(text, agent_name, model_class)
 
     async def _run_agent(
         self,

@@ -1,8 +1,9 @@
 """ADK agent callbacks for lifecycle logging and SSE event emission.
 
 These are attached to Agent() instances via before_agent_callback,
-after_agent_callback, and before_model_callback.  They never interfere
-with execution (always return None).
+after_agent_callback, and before_model_callback.  The after_model
+callback also strips markdown code fences from model output so that
+session history always contains clean JSON.
 """
 
 import json
@@ -15,6 +16,7 @@ from google.adk.models import LlmRequest, LlmResponse
 from google.genai import types
 
 from .event_bus import emit_event
+from .response import strip_code_fences
 
 logger = logging.getLogger("adk_agentic_writer.agents.callbacks")
 
@@ -82,6 +84,45 @@ def _try_extract_metric(text: str, agent_name: str) -> Optional[dict]:
     return None
 
 
+def _strip_fences_from_response(llm_response: LlmResponse) -> Optional[LlmResponse]:
+    """Return a new LlmResponse with code fences removed from text parts.
+
+    Only touches text parts; function_call / function_response parts are
+    left untouched.  Returns ``None`` when no stripping was needed.
+    """
+    if not llm_response.content or not llm_response.content.parts:
+        return None
+
+    needs_strip = any(
+        part.text and part.text.strip().startswith("```")
+        for part in llm_response.content.parts
+    )
+    if not needs_strip:
+        return None
+
+    new_parts = []
+    for part in llm_response.content.parts:
+        if part.text and part.text.strip().startswith("```"):
+            new_parts.append(types.Part(text=strip_code_fences(part.text)))
+        else:
+            new_parts.append(part)
+
+    cleaned_content = types.Content(
+        role=llm_response.content.role,
+        parts=new_parts,
+    )
+    return LlmResponse(
+        content=cleaned_content,
+        grounding_metadata=llm_response.grounding_metadata,
+        usage_metadata=llm_response.usage_metadata,
+        finish_reason=llm_response.finish_reason,
+        error_code=llm_response.error_code,
+        error_message=llm_response.error_message,
+        custom_metadata=llm_response.custom_metadata,
+        model_version=llm_response.model_version,
+    )
+
+
 def adk_after_model(
     callback_context: CallbackContext,
     llm_response: LlmResponse,
@@ -94,16 +135,20 @@ def adk_after_model(
         for part in llm_response.content.parts:
             fc = getattr(part, "function_call", None)
             if fc and fc.name:
-                emit_event("model.tool_call", f"{name} → {fc.name}",
-                           agent=name, tool=fc.name)
+                emit_event(
+                    "model.tool_call", f"{name} → {fc.name}", agent=name, tool=fc.name
+                )
 
     gm = llm_response.grounding_metadata
     if gm and gm.web_search_queries:
         queries = ", ".join(gm.web_search_queries[:3])
         logger.info("[%s] google_search: %s", name, queries)
-        emit_event("model.tool_call",
-                   f"{name} → google_search ({queries})",
-                   agent=name, tool="google_search")
+        emit_event(
+            "model.tool_call",
+            f"{name} → google_search ({queries})",
+            agent=name,
+            tool="google_search",
+        )
 
     tokens = None
     um = llm_response.usage_metadata
@@ -128,8 +173,16 @@ def adk_after_model(
     emit_event("model.complete", msg, **extra)
 
     if llm_response.error_code:
-        emit_event("model.error",
-                   f"{name} LLM error: {llm_response.error_message or llm_response.error_code}",
-                   level="error", agent=name)
+        emit_event(
+            "model.error",
+            f"{name} LLM error: {llm_response.error_message or llm_response.error_code}",
+            level="error",
+            agent=name,
+        )
+
+    stripped = _strip_fences_from_response(llm_response)
+    if stripped:
+        logger.info("[%s] stripped code fences from model output", name)
+        return stripped
 
     return None

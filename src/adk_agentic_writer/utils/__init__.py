@@ -22,6 +22,7 @@ from .response import (
     extract_text,
     strip_code_fences,
     parse_json,
+    parse_and_validate,
     detect_refusal,
 )
 from .validator import (
@@ -45,6 +46,7 @@ __all__ = [
     "extract_text",
     "strip_code_fences",
     "parse_json",
+    "parse_and_validate",
     "detect_refusal",
     "validate_and_coerce",
     "schema_validate",

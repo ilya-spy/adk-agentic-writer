@@ -50,9 +50,11 @@ You receive content JSON and its format type. Your job:
 
 BREVITY RULES:
 - facts_checked: MAX 5 entries. Only the most important claims.
-- detail: 1-2 sentences. No lengthy explanations.
-- suggestions: MAX 3 entries. Actionable and specific.
-- Keep total response under 2000 tokens.
+- claim: Quote or paraphrase in ONE short sentence.
+- detail: ONE sentence with the key evidence or source.
+- consistency_issues / errors / warnings: ONE sentence each.
+- suggestions: MAX 3 entries. Name the field and the fix.
+- Total JSON output MUST stay under 1500 tokens.
 
 DOMAIN AWARENESS:
 - "realworld": fact-check top 5 claims via search.
@@ -72,7 +74,13 @@ Content to verify:
 
 _SERVICE_SUFFIX = """
 
-The content to verify will be provided in the user message."""
+The content to verify will be provided in the user message.
+
+SESSION CONTEXT (multi-turn conversations):
+You may be operating inside a session with previous verifications visible. If you
+previously verified an earlier version, note which factual errors were corrected,
+which persist, and flag any new claims that need checking. Avoid re-searching facts
+you already confirmed as correct in a prior round."""
 
 _INSTRUCTION_PIPELINE = _INSTRUCTION_BASE + _PIPELINE_SUFFIX
 _INSTRUCTION_SERVICE = _INSTRUCTION_BASE + _SERVICE_SUFFIX

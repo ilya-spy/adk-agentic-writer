@@ -23,7 +23,16 @@ Use the creative direction and reasoning above to guide your content creation.""
 
 _SERVICE_SUFFIX = """
 
-The topic, creative direction, and reasoning will be provided in the user message."""
+The topic, creative direction, and reasoning will be provided in the user message.
+
+SESSION CONTEXT (multi-turn conversations):
+You may be operating inside a session that contains previous ideation briefs, earlier
+drafts, reviews, and verifications. When the user's prompt builds on prior work:
+- Use previous drafts and review feedback as context (e.g., avoid repeating content,
+  build on established themes, honour corrections from reviewers).
+- Always produce a COMPLETE content JSON matching the format schema. Never output a
+  partial diff or reference a previous draft by shorthand.
+- If the user's prompt is unrelated to prior content, ignore earlier session history."""
 
 
 _DOMAIN_BLOCK = """
